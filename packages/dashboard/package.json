@@ -1,0 +1,13 @@
+{
+  "name": "@chanl-ai/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "React dashboard for chanl-eval",
+  "license": "MIT",
+  "scripts": {
+    "dev": "echo 'Dashboard not yet implemented'",
+    "build": "echo 'Dashboard not yet implemented'",
+    "test": "echo 'No tests yet' && exit 0",
+    "clean": "rm -rf dist"
+  }
+}

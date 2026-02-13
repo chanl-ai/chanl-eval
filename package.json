@@ -1,0 +1,22 @@
+{
+  "name": "chanl-eval",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open-source AI agent testing and evaluation engine",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chanl-ai/chanl-eval.git"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:cov": "pnpm -r test:cov",
+    "lint": "pnpm -r lint",
+    "clean": "pnpm -r clean"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
