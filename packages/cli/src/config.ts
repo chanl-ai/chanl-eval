@@ -5,11 +5,28 @@ import * as os from 'os';
 export interface CliConfig {
   server: string;
   apiKey: string;
+  provider: string;
+  openaiApiKey: string;
+  anthropicApiKey: string;
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+  twilioPhoneNumber: string;
+  analytics: boolean;
+  analyticsId: string;
+  [key: string]: string | boolean;
 }
 
 const DEFAULT_CONFIG: CliConfig = {
-  server: 'http://localhost:8005',
+  server: 'http://localhost:18005',
   apiKey: '',
+  provider: '',
+  openaiApiKey: '',
+  anthropicApiKey: '',
+  twilioAccountSid: '',
+  twilioAuthToken: '',
+  twilioPhoneNumber: '',
+  analytics: true,
+  analyticsId: '',
 };
 
 /**
@@ -42,9 +59,9 @@ export function loadConfig(): CliConfig {
 }
 
 /**
- * Save the full config to disk.
+ * Save config to disk. Accepts a partial config — missing fields use defaults.
  */
-export function saveConfig(config: CliConfig): void {
+export function saveConfig(config: Partial<CliConfig>): void {
   const configDir = getConfigDir();
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
@@ -56,16 +73,16 @@ export function saveConfig(config: CliConfig): void {
 /**
  * Get a single config value by key.
  */
-export function getConfig(key: keyof CliConfig): string {
+export function getConfig(key: keyof CliConfig): string | boolean {
   const config = loadConfig();
-  return config[key] || '';
+  return config[key] ?? '';
 }
 
 /**
  * Set a single config value by key.
  */
-export function setConfig(key: keyof CliConfig, value: string): void {
+export function setConfig(key: keyof CliConfig, value: string | boolean): void {
   const config = loadConfig();
-  config[key] = value;
+  (config as any)[key] = value;
   saveConfig(config);
 }

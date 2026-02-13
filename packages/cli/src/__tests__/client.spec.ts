@@ -231,7 +231,7 @@ describe('Client', () => {
       const err = {
         code: 'ECONNREFUSED',
         message: 'connect ECONNREFUSED',
-        config: { baseURL: 'http://localhost:8005' },
+        config: { baseURL: 'http://localhost:18005' },
         isAxiosError: true,
       };
 

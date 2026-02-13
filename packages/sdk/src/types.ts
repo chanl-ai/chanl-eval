@@ -477,7 +477,7 @@ export interface CreateScorecardResultDto {
 // ============================================================================
 
 export interface EvalClientConfig {
-  /** Base URL of the chanl-eval server (e.g., 'http://localhost:8005') */
+  /** Base URL of the chanl-eval server (e.g., 'http://localhost:18005') */
   baseUrl: string;
   /** API key for authentication (sent as X-API-Key header) */
   apiKey: string;

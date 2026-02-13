@@ -65,7 +65,7 @@ describe('Commands Integration', () => {
     // Write a config so commands have something to work with
     fs.writeFileSync(
       path.join(tmpDir, 'config.json'),
-      JSON.stringify({ server: 'http://localhost:8005', apiKey: 'test-key' }),
+      JSON.stringify({ server: 'http://localhost:18005', apiKey: 'test-key' }),
     );
 
     jest.clearAllMocks();
@@ -111,7 +111,7 @@ describe('Commands Integration', () => {
       const program = createFreshProgram();
       program.parse(['node', 'chanl', 'config', 'get', 'server']);
 
-      expect(consoleSpy).toHaveBeenCalledWith('http://localhost:8005');
+      expect(consoleSpy).toHaveBeenCalledWith('http://localhost:18005');
       consoleSpy.mockRestore();
     });
   });

@@ -7,7 +7,11 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as yaml from 'js-yaml';
-import { Scenario, ScenarioDocument } from '../schemas/scenario.schema';
+import {
+  Scenario,
+  ScenarioDocument,
+  DifficultyLevel,
+} from '../schemas/scenario.schema';
 import {
   ScenarioExecution,
   ScenarioExecutionDocument,
@@ -663,6 +667,105 @@ export class ScenarioService {
     } catch (error: any) {
       this.logger.error(
         `Failed to import scenario from YAML: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Create default starter scenarios. Idempotent — skips if defaults already exist.
+   * Creates scenarios as drafts (no agents configured yet).
+   */
+  async createDefaultScenarios(
+    personaMap: Record<string, string>,
+    scorecardId?: string,
+  ): Promise<Scenario[]> {
+    try {
+      // Check if defaults already exist
+      const existing = await this.scenarioModel
+        .find({ tags: '_default' })
+        .exec();
+      if (existing.length > 0) {
+        this.logger.log(
+          `Default scenarios already exist (${existing.length} found)`,
+        );
+        return existing.map((doc) => doc.toJSON() as any as Scenario);
+      }
+
+      const defaults = [
+        {
+          name: 'Angry Customer Refund',
+          description:
+            'A frustrated customer demands a full refund for a broken laptop purchased 2 weeks ago. Tests empathy, de-escalation, and resolution skills.',
+          prompt:
+            "I bought a laptop 2 weeks ago and it's already broken. I want a full refund NOW.",
+          category: 'support',
+          difficulty: 'medium' as DifficultyLevel,
+          personaKey: 'Angry - Karen',
+          tags: ['_default', 'refund', 'complaint', 'empathy'],
+        },
+        {
+          name: 'Confused Billing Inquiry',
+          description:
+            'A worried customer calls about unfamiliar charges on their bill. Tests clarity, patience, and ability to explain complex information.',
+          prompt:
+            "I don't understand my bill. There are charges I've never seen before and I'm worried.",
+          category: 'support',
+          difficulty: 'easy' as DifficultyLevel,
+          personaKey: 'Stressed - Mei',
+          tags: ['_default', 'billing', 'clarity', 'patience'],
+        },
+        {
+          name: 'Product Interest Call',
+          description:
+            'A curious prospect asks about the premium plan. Tests discovery, engagement, and sales skills.',
+          prompt:
+            "Hi, I've been looking at your premium plan. Can you tell me more about it?",
+          category: 'sales',
+          difficulty: 'easy' as DifficultyLevel,
+          personaKey: 'Curious - Maria',
+          tags: ['_default', 'sales', 'discovery', 'engagement'],
+        },
+      ];
+
+      const scenarios: Scenario[] = [];
+
+      for (const def of defaults) {
+        const personaId = personaMap[def.personaKey];
+        const personaIds = personaId
+          ? [new Types.ObjectId(personaId)]
+          : [];
+
+        const scenarioData: any = {
+          name: def.name,
+          description: def.description,
+          prompt: def.prompt,
+          category: def.category,
+          difficulty: def.difficulty,
+          tags: def.tags,
+          status: 'draft',
+          personaIds,
+          agentIds: [],
+          createdBy: 'system',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        if (scorecardId) {
+          scenarioData.scorecardId = new Types.ObjectId(scorecardId);
+        }
+
+        const scenario = new this.scenarioModel(scenarioData);
+        const saved = await scenario.save();
+        scenarios.push(saved.toJSON() as any as Scenario);
+      }
+
+      this.logger.log(`Created ${scenarios.length} default scenarios`);
+      return scenarios;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to create default scenarios: ${error.message}`,
         error.stack,
       );
       throw error;

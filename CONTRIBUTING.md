@@ -42,10 +42,10 @@ pnpm test:cov          # with coverage
 
 ```bash
 cd packages/server
-pnpm start:dev         # NestJS hot-reload on port 8005
+pnpm start:dev         # NestJS hot-reload on port 18005
 ```
 
-API docs are available at `http://localhost:8005/api/docs`.
+API docs are available at `http://localhost:18005/api/docs`.
 
 ## Project Structure
 

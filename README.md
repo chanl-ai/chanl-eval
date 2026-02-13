@@ -22,7 +22,7 @@ docker compose up -d
 # Build all packages
 pnpm build
 
-# Start the server (port 8005)
+# Start the server (port 18005)
 cd packages/server && pnpm start:dev
 ```
 
@@ -35,7 +35,7 @@ npm install -g @chanl-ai/cli
 ### 3. Configure
 
 ```bash
-chanl config set server http://localhost:8005
+chanl config set server http://localhost:18005
 chanl login
 ```
 
@@ -49,7 +49,7 @@ Or via the API directly:
 
 ```bash
 # Create a persona
-curl -X POST http://localhost:8005/personas \
+curl -X POST http://localhost:18005/personas \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Frustrated Karen",
@@ -65,7 +65,7 @@ curl -X POST http://localhost:8005/personas \
   }'
 
 # Create a scenario
-curl -X POST http://localhost:8005/scenarios \
+curl -X POST http://localhost:18005/scenarios \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Billing Dispute",
@@ -78,7 +78,7 @@ curl -X POST http://localhost:8005/scenarios \
   }'
 ```
 
-API docs are at [http://localhost:8005/api/docs](http://localhost:8005/api/docs).
+API docs are at [http://localhost:18005/api/docs](http://localhost:18005/api/docs).
 
 ## What It Does
 
@@ -112,7 +112,7 @@ chanl-eval/
 ├── packages/
 │   ├── scenarios-core/    # Personas, scenarios, execution engine, agent adapters
 │   ├── scorecards-core/   # Scorecards, criteria handlers, evaluation engine
-│   ├── server/            # Standalone NestJS server (port 8005)
+│   ├── server/            # Standalone NestJS server (port 18005)
 │   ├── cli/               # CLI tool ("chanl")
 │   ├── sdk/               # TypeScript SDK
 │   └── dashboard/         # React web UI (planned)

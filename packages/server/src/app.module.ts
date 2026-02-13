@@ -11,6 +11,7 @@ import { ScorecardsModule } from '@chanl-ai/scorecards-core';
 import { HealthModule } from './health/health.module';
 import { ApiKeyModule } from './auth/api-key.module';
 import { ApiKeyGuard } from './auth/api-key.guard';
+import { BootstrapModule } from './bootstrap/bootstrap.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ApiKeyGuard } from './auth/api-key.guard';
     // Server modules
     HealthModule,
     ApiKeyModule,
+    BootstrapModule,
   ],
   providers: [
     {

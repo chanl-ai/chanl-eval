@@ -46,7 +46,7 @@ export function unwrapResponse<T>(response: AxiosResponse): T {
  * import { EvalClient } from '@chanl-ai/eval-sdk';
  *
  * const client = new EvalClient({
- *   baseUrl: 'http://localhost:8005',
+ *   baseUrl: 'http://localhost:18005',
  *   apiKey: 'your-api-key',
  * });
  *

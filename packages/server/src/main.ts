@@ -33,7 +33,7 @@ async function bootstrap() {
   // Graceful shutdown
   app.enableShutdownHooks();
 
-  const port = process.env.PORT || 8005;
+  const port = process.env.PORT || 18005;
   await app.listen(port);
   logger.log(`chanl-eval server running on port ${port}`);
   logger.log(`Swagger docs at http://localhost:${port}/api/docs`);

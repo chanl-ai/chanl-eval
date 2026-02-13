@@ -35,7 +35,7 @@ describe('EvalClient', () => {
     });
 
     client = new EvalClient({
-      baseUrl: 'http://localhost:8005',
+      baseUrl: 'http://localhost:18005',
       apiKey: 'test-api-key',
     });
 
@@ -54,7 +54,7 @@ describe('EvalClient', () => {
   describe('constructor', () => {
     it('should create axios instance with correct baseURL and headers', () => {
       expect(mockedAxios.create).toHaveBeenCalledWith({
-        baseURL: 'http://localhost:8005',
+        baseURL: 'http://localhost:18005',
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': 'test-api-key',
