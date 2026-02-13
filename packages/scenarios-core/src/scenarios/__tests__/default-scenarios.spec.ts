@@ -73,14 +73,14 @@ describe('ScenarioService.createDefaultScenarios', () => {
     ]);
   });
 
-  it('should create scenarios as draft status', async () => {
+  it('should create scenarios as active status', async () => {
     const result = await service.createDefaultScenarios(
       personaMap,
       scorecardId,
     );
 
     for (const scenario of result) {
-      expect(scenario.status).toBe('draft');
+      expect(scenario.status).toBe('active');
     }
   });
 

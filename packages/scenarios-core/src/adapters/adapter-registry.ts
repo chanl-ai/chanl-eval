@@ -1,10 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { AgentAdapter } from './agent-adapter.interface';
+import { OpenAIAdapter } from './openai.adapter';
+import { AnthropicAdapter } from './anthropic.adapter';
+import { HttpAdapter } from './http.adapter';
 
 @Injectable()
-export class AdapterRegistry {
+export class AdapterRegistry implements OnModuleInit {
   private readonly logger = new Logger(AdapterRegistry.name);
   private readonly adapters = new Map<string, AgentAdapter>();
+
+  onModuleInit(): void {
+    this.register(new OpenAIAdapter());
+    this.register(new AnthropicAdapter());
+    this.register(new HttpAdapter());
+  }
 
   register(adapter: AgentAdapter): void {
     this.adapters.set(adapter.type, adapter);

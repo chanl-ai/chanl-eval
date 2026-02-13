@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { get, post, formatError } from '../client';
 import { printOutput, printSuccess, printError, truncate } from '../output';
+import { loadConfig } from '../config';
 
 /**
  * Shared run action — used by both `chanl scenarios run` and `chanl run`.
@@ -114,6 +115,23 @@ async function executeAndPoll(
   if (options.scorecardId) executeDto.scorecardId = options.scorecardId;
   if (options.mode) executeDto.mode = options.mode;
   if (options.dryRun) executeDto.dryRun = true;
+
+  // Inject adapter config from CLI config
+  const config = loadConfig();
+  if (config.provider === 'openai' && config.openaiApiKey) {
+    executeDto.adapterType = 'openai';
+    executeDto.adapterConfig = { apiKey: config.openaiApiKey };
+  } else if (config.provider === 'anthropic' && config.anthropicApiKey) {
+    executeDto.adapterType = 'anthropic';
+    executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
+  } else if (config.openaiApiKey) {
+    // Fallback: if openaiApiKey is set but no provider specified, use openai
+    executeDto.adapterType = 'openai';
+    executeDto.adapterConfig = { apiKey: config.openaiApiKey };
+  } else if (config.anthropicApiKey) {
+    executeDto.adapterType = 'anthropic';
+    executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
+  }
 
   const spinner = ora('Starting scenario execution...').start();
   const execResult = await post(

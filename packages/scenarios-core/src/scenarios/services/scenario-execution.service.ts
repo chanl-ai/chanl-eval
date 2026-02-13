@@ -16,6 +16,7 @@ import {
   ExecuteScenarioDto,
   RetryExecutionDto,
 } from '../dto/execute-scenario.dto';
+import { QueueProducerService } from '../../execution/queue-producer.service';
 
 @Injectable()
 export class ScenarioExecutionService {
@@ -26,6 +27,7 @@ export class ScenarioExecutionService {
     private executionModel: Model<ScenarioExecutionDocument>,
     @InjectModel(Scenario.name)
     private scenarioModel: Model<ScenarioDocument>,
+    private readonly queueProducer: QueueProducerService,
   ) {}
 
   /**
@@ -97,9 +99,19 @@ export class ScenarioExecutionService {
       const execution = new this.executionModel(executionData);
       const savedExecution = await execution.save();
 
-      // Note: Queue processing will be handled by execution engine (Task 4)
+      // Enqueue the BullMQ job for the execution processor
+      await this.queueProducer.enqueueExecution(executionId, scenarioId, {
+        workspaceId,
+        adapterType: executeDto.adapterType,
+        adapterConfig: executeDto.adapterConfig,
+        personaId:
+          executeDto.personaId || scenario.personaIds?.[0]?.toString(),
+        agentId: executeDto.agentId || scenario.agentIds?.[0]?.toString(),
+        parameters: executeDto.parameters,
+      });
+
       this.logger.log(
-        `Created execution ${executionId} for scenario ${scenarioId}`,
+        `Created and enqueued execution ${executionId} for scenario ${scenarioId}`,
       );
 
       return savedExecution.toJSON();

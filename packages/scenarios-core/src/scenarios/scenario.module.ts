@@ -10,6 +10,7 @@ import { ScenarioExecutionService } from './services/scenario-execution.service'
 import { ScenarioController } from './controllers/scenario.controller';
 import { ScenarioExecutionController } from './controllers/scenario-execution.controller';
 import { PersonaModule } from '../personas/persona.module';
+import { ExecutionModule } from '../execution/execution.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PersonaModule } from '../personas/persona.module';
       { name: ScenarioExecution.name, schema: ScenarioExecutionSchema },
     ]),
     forwardRef(() => PersonaModule),
+    ExecutionModule,
   ],
   // IMPORTANT: ExecutionController MUST come first for route ordering
   // /scenarios/executions must be matched before /scenarios/:id

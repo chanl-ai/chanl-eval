@@ -687,10 +687,18 @@ export class ScenarioService {
         .find({ tags: '_default' })
         .exec();
       if (existing.length > 0) {
-        this.logger.log(
-          `Default scenarios already exist (${existing.length} found)`,
+        // Ensure defaults are active (fix for early versions that created them as draft)
+        await this.scenarioModel.updateMany(
+          { tags: '_default', status: 'draft' },
+          { $set: { status: 'active' } },
         );
-        return existing.map((doc) => doc.toJSON() as any as Scenario);
+        const updated = await this.scenarioModel
+          .find({ tags: '_default' })
+          .exec();
+        this.logger.log(
+          `Default scenarios already exist (${updated.length} found)`,
+        );
+        return updated.map((doc) => doc.toJSON() as any as Scenario);
       }
 
       const defaults = [
@@ -744,7 +752,7 @@ export class ScenarioService {
           category: def.category,
           difficulty: def.difficulty,
           tags: def.tags,
-          status: 'draft',
+          status: 'active',
           personaIds,
           agentIds: [],
           createdBy: 'system',

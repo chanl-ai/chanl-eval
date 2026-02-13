@@ -47,6 +47,14 @@ export class ExecuteScenarioDto {
   @IsOptional()
   @IsBoolean()
   dryRun?: boolean;
+
+  @IsOptional()
+  @IsString()
+  adapterType?: string;
+
+  @IsOptional()
+  @IsObject()
+  adapterConfig?: Record<string, any>;
 }
 
 export class RetryExecutionDto {
