@@ -17,11 +17,11 @@ import { BootstrapModule } from './bootstrap/bootstrap.module';
   imports: [
     // Infrastructure
     MongooseModule.forRoot(
-      process.env.MONGODB_URI || 'mongodb://localhost:27017/chanl-eval',
+      process.env.MONGODB_URI || 'mongodb://localhost:27217/chanl-eval',
     ),
     BullModule.forRoot({
       redis: parseRedisUrl(
-        process.env.REDIS_URL || 'redis://localhost:6379',
+        process.env.REDIS_URL || 'redis://localhost:6479',
       ),
     }),
 

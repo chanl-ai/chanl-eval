@@ -49,9 +49,9 @@ COPY --from=builder /app/packages/server/dist packages/server/dist
 # Install production dependencies only
 RUN pnpm install --prod --frozen-lockfile || pnpm install --prod
 
-EXPOSE 8005
+EXPOSE 18005
 
-ENV PORT=8005
+ENV PORT=18005
 ENV NODE_ENV=production
 
 CMD ["node", "packages/server/dist/main.js"]
