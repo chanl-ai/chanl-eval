@@ -1,0 +1,27 @@
+name: Pricing Objection
+description: Interested buyer who is budget-conscious and pushing back on cost
+prompt: >-
+  We like the product but the pricing is way above our budget. Our team
+  is only 5 people and we're a startup. Is there a startup discount or
+  a smaller plan we could start with?
+category: sales
+difficulty: medium
+persona:
+  name: Budget-Conscious Startup Founder
+  emotion: neutral
+  speechStyle: normal
+  intentClarity: clear
+  behavior:
+    cooperationLevel: cooperative
+    patience: moderate
+assertions:
+  - type: keyword
+    must_include: ["pricing", "plan"]
+  - type: response_time
+    max_seconds: 5
+  - type: sentiment
+    expected: accommodating
+tags:
+  - sales
+  - pricing
+  - negotiation

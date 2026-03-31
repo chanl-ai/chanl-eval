@@ -7,6 +7,12 @@
   "bin": {
     "chanl": "./dist/bin/chanl.js"
   },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "scripts": {
     "build": "tsc",

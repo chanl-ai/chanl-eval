@@ -1,0 +1,26 @@
+name: Cold Outreach Response
+description: Prospect responding to a cold sales email with mild interest
+prompt: >-
+  I got your email about your analytics platform. We're currently using
+  a competitor but our contract is up in two months. What makes you different?
+category: sales
+difficulty: medium
+persona:
+  name: Skeptical Buyer
+  emotion: neutral
+  speechStyle: normal
+  intentClarity: clear
+  behavior:
+    cooperationLevel: neutral
+    patience: moderate
+assertions:
+  - type: keyword
+    must_include: ["differentiate", "value"]
+  - type: response_time
+    max_seconds: 5
+  - type: sentiment
+    expected: confident
+tags:
+  - sales
+  - outreach
+  - comparison

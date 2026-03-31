@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "Open-source AI agent testing and evaluation engine",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/chanl-ai/chanl-eval.git"

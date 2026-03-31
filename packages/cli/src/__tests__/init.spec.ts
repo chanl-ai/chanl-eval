@@ -210,15 +210,28 @@ describe('chanl init', () => {
   // scaffoldProject — with --template sales
   // =========================================================================
   describe('--template sales', () => {
-    it('creates 3 sales scenario files', () => {
+    it('creates 4 sales scenario files', () => {
       const projectDir = path.join(tmpDir, 'sales-project');
       const result = scaffoldProject(projectDir, { template: 'sales' });
 
       const scenarioFiles = result.files.filter((f) => f.startsWith('scenarios/'));
-      expect(scenarioFiles).toHaveLength(3);
+      expect(scenarioFiles).toHaveLength(4);
       expect(scenarioFiles).toContain('scenarios/cold-outreach.yaml');
       expect(scenarioFiles).toContain('scenarios/pricing-negotiation.yaml');
       expect(scenarioFiles).toContain('scenarios/demo-request.yaml');
+      expect(scenarioFiles).toContain('scenarios/competitor-comparison.yaml');
+    });
+
+    it('competitor-comparison scenario has analytical persona', () => {
+      const projectDir = path.join(tmpDir, 'sales-comp-project');
+      scaffoldProject(projectDir, { template: 'sales' });
+
+      const content = fs.readFileSync(
+        path.join(projectDir, 'scenarios/competitor-comparison.yaml'),
+        'utf-8',
+      );
+      expect(content).toContain('name: Analytical Decision Maker');
+      expect(content).toContain('difficulty: hard');
     });
   });
 
@@ -284,6 +297,78 @@ describe('chanl init', () => {
   });
 
   // =========================================================================
+  // Scenario assertions — templates include inline assertions
+  // =========================================================================
+  describe('scenario assertions', () => {
+    it('base scenarios include assertions block', () => {
+      const projectDir = path.join(tmpDir, 'assert-project');
+      scaffoldProject(projectDir);
+
+      const content = fs.readFileSync(
+        path.join(projectDir, 'scenarios/angry-customer.yaml'),
+        'utf-8',
+      );
+      expect(content).toContain('assertions:');
+      expect(content).toContain('type: keyword');
+      expect(content).toContain('must_include:');
+      expect(content).toContain('type: response_time');
+      expect(content).toContain('max_seconds: 5');
+    });
+
+    it('customer-support scenarios include assertions', () => {
+      const projectDir = path.join(tmpDir, 'cs-assert-project');
+      scaffoldProject(projectDir, { template: 'customer-support' });
+
+      const escalation = fs.readFileSync(
+        path.join(projectDir, 'scenarios/escalation-request.yaml'),
+        'utf-8',
+      );
+      expect(escalation).toContain('assertions:');
+      expect(escalation).toContain('must_include:');
+
+      const technical = fs.readFileSync(
+        path.join(projectDir, 'scenarios/technical-issue.yaml'),
+        'utf-8',
+      );
+      expect(technical).toContain('assertions:');
+    });
+
+    it('sales scenarios include assertions', () => {
+      const projectDir = path.join(tmpDir, 'sales-assert-project');
+      scaffoldProject(projectDir, { template: 'sales' });
+
+      const cold = fs.readFileSync(
+        path.join(projectDir, 'scenarios/cold-outreach.yaml'),
+        'utf-8',
+      );
+      expect(cold).toContain('assertions:');
+      expect(cold).toContain('type: keyword');
+    });
+  });
+
+  // =========================================================================
+  // getTemplateList — template metadata
+  // =========================================================================
+  describe('getTemplateList', () => {
+    it('returns metadata for all available templates', () => {
+      const { getTemplateList } = require('../commands/init');
+      const list = getTemplateList();
+
+      expect(list).toHaveLength(2);
+
+      const cs = list.find((t: any) => t.name === 'customer-support');
+      expect(cs).toBeDefined();
+      expect(cs.scenarioCount).toBe(5);
+      expect(cs.description).toContain('refund');
+
+      const sales = list.find((t: any) => t.name === 'sales');
+      expect(sales).toBeDefined();
+      expect(sales.scenarioCount).toBe(4);
+      expect(sales.description).toContain('outreach');
+    });
+  });
+
+  // =========================================================================
   // CLI integration — command registration and execution
   // =========================================================================
   describe('CLI integration', () => {
@@ -311,6 +396,30 @@ describe('chanl init', () => {
       const initCmd = program.commands.find((c: any) => c.name() === 'init');
       expect(initCmd).toBeDefined();
       expect(initCmd!.description()).toContain('Scaffold');
+    });
+
+    it('templates command is registered with list subcommand', () => {
+      const program = createFreshProgram();
+      const templatesCmd = program.commands.find((c: any) => c.name() === 'templates');
+      expect(templatesCmd).toBeDefined();
+      expect(templatesCmd!.description()).toContain('template');
+
+      const listCmd = templatesCmd!.commands.find((c: any) => c.name() === 'list');
+      expect(listCmd).toBeDefined();
+    });
+
+    it('templates list prints available templates', async () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      const program = createFreshProgram();
+
+      await program.parseAsync(['node', 'chanl', 'templates', 'list']);
+
+      const output = consoleSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(output).toContain('customer-support');
+      expect(output).toContain('sales');
+      expect(output).toContain('scenarios');
+
+      consoleSpy.mockRestore();
     });
 
     it('init --help shows template option', () => {

@@ -117,6 +117,11 @@ persona:
   behavior:
     cooperationLevel: hostile
     patience: impatient
+assertions:
+  - type: keyword
+    must_include: ["refund", "policy"]
+  - type: response_time
+    max_seconds: 5
 tags:
   - refund
   - support
@@ -140,6 +145,11 @@ persona:
   behavior:
     cooperationLevel: neutral
     patience: moderate
+assertions:
+  - type: keyword
+    must_include: ["credit", "charge"]
+  - type: response_time
+    max_seconds: 5
 tags:
   - billing
   - support
@@ -163,6 +173,11 @@ persona:
   behavior:
     cooperationLevel: cooperative
     patience: patient
+assertions:
+  - type: keyword
+    must_include: ["plan", "features"]
+  - type: response_time
+    max_seconds: 5
 tags:
   - sales
   - inquiry
@@ -192,6 +207,11 @@ persona:
   behavior:
     cooperationLevel: cooperative
     patience: patient
+assertions:
+  - type: keyword
+    must_include: ["troubleshoot", "steps"]
+  - type: response_time
+    max_seconds: 5
 tags:
   - technical
   - support
@@ -215,6 +235,11 @@ persona:
   behavior:
     cooperationLevel: hostile
     patience: none
+assertions:
+  - type: keyword
+    must_include: ["manager", "escalate"]
+  - type: response_time
+    max_seconds: 5
 tags:
   - escalation
   - support
@@ -243,6 +268,11 @@ persona:
   behavior:
     cooperationLevel: neutral
     patience: moderate
+assertions:
+  - type: keyword
+    must_include: ["differentiate", "value"]
+  - type: response_time
+    max_seconds: 5
 tags:
   - sales
   - outreach
@@ -266,6 +296,11 @@ persona:
   behavior:
     cooperationLevel: cooperative
     patience: moderate
+assertions:
+  - type: keyword
+    must_include: ["pricing", "plan"]
+  - type: response_time
+    max_seconds: 5
 tags:
   - sales
   - pricing
@@ -289,10 +324,44 @@ persona:
   behavior:
     cooperationLevel: cooperative
     patience: patient
+assertions:
+  - type: keyword
+    must_include: ["demo", "schedule"]
+  - type: response_time
+    max_seconds: 5
 tags:
   - sales
   - demo
   - inbound
+`,
+  },
+  {
+    filename: 'competitor-comparison.yaml',
+    content: `name: Competitor Comparison
+description: Prospect actively comparing your product against a known competitor
+prompt: >-
+  We've been evaluating both your platform and Competitor X. They offer
+  a similar feature set at a lower price point. Can you walk me through
+  why we should choose you instead?
+category: sales
+difficulty: hard
+persona:
+  name: Analytical Decision Maker
+  emotion: neutral
+  speechStyle: normal
+  intentClarity: very clear
+  behavior:
+    cooperationLevel: neutral
+    patience: moderate
+assertions:
+  - type: keyword
+    must_include: ["advantage", "compare"]
+  - type: response_time
+    max_seconds: 5
+tags:
+  - sales
+  - competitor
+  - comparison
 `,
   },
 ];
@@ -365,6 +434,39 @@ export function scaffoldProject(
 }
 
 // ---------------------------------------------------------------------------
+// Template metadata — used by `chanl templates list`
+// ---------------------------------------------------------------------------
+
+interface TemplateInfo {
+  name: string;
+  description: string;
+  scenarioCount: number;
+  categories: string[];
+}
+
+const TEMPLATE_INFO: Record<string, TemplateInfo> = {
+  'customer-support': {
+    name: 'customer-support',
+    description: 'Support scenarios: refunds, billing, technical issues, escalations',
+    scenarioCount: CUSTOMER_SUPPORT_SCENARIOS.length,
+    categories: ['support', 'sales'],
+  },
+  'sales': {
+    name: 'sales',
+    description: 'Sales scenarios: outreach, pricing objections, demos, competitor comparison',
+    scenarioCount: SALES_SCENARIOS.length,
+    categories: ['sales'],
+  },
+};
+
+/**
+ * Get metadata about all available templates.
+ */
+export function getTemplateList(): TemplateInfo[] {
+  return Object.values(TEMPLATE_INFO);
+}
+
+// ---------------------------------------------------------------------------
 // CLI command registration
 // ---------------------------------------------------------------------------
 
@@ -383,6 +485,36 @@ export function registerInitCommand(program: Command): void {
         printError(err.message);
         process.exit(1);
       }
+    });
+}
+
+export function registerTemplatesCommand(program: Command): void {
+  const templates = program
+    .command('templates')
+    .description('Manage scenario template packs');
+
+  templates
+    .command('list')
+    .description('List available scenario template packs')
+    .action(() => {
+      const list = getTemplateList();
+
+      console.log('');
+      console.log(chalk.bold('Available template packs:'));
+      console.log('');
+
+      for (const tpl of list) {
+        console.log(
+          `  ${chalk.green(tpl.name)}` +
+          chalk.dim(` (${tpl.scenarioCount} scenarios)`),
+        );
+        console.log(`  ${chalk.dim(tpl.description)}`);
+        console.log('');
+      }
+
+      console.log(chalk.dim('  Usage: chanl init --template <name>'));
+      console.log(chalk.dim('  Example: chanl init --template customer-support'));
+      console.log('');
     });
 }
 

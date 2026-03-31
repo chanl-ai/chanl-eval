@@ -4,6 +4,12 @@
   "description": "Core scenario engine: personas, scenarios, execution, adapters",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "scripts": {
     "build": "tsc",

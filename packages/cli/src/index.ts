@@ -5,7 +5,7 @@ import { registerScenariosCommand, runScenarioAction } from './commands/scenario
 import { registerPersonasCommand } from './commands/personas';
 import { registerScorecardsCommand } from './commands/scorecards';
 import { registerServerCommand } from './commands/server';
-import { registerInitCommand } from './commands/init';
+import { registerInitCommand, registerTemplatesCommand } from './commands/init';
 import { registerAnalyticsCommand } from './commands/analytics';
 import { registerTestCommand } from './commands/test';
 import { registerCompareCommand } from './commands/compare';
@@ -37,6 +37,7 @@ export function createProgram(): Command {
 
   // Register all command groups
   registerInitCommand(program);
+  registerTemplatesCommand(program);
   registerConfigCommand(program);
   registerLoginCommand(program);
   registerScenariosCommand(program);

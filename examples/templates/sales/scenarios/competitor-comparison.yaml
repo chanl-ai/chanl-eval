@@ -1,0 +1,27 @@
+name: Competitor Comparison
+description: Prospect actively comparing your product against a known competitor
+prompt: >-
+  We've been evaluating both your platform and Competitor X. They offer
+  a similar feature set at a lower price point. Can you walk me through
+  why we should choose you instead?
+category: sales
+difficulty: hard
+persona:
+  name: Analytical Decision Maker
+  emotion: neutral
+  speechStyle: normal
+  intentClarity: very clear
+  behavior:
+    cooperationLevel: neutral
+    patience: moderate
+assertions:
+  - type: keyword
+    must_include: ["advantage", "compare"]
+  - type: response_time
+    max_seconds: 5
+  - type: sentiment
+    expected: confident
+tags:
+  - sales
+  - competitor
+  - comparison
