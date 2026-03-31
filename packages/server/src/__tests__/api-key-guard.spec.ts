@@ -9,6 +9,8 @@ describe('ApiKeyGuard', () => {
   let apiKeyService: ApiKeyService;
   let reflector: Reflector;
 
+  const prevRequire = process.env.CHANL_EVAL_REQUIRE_API_KEY;
+
   function createMockContext(
     url: string,
     method: string,
@@ -28,6 +30,7 @@ describe('ApiKeyGuard', () => {
   }
 
   beforeEach(async () => {
+    process.env.CHANL_EVAL_REQUIRE_API_KEY = 'true';
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ApiKeyGuard,
@@ -44,6 +47,14 @@ describe('ApiKeyGuard', () => {
     guard = module.get<ApiKeyGuard>(ApiKeyGuard);
     apiKeyService = module.get<ApiKeyService>(ApiKeyService);
     reflector = module.get<Reflector>(Reflector);
+  });
+
+  afterEach(() => {
+    if (prevRequire === undefined) {
+      delete process.env.CHANL_EVAL_REQUIRE_API_KEY;
+    } else {
+      process.env.CHANL_EVAL_REQUIRE_API_KEY = prevRequire;
+    }
   });
 
   it('should allow health endpoint without auth', async () => {
@@ -85,6 +96,14 @@ describe('ApiKeyGuard', () => {
   it('should allow public routes without auth', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(true);
     const context = createMockContext('/api-keys', 'POST');
+    const result = await guard.canActivate(context);
+    expect(result).toBe(true);
+  });
+
+  it('should allow non-health routes when CHANL_EVAL_REQUIRE_API_KEY is not set', async () => {
+    delete process.env.CHANL_EVAL_REQUIRE_API_KEY;
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+    const context = createMockContext('/personas', 'GET');
     const result = await guard.canActivate(context);
     expect(result).toBe(true);
   });

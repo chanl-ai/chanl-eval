@@ -36,6 +36,10 @@ export class ApiKeyGuard implements CanActivate {
       return true;
     }
 
+    if (process.env.CHANL_EVAL_REQUIRE_API_KEY !== 'true') {
+      return true;
+    }
+
     const apiKey = request.headers['x-api-key'] as string | undefined;
 
     if (!apiKey) {

@@ -69,12 +69,15 @@ export class EvalClient {
   readonly executions: ExecutionsModule;
 
   constructor(config: EvalClientConfig) {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (config.apiKey) {
+      headers['X-API-Key'] = config.apiKey;
+    }
     this.http = axios.create({
       baseURL: config.baseUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': config.apiKey,
-      },
+      headers,
     });
 
     // Response interceptor to convert HTTP errors into typed SDK errors

@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { SiteHeader } from '@/components/site-header';
 import {
   Table,
   TableBody,
@@ -27,7 +26,6 @@ export default function PersonasListPage() {
 
   return (
     <>
-      <SiteHeader title="Personas" />
       <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
         {!apiKey ? (
           <p className="text-muted-foreground text-sm">

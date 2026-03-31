@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import 'dotenv/config';
 import { createProgram } from '../index';
 
 const program = createProgram();

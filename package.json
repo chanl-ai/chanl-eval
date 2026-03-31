@@ -13,7 +13,9 @@
     "test": "pnpm -r test",
     "test:cov": "pnpm -r test:cov",
     "lint": "pnpm -r lint",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "dev:server": "pnpm --filter @chanl/eval-server start:dev",
+    "dev:dashboard": "pnpm --filter @chanl/eval-dashboard dev"
   },
   "engines": {
     "node": ">=18.0.0",

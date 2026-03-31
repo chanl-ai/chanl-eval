@@ -1,19 +1,21 @@
 'use client';
 
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { EvalAppSidebar } from '@/components/eval-app-sidebar';
+import { SiteHeader } from '@/components/site-header';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider
       style={
         {
-          '--header-height': 'calc(var(--spacing) * 14)',
+          '--header-height': 'calc(var(--spacing) * 16)',
         } as React.CSSProperties
       }
     >
-      <EvalAppSidebar />
+      <EvalAppSidebar variant="inset" />
       <SidebarInset>
+        <SiteHeader />
         <div className="flex min-h-svh flex-1 flex-col">{children}</div>
       </SidebarInset>
     </SidebarProvider>

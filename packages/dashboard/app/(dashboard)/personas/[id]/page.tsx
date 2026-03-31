@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { SiteHeader } from '@/components/site-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,7 +58,6 @@ export default function PersonaDetailPage() {
 
   return (
     <>
-      <SiteHeader title="Persona" />
       <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
         <Link href="/personas" className="text-muted-foreground text-sm hover:underline">
           ← Personas

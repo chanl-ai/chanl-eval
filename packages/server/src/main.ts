@@ -37,6 +37,11 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`chanl-eval server running on port ${port}`);
   logger.log(`Swagger docs at http://localhost:${port}/api/docs`);
+  if (process.env.CHANL_EVAL_REQUIRE_API_KEY !== 'true') {
+    logger.warn(
+      'X-API-Key not required (set CHANL_EVAL_REQUIRE_API_KEY=true to enforce in shared or production environments)',
+    );
+  }
 }
 
 bootstrap();

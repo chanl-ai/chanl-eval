@@ -27,13 +27,14 @@ pnpm build
 cd packages/server && pnpm start:dev
 ```
 
-Server listens on **http://localhost:18005**. On **first** startup with an empty database, the log prints a **bootstrap API key** (save it). All non-health routes require header **`X-API-Key`**.
+Server listens on **http://localhost:18005**. By default, **`X-API-Key` is not required** (good for local use). Set **`CHANL_EVAL_REQUIRE_API_KEY=true`** when running the server to enforce API keys; on first boot with an empty database the log can still print a **bootstrap key** for that mode.
 
 ### 3. CLI from this repo (development)
 
 ```bash
 cd packages/cli && pnpm link --global
 chanl config set server http://localhost:18005
+# Optional if the server has CHANL_EVAL_REQUIRE_API_KEY=true:
 chanl login   # paste the bootstrap API key when prompted
 chanl config set provider openai
 chanl config set openaiApiKey sk-...   # key for the *agent under test*
@@ -57,24 +58,32 @@ chanl scenarios run examples/angry-customer.yaml
 
 ### Optional: Web dashboard (local)
 
-Minimal UI on port **3000** using the same `@chanl/eval-sdk` as programmatic clients (no `platform-sdk`). Set **server URL**, **X-API-Key**, and (for **Run** on a scenario) an **OpenAI or Anthropic API key** for the agent under test.
+Minimal UI using the same `@chanl/eval-sdk` as programmatic clients (no `platform-sdk`). Defaults to port **3000**; use another port if that is taken (`pnpm exec next dev --port 3010` in `packages/dashboard`).
+
+**Optional:** copy [`packages/dashboard/.env.example`](packages/dashboard/.env.example) to `packages/dashboard/.env.local` if you use `CHANL_EVAL_REQUIRE_API_KEY=true` (set `NEXT_PUBLIC_CHANL_EVAL_API_KEY`) or for **Run scenario** (`NEXT_PUBLIC_CHANL_EVAL_AGENT_API_KEY`).
 
 ```bash
 # From repo root, after pnpm build
 pnpm --filter @chanl/eval-dashboard dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), complete **Settings**, then browse executions, scenarios, personas, and scorecards.
+Open the printed local URL, then browse executions, scenarios, personas, and scorecards.
+
+**Shortcuts:** `pnpm dev:server` and `pnpm dev:dashboard` (from repo root) start the API and the UI.
+
+**If the dashboard shows “set API key” but you added `.env.local`:** restart `next dev` after editing env files, then hard-refresh the browser. If you ever cleared the key in Settings, an empty value was saved in `localStorage` and could override env until you paste a key again or clear site data for `localhost` (or use the fix in the latest `eval-config`).
+
+**If the server fails with `EADDRINUSE` on port 18005:** another process is using that port — stop it or set `PORT=18006` (and point the dashboard at that URL).
+
+**CLI via `.env`:** optional repo-root [`.env.example`](.env.example) — copy to `.env` and set `CHANL_API_KEY` / `CHANL_OPENAI_API_KEY` (loaded automatically when you run `chanl`; `~/.chanl/config.json` still overrides when set).
 
 ### API example (create resources)
 
-Replace `YOUR_API_KEY` and use valid 24-character hex ids for `personaIds` / `agentIds` (see `chanl personas list`).
+Use valid 24-character hex ids for `personaIds` / `agentIds` (see `chanl personas list`). Omit `X-API-Key` unless the server has `CHANL_EVAL_REQUIRE_API_KEY=true`.
 
 ```bash
-API_KEY=YOUR_API_KEY
 curl -s -X POST http://localhost:18005/personas \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
   -d '{
     "name": "Frustrated Karen",
     "gender": "female",
@@ -90,7 +99,6 @@ curl -s -X POST http://localhost:18005/personas \
 
 curl -s -X POST http://localhost:18005/scenarios \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
   -d '{
     "name": "Billing Dispute",
     "prompt": "Customer was double-charged and wants a refund",

@@ -1,6 +1,5 @@
 'use client';
 
-import { SiteHeader } from '@/components/site-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -44,14 +43,15 @@ export default function SettingsPage() {
 
   return (
     <>
-      <SiteHeader title="Settings" />
       <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
         <Card>
           <CardHeader>
             <CardTitle>chanl-eval server</CardTitle>
             <CardDescription>
               Same REST API as the CLI. On first server boot, copy the API key from the server log
-              if none exists yet.
+              if none exists yet — or set <code className="text-xs">NEXT_PUBLIC_CHANL_EVAL_API_KEY</code> in{' '}
+              <code className="text-xs">packages/dashboard/.env.local</code> (see{' '}
+              <code className="text-xs">.env.example</code>).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

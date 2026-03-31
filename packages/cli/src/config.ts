@@ -50,16 +50,29 @@ function getConfigPath(): string {
  */
 export function loadConfig(): CliConfig {
   const configPath = getConfigPath();
+  let fromFile: Record<string, unknown> = {};
   try {
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, 'utf-8');
-      const parsed = JSON.parse(raw);
-      return { ...DEFAULT_CONFIG, ...parsed };
+      fromFile = JSON.parse(raw) as Record<string, unknown>;
     }
   } catch {
-    // Ignore parse errors, return defaults
+    fromFile = {};
   }
-  return { ...DEFAULT_CONFIG };
+  const merged = { ...DEFAULT_CONFIG, ...fromFile } as CliConfig;
+  if (!('server' in fromFile) && process.env.CHANL_SERVER_URL) {
+    merged.server = process.env.CHANL_SERVER_URL;
+  }
+  if (!('apiKey' in fromFile) && process.env.CHANL_API_KEY) {
+    merged.apiKey = process.env.CHANL_API_KEY;
+  }
+  if (!('openaiApiKey' in fromFile) && process.env.CHANL_OPENAI_API_KEY) {
+    merged.openaiApiKey = process.env.CHANL_OPENAI_API_KEY;
+  }
+  if (!('anthropicApiKey' in fromFile) && process.env.CHANL_ANTHROPIC_API_KEY) {
+    merged.anthropicApiKey = process.env.CHANL_ANTHROPIC_API_KEY;
+  }
+  return merged;
 }
 
 /**

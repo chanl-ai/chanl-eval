@@ -18,6 +18,10 @@ describe('Config', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chanl-cli-test-'));
     originalEnv = process.env.CHANL_CONFIG_DIR;
     process.env.CHANL_CONFIG_DIR = tmpDir;
+    delete process.env.CHANL_SERVER_URL;
+    delete process.env.CHANL_API_KEY;
+    delete process.env.CHANL_OPENAI_API_KEY;
+    delete process.env.CHANL_ANTHROPIC_API_KEY;
   });
 
   afterEach(() => {
@@ -39,6 +43,15 @@ describe('Config', () => {
     const config = loadConfig();
     expect(config.server).toBe('http://localhost:18005');
     expect(config.apiKey).toBe('');
+  });
+
+  it('loadConfig fills server and apiKey from env when file missing', () => {
+    process.env.CHANL_SERVER_URL = 'http://env:9999';
+    process.env.CHANL_API_KEY = 'env-key';
+    const { loadConfig } = requireFresh();
+    const config = loadConfig();
+    expect(config.server).toBe('http://env:9999');
+    expect(config.apiKey).toBe('env-key');
   });
 
   it('saveConfig creates config file and loadConfig reads it back', () => {

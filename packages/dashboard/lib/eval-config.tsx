@@ -15,10 +15,17 @@ const STORAGE_KEY = 'chanl-eval-api-key';
 const STORAGE_ADAPTER = 'chanl-eval-adapter-type';
 const STORAGE_AGENT_KEY = 'chanl-eval-agent-api-key';
 
-const DEFAULT_BASE =
-  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_CHANL_EVAL_SERVER
-    ? process.env.NEXT_PUBLIC_CHANL_EVAL_SERVER
-    : 'http://localhost:18005';
+function envServer(): string {
+  return process.env.NEXT_PUBLIC_CHANL_EVAL_SERVER || 'http://localhost:18005';
+}
+
+function envApiKey(): string {
+  return process.env.NEXT_PUBLIC_CHANL_EVAL_API_KEY || '';
+}
+
+function envAgentApiKey(): string {
+  return process.env.NEXT_PUBLIC_CHANL_EVAL_AGENT_API_KEY || '';
+}
 
 export type AdapterType = 'openai' | 'anthropic';
 
@@ -38,10 +45,10 @@ interface EvalConfigContextValue {
 const EvalConfigContext = createContext<EvalConfigContextValue | null>(null);
 
 export function EvalConfigProvider({ children }: { children: React.ReactNode }) {
-  const [baseUrl, setBaseUrlState] = useState(DEFAULT_BASE);
-  const [apiKey, setApiKeyState] = useState('');
+  const [baseUrl, setBaseUrlState] = useState(() => envServer());
+  const [apiKey, setApiKeyState] = useState(() => envApiKey());
   const [adapterType, setAdapterTypeState] = useState<AdapterType>('openai');
-  const [agentApiKey, setAgentApiKeyState] = useState('');
+  const [agentApiKey, setAgentApiKeyState] = useState(() => envAgentApiKey());
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -50,10 +57,14 @@ export function EvalConfigProvider({ children }: { children: React.ReactNode }) 
       const k = localStorage.getItem(STORAGE_KEY);
       const a = localStorage.getItem(STORAGE_ADAPTER) as AdapterType | null;
       const ak = localStorage.getItem(STORAGE_AGENT_KEY);
-      if (b) setBaseUrlState(b);
-      if (k !== null) setApiKeyState(k);
+      // Non-empty localStorage wins; empty string previously meant "cleared" and
+      // would wipe NEXT_PUBLIC_* — fall back to env in that case.
+      if (b !== null && b !== '') setBaseUrlState(b);
+      if (k !== null && k !== '') setApiKeyState(k);
+      else if (k === '' && envApiKey()) setApiKeyState(envApiKey());
       if (a === 'openai' || a === 'anthropic') setAdapterTypeState(a);
-      if (ak !== null) setAgentApiKeyState(ak);
+      if (ak !== null && ak !== '') setAgentApiKeyState(ak);
+      else if (ak === '' && envAgentApiKey()) setAgentApiKeyState(envAgentApiKey());
     } catch {
       /* ignore */
     }

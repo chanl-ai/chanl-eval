@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { SiteHeader } from '@/components/site-header';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -57,7 +56,6 @@ export default function ExecutionDetailPage() {
 
   return (
     <>
-      <SiteHeader title="Execution" />
       <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
         <Link href="/executions" className="text-muted-foreground text-sm hover:underline">
           ← Executions

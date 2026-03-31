@@ -1,11 +1,12 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
+import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   ClipboardList,
   FileText,
-  LayoutDashboard,
   ScrollText,
   Settings,
   UserCircle,
@@ -31,23 +32,18 @@ const nav = [
   { title: 'Settings', href: '/settings', icon: Settings },
 ];
 
-export function EvalAppSidebar() {
+export function EvalAppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
 
   return (
-    <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader className="border-b border-sidebar-border/60">
+    <Sidebar collapsible="icon" {...props}>
+      <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/executions">
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <LayoutDashboard className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Chanl Eval</span>
-                  <span className="truncate text-xs text-muted-foreground">Local</span>
-                </div>
+            <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:!p-1.5">
+              <Link href="/executions" className="flex items-center gap-2">
+                <img src="/chanl-logo.svg" alt="Chanl" className="!size-5" />
+                <span className="text-base font-semibold">Chanl</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
