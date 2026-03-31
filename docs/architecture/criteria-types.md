@@ -281,8 +281,8 @@ import {
   CriteriaHandler,
   CriteriaHandlerResult,
   EvaluationContext,
-} from '@chanl-ai/scorecards-core';
-import { ScorecardCriteria } from '@chanl-ai/scorecards-core';
+} from '@chanl/scorecards-core';
+import { ScorecardCriteria } from '@chanl/scorecards-core';
 
 // Define your settings interface
 export interface SentimentCriteriaSettings {
@@ -347,7 +347,7 @@ Your settings interface determines what configuration users provide when creatin
 ### Step 3: Register the Handler
 
 ```typescript
-import { CriteriaHandlerRegistry } from '@chanl-ai/scorecards-core';
+import { CriteriaHandlerRegistry } from '@chanl/scorecards-core';
 import { SentimentHandler } from './sentiment.handler';
 
 registry.register(new SentimentHandler());
@@ -435,7 +435,7 @@ import {
   isBooleanThreshold,
   isNumericalThreshold,
   isPercentageThreshold,
-} from '@chanl-ai/scorecards-core';
+} from '@chanl/scorecards-core';
 
 if (isBooleanThreshold(criteria.threshold)) {
   // threshold.expectedValue is available

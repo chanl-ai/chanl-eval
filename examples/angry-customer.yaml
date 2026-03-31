@@ -1,0 +1,20 @@
+# Example scenario — import with: chanl scenarios run examples/angry-customer.yaml
+# Replace PERSONA_ID below with an id from `chanl personas list` (seeded defaults exist after first boot).
+# agentIds uses a placeholder ObjectId; swap for your agent registry id if you use one.
+
+name: Angry Customer Refund (example)
+description: >-
+  Frustrated customer wants a refund — tests de-escalation and policy handling.
+prompt: >-
+  I bought a laptop two weeks ago and it's already broken. I want a full refund NOW.
+category: support
+difficulty: medium
+status: active
+tags:
+  - example
+  - refund
+personaIds:
+  - "PERSONA_ID"
+agentIds:
+  - "507f1f77bcf86cd799439011"
+createdBy: dev

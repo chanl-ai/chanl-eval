@@ -8,6 +8,8 @@ const VALID_KEYS: Array<keyof CliConfig> = [
   'provider',
   'openaiApiKey',
   'anthropicApiKey',
+  'httpEndpoint',
+  'httpApiKey',
   'twilioAccountSid',
   'twilioAuthToken',
   'twilioPhoneNumber',
@@ -19,6 +21,7 @@ const SECRET_KEYS: Array<keyof CliConfig> = [
   'apiKey',
   'openaiApiKey',
   'anthropicApiKey',
+  'httpApiKey',
   'twilioAuthToken',
 ];
 

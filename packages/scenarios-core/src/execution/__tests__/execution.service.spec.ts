@@ -11,6 +11,7 @@ import { QueueProducerService } from '../queue-producer.service';
 import { ExecutionProcessor } from '../execution-processor';
 import { AdapterRegistry } from '../../adapters/adapter-registry';
 import { PersonaSimulatorService } from '../../simulator/persona-simulator.service';
+import { EvaluationService } from '@chanl/scorecards-core';
 import {
   Scenario,
   ScenarioSchema,
@@ -665,6 +666,20 @@ describe('ExecutionProcessor', () => {
         ExecutionProcessor,
         AdapterRegistry,
         PersonaSimulatorService,
+        {
+          provide: EvaluationService,
+          useValue: {
+            evaluate: jest.fn().mockResolvedValue({
+              overallScore: 8,
+              passed: true,
+              resultId: 'mock-result',
+              scorecardId: 'mock-sc',
+              categoryScores: {},
+              criteriaResults: [],
+              status: 'completed',
+            }),
+          },
+        },
       ],
     }).compile();
 

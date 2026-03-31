@@ -1,5 +1,5 @@
 /**
- * @chanl-ai/eval-sdk
+ * @chanl/eval-sdk
  *
  * TypeScript SDK for the chanl-eval server.
  */

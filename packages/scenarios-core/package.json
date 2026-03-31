@@ -1,5 +1,5 @@
 {
-  "name": "@chanl-ai/scenarios-core",
+  "name": "@chanl/scenarios-core",
   "version": "0.1.0",
   "description": "Core scenario engine: personas, scenarios, execution, adapters",
   "main": "dist/index.js",
@@ -12,6 +12,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@chanl/scorecards-core": "workspace:*",
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
     "@nestjs/mongoose": "^10.0.0",
@@ -27,7 +28,6 @@
     "reflect-metadata": "^0.1.13"
   },
   "devDependencies": {
-    "@chanl-ai/scorecards-core": "workspace:*",
     "@nestjs/testing": "^10.0.0",
     "@types/jest": "^29.0.0",
     "@types/js-yaml": "^4.0.0",

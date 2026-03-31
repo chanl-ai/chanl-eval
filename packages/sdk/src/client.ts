@@ -43,7 +43,7 @@ export function unwrapResponse<T>(response: AxiosResponse): T {
  *
  * @example
  * ```typescript
- * import { EvalClient } from '@chanl-ai/eval-sdk';
+ * import { EvalClient } from '@chanl/eval-sdk';
  *
  * const client = new EvalClient({
  *   baseUrl: 'http://localhost:18005',

@@ -11,7 +11,7 @@ chanl-eval/
 │   ├── scorecards-core/   # Scorecards, criteria handlers, evaluation engine
 │   ├── server/            # Standalone NestJS server (port 8005)
 │   ├── cli/               # CLI tool ("chanl")
-│   ├── sdk/               # TypeScript SDK (@chanl-ai/eval-sdk)
+│   ├── sdk/               # TypeScript SDK (@chanl/eval-sdk)
 │   └── dashboard/         # React web UI (planned)
 ├── adapters/              # Community agent adapters
 ├── criteria-types/        # Community criteria type handlers
@@ -26,7 +26,7 @@ chanl-eval/
 │                      Consumers                              │
 │   ┌──────────┐    ┌──────────┐    ┌──────────────────┐      │
 │   │   CLI    │    │ Dashboard│    │  SDK (external)  │      │
-│   │ @chanl-  │    │ @chanl-  │    │  @chanl-ai/      │      │
+│   │ @chanl-  │    │ @chanl-  │    │  @chanl/      │      │
 │   │ ai/cli   │    │ ai/      │    │  eval-sdk        │      │
 │   └────┬─────┘    │ dashboard│    └────────┬─────────┘      │
 │        │          └────┬─────┘             │                │
@@ -35,7 +35,7 @@ chanl-eval/
 │                        ▼                                    │
 │              ┌─────────────────┐                            │
 │              │     Server      │  REST API (port 8005)      │
-│              │ @chanl-ai/      │  Swagger at /api/docs      │
+│              │ @chanl/      │  Swagger at /api/docs      │
 │              │ eval-server     │                            │
 │              └───────┬─────────┘                            │
 │                      │                                      │

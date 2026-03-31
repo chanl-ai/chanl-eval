@@ -8,6 +8,8 @@ export interface CliConfig {
   provider: string;
   openaiApiKey: string;
   anthropicApiKey: string;
+  httpEndpoint: string;
+  httpApiKey: string;
   twilioAccountSid: string;
   twilioAuthToken: string;
   twilioPhoneNumber: string;
@@ -22,6 +24,8 @@ const DEFAULT_CONFIG: CliConfig = {
   provider: '',
   openaiApiKey: '',
   anthropicApiKey: '',
+  httpEndpoint: '',
+  httpApiKey: '',
   twilioAccountSid: '',
   twilioAuthToken: '',
   twilioPhoneNumber: '',

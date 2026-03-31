@@ -78,6 +78,8 @@ describe('New CLI Commands', () => {
       JSON.stringify({
         server: 'http://localhost:18005',
         apiKey: 'test-key',
+        provider: 'http',
+        httpEndpoint: 'http://localhost:19000',
         analytics: true,
         analyticsId: 'test-uuid-123',
       }),

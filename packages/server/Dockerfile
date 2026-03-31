@@ -22,9 +22,9 @@ COPY packages/scorecards-core/ packages/scorecards-core/
 COPY packages/server/ packages/server/
 
 # Build all packages in order
-RUN pnpm --filter @chanl-ai/scenarios-core build && \
-    pnpm --filter @chanl-ai/scorecards-core build && \
-    pnpm --filter @chanl-ai/eval-server build
+RUN pnpm --filter @chanl/scenarios-core build && \
+    pnpm --filter @chanl/scorecards-core build && \
+    pnpm --filter @chanl/eval-server build
 
 # ---- Runtime stage ----
 FROM node:20-alpine

@@ -64,7 +64,7 @@ interface AgentResponse {
 Tests agents built on OpenAI's Chat Completions API (GPT-4o, GPT-4, etc.).
 
 ```typescript
-import { OpenAIAdapter } from '@chanl-ai/scenarios-core';
+import { OpenAIAdapter } from '@chanl/scenarios-core';
 
 const adapter = new OpenAIAdapter();
 await adapter.connect({
@@ -91,7 +91,7 @@ Source: `packages/scenarios-core/src/adapters/openai.adapter.ts`
 Tests agents built on Anthropic's Messages API (Claude models).
 
 ```typescript
-import { AnthropicAdapter } from '@chanl-ai/scenarios-core';
+import { AnthropicAdapter } from '@chanl/scenarios-core';
 
 const adapter = new AnthropicAdapter();
 await adapter.connect({
@@ -114,7 +114,7 @@ Source: `packages/scenarios-core/src/adapters/anthropic.adapter.ts`
 Tests any AI agent exposed as a REST endpoint. This is the most flexible adapter -- use it for custom agents, internal services, or platforms without a dedicated adapter.
 
 ```typescript
-import { HttpAdapter } from '@chanl-ai/scenarios-core';
+import { HttpAdapter } from '@chanl/scenarios-core';
 
 const adapter = new HttpAdapter();
 await adapter.connect({
@@ -147,7 +147,7 @@ Source: `packages/scenarios-core/src/adapters/http.adapter.ts`
 Adapters are registered at startup and retrieved by type string during execution:
 
 ```typescript
-import { AdapterRegistry, OpenAIAdapter, AnthropicAdapter, HttpAdapter } from '@chanl-ai/scenarios-core';
+import { AdapterRegistry, OpenAIAdapter, AnthropicAdapter, HttpAdapter } from '@chanl/scenarios-core';
 
 const registry = new AdapterRegistry();
 registry.register(new OpenAIAdapter());      // type: "openai"
@@ -181,7 +181,7 @@ import {
   AgentAdapterConfig,
   AgentMessage,
   AgentResponse,
-} from '@chanl-ai/scenarios-core';
+} from '@chanl/scenarios-core';
 
 export class MyPlatformAdapter implements AgentAdapter {
   readonly name = 'MyPlatform';
@@ -274,7 +274,7 @@ export class MyPlatformAdapter implements AgentAdapter {
 ### Step 2: Register the Adapter
 
 ```typescript
-import { AdapterRegistry } from '@chanl-ai/scenarios-core';
+import { AdapterRegistry } from '@chanl/scenarios-core';
 import { MyPlatformAdapter } from './my-platform.adapter';
 
 const registry = new AdapterRegistry();

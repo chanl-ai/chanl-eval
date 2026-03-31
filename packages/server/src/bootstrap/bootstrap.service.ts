@@ -3,9 +3,9 @@ import {
   Logger,
   OnApplicationBootstrap,
 } from '@nestjs/common';
-import { PersonaService } from '@chanl-ai/scenarios-core';
-import { ScenarioService } from '@chanl-ai/scenarios-core';
-import { ScorecardsService } from '@chanl-ai/scorecards-core';
+import { PersonaService } from '@chanl/scenarios-core';
+import { ScenarioService } from '@chanl/scenarios-core';
+import { ScorecardsService } from '@chanl/scorecards-core';
 import { ApiKeyService } from '../auth/api-key.service';
 
 @Injectable()

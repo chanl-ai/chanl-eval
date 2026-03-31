@@ -1,5 +1,5 @@
 {
-  "name": "@chanl-ai/eval-sdk",
+  "name": "@chanl/eval-sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for chanl-eval server",
   "main": "dist/index.js",
@@ -15,6 +15,7 @@
     "axios": "^1.6.0"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "@types/jest": "^29.0.0",
     "jest": "^29.0.0",
     "ts-jest": "^29.0.0",

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScorecardsModule } from '@chanl/scorecards-core';
 import {
   Scenario,
   ScenarioSchema,
@@ -22,6 +23,7 @@ import { QUEUE_NAMES, defaultJobOptions } from './queues.config';
 
 @Module({
   imports: [
+    ScorecardsModule,
     MongooseModule.forFeature([
       { name: Scenario.name, schema: ScenarioSchema },
       { name: ScenarioExecution.name, schema: ScenarioExecutionSchema },

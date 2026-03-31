@@ -82,7 +82,7 @@ Agent adapters connect chanl-eval to AI agent platforms. See [docs/architecture/
 
 2. Implement the `AgentAdapter` interface:
    ```typescript
-   import { AgentAdapter, AgentAdapterConfig, AgentMessage, AgentResponse } from '@chanl-ai/scenarios-core';
+   import { AgentAdapter, AgentAdapterConfig, AgentMessage, AgentResponse } from '@chanl/scenarios-core';
 
    export class MyPlatformAdapter implements AgentAdapter {
      readonly name = 'MyPlatform';
@@ -124,8 +124,8 @@ Criteria handlers evaluate specific aspects of a conversation. See [docs/archite
 
 2. Implement the `CriteriaHandler` interface:
    ```typescript
-   import { CriteriaHandler, CriteriaHandlerResult, EvaluationContext } from '@chanl-ai/scorecards-core';
-   import { ScorecardCriteria } from '@chanl-ai/scorecards-core';
+   import { CriteriaHandler, CriteriaHandlerResult, EvaluationContext } from '@chanl/scorecards-core';
+   import { ScorecardCriteria } from '@chanl/scorecards-core';
 
    export class SentimentHandler implements CriteriaHandler {
      readonly type = 'sentiment';

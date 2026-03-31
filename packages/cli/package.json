@@ -1,5 +1,5 @@
 {
-  "name": "@chanl-ai/cli",
+  "name": "@chanl/eval-cli",
   "version": "0.1.0",
   "description": "CLI for chanl-eval: manage scenarios, personas, scorecards",
   "main": "dist/index.js",
@@ -15,7 +15,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@chanl-ai/eval-sdk": "workspace:*",
+    "@chanl/eval-sdk": "workspace:*",
     "axios": "^1.6.0",
     "commander": "^12.0.0",
     "chalk": "^4.1.2",

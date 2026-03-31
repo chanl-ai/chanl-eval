@@ -15,6 +15,29 @@ import {
   ScorecardResult,
   ScorecardResultSchema,
 } from './schemas/scorecard-result.schema';
+import { CriteriaHandlerRegistry } from './handlers/criteria-handler-registry';
+import {
+  KeywordHandler,
+  PromptHandler,
+  ResponseTimeHandler,
+  TalkTimeHandler,
+  SilenceDurationHandler,
+  InterruptionsHandler,
+  ToolCallHandler,
+} from './handlers';
+import { EvaluationService } from './evaluation/evaluation.service';
+
+function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
+  const registry = new CriteriaHandlerRegistry();
+  registry.register(new KeywordHandler());
+  registry.register(new PromptHandler());
+  registry.register(new ResponseTimeHandler());
+  registry.register(new TalkTimeHandler());
+  registry.register(new SilenceDurationHandler());
+  registry.register(new InterruptionsHandler());
+  registry.register(new ToolCallHandler());
+  return registry;
+}
 
 @Module({
   imports: [
@@ -26,7 +49,14 @@ import {
     ]),
   ],
   controllers: [ScorecardsController],
-  providers: [ScorecardsService],
-  exports: [ScorecardsService],
+  providers: [
+    ScorecardsService,
+    {
+      provide: CriteriaHandlerRegistry,
+      useFactory: createCriteriaHandlerRegistry,
+    },
+    EvaluationService,
+  ],
+  exports: [ScorecardsService, EvaluationService, CriteriaHandlerRegistry],
 })
 export class ScorecardsModule {}

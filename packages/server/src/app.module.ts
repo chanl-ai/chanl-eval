@@ -4,8 +4,8 @@ import { BullModule } from '@nestjs/bull';
 import { APP_GUARD } from '@nestjs/core';
 
 // Core packages
-import { PersonaModule, ScenarioModule } from '@chanl-ai/scenarios-core';
-import { ScorecardsModule } from '@chanl-ai/scorecards-core';
+import { PersonaModule, ScenarioModule } from '@chanl/scenarios-core';
+import { ScorecardsModule } from '@chanl/scorecards-core';
 
 // Local modules
 import { HealthModule } from './health/health.module';

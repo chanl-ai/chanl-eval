@@ -5,6 +5,6 @@ module.exports = {
   testMatch: ['**/*.spec.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   moduleNameMapper: {
-    '^@chanl-ai/scorecards-core$': '<rootDir>/../scorecards-core/src/index.ts',
+    '^@chanl/scorecards-core$': '<rootDir>/../scorecards-core/src/index.ts',
   },
 };

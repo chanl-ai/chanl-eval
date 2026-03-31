@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { PersonaModule, ScenarioModule } from '@chanl-ai/scenarios-core';
-import { ScorecardsModule } from '@chanl-ai/scorecards-core';
+import { PersonaModule, ScenarioModule } from '@chanl/scenarios-core';
+import { ScorecardsModule } from '@chanl/scorecards-core';
 import { ApiKeyModule } from '../auth/api-key.module';
 import { BootstrapService } from './bootstrap.service';
 

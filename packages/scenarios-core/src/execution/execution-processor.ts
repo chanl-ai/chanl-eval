@@ -18,6 +18,13 @@ import { Persona, PersonaDocument } from '../personas/schemas/persona.schema';
 import { AdapterRegistry } from '../adapters/adapter-registry';
 import { AgentMessage } from '../adapters/agent-adapter.interface';
 import { PersonaSimulatorService } from '../simulator/persona-simulator.service';
+import { EvaluationService } from '@chanl/scorecards-core';
+import {
+  generatePersonaOpening,
+  generatePersonaUtterance,
+  resolvePersonaLlmKey,
+} from './persona-llm';
+import { buildOpenAiJudge } from './judge-llm';
 
 @Processor(QUEUE_NAMES.SCENARIO_EXECUTION)
 export class ExecutionProcessor {
@@ -32,6 +39,7 @@ export class ExecutionProcessor {
     private personaModel: Model<PersonaDocument>,
     private readonly adapterRegistry: AdapterRegistry,
     private readonly personaSimulator: PersonaSimulatorService,
+    private readonly evaluationService: EvaluationService,
   ) {}
 
   /**
@@ -115,8 +123,14 @@ export class ExecutionProcessor {
       const transcript: TranscriptEntry[] = [];
       const history: AgentMessage[] = [];
 
-      // Initial persona message (the opening line)
-      let personaMessage = this.getOpeningMessage(scenario.prompt, persona);
+      // Initial persona message (LLM when keys allow, else heuristic)
+      let personaMessage =
+        (await generatePersonaOpening({
+          personaSystemPrompt,
+          scenarioPrompt: scenario.prompt,
+          adapterType: data.adapterType,
+          adapterConfig: data.adapterConfig,
+        })) || this.getOpeningMessage(scenario.prompt, persona);
 
       for (let turn = 0; turn < maxTurns; turn++) {
         const turnProgress = 50 + Math.round((turn / maxTurns) * 40);
@@ -152,14 +166,15 @@ export class ExecutionProcessor {
           break;
         }
 
-        // Generate next persona message (for simplicity, use the agent response
-        // as context; in a full implementation, this would use an LLM with
-        // the persona system prompt to generate the next user utterance)
-        personaMessage = this.generateNextPersonaMessage(
+        const llmNext = await generatePersonaUtterance({
           personaSystemPrompt,
           history,
-          turn,
-        );
+          adapterType: data.adapterType,
+          adapterConfig: data.adapterConfig,
+        });
+        personaMessage =
+          llmNext ||
+          this.generateNextPersonaMessage(personaSystemPrompt, history, turn);
       }
 
       // 8. Disconnect adapter
@@ -167,11 +182,66 @@ export class ExecutionProcessor {
 
       await job.progress(90);
 
-      // 9. Calculate results
+      // 9. Scorecard evaluation (optional)
       const duration = Date.now() - startTime;
+      let scoreFromScorecard: number | undefined;
+      const transcriptText = transcript
+        .map((e) =>
+          e.role === 'agent' ? `Agent: ${e.content}` : `Customer: ${e.content}`,
+        )
+        .join('\n');
+
+      if (scenario.scorecardId && this.evaluationService) {
+        try {
+          const judgeKey = resolvePersonaLlmKey(
+            data.adapterType,
+            data.adapterConfig,
+          );
+          const openAiKeyForJudge =
+            judgeKey?.kind === 'openai'
+              ? judgeKey.apiKey
+              : data.adapterConfig?.openaiApiKey ||
+                (data.adapterType === 'openai'
+                  ? data.adapterConfig?.apiKey
+                  : undefined);
+
+          const evalResult = await this.evaluationService.evaluate(
+            scenario.scorecardId.toString(),
+            {
+              transcriptText,
+              segments: transcript.map((t) => ({
+                speaker: t.role === 'agent' ? 'agent' : 'customer',
+                text: t.content,
+              })),
+              metrics: {
+                firstResponseLatency:
+                  (transcript.find((x) => x.role === 'agent')?.latencyMs ||
+                    0) / 1000,
+              },
+              llmEvaluate: buildOpenAiJudge(
+                typeof openAiKeyForJudge === 'string'
+                  ? openAiKeyForJudge
+                  : undefined,
+              ),
+            },
+            { scenarioExecutionId: data.executionId },
+          );
+          scoreFromScorecard = Math.min(
+            100,
+            Math.round((evalResult.overallScore || 0) * 10),
+          );
+        } catch (err: any) {
+          this.logger.warn(
+            `Scorecard evaluation skipped or failed: ${err?.message || err}`,
+          );
+        }
+      }
+
+      // 10. Calculate results
+      const engagementScore = this.calculateScore(transcript);
       const result: ScenarioExecutionResult = {
         passed: true,
-        score: this.calculateScore(transcript),
+        score: scoreFromScorecard ?? engagementScore,
         duration,
         transcript,
         metrics: {
@@ -180,7 +250,7 @@ export class ExecutionProcessor {
         },
       };
 
-      // 10. Update execution with results
+      // 11. Update execution with results
       await this.executionModel.findOneAndUpdate(
         { executionId: data.executionId },
         {

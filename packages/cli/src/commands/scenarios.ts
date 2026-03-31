@@ -124,6 +124,12 @@ async function executeAndPoll(
   } else if (config.provider === 'anthropic' && config.anthropicApiKey) {
     executeDto.adapterType = 'anthropic';
     executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
+  } else if (config.provider === 'http' && config.httpEndpoint) {
+    executeDto.adapterType = 'http';
+    executeDto.adapterConfig = {
+      endpoint: config.httpEndpoint,
+      ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
+    };
   } else if (config.openaiApiKey) {
     // Fallback: if openaiApiKey is set but no provider specified, use openai
     executeDto.adapterType = 'openai';
@@ -131,6 +137,34 @@ async function executeAndPoll(
   } else if (config.anthropicApiKey) {
     executeDto.adapterType = 'anthropic';
     executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
+  }
+
+  if (!executeDto.adapterType) {
+    let msg = '';
+    if (config.provider === 'openai' && !config.openaiApiKey) {
+      msg =
+        'Missing OpenAI API key. Set it with: chanl config set openaiApiKey sk-...';
+    } else if (config.provider === 'anthropic' && !config.anthropicApiKey) {
+      msg =
+        'Missing Anthropic API key. Set it with: chanl config set anthropicApiKey sk-ant-...';
+    } else if (config.provider === 'http' && !config.httpEndpoint) {
+      msg =
+        'Missing HTTP endpoint. Set it with: chanl config set httpEndpoint http://localhost:19000';
+    } else {
+      msg =
+        'No provider configured. Set a provider and API key first:\n' +
+        '  chanl config set provider openai\n' +
+        '  chanl config set openaiApiKey sk-...\n' +
+        'Or:\n' +
+        '  chanl config set provider anthropic\n' +
+        '  chanl config set anthropicApiKey sk-ant-...\n' +
+        'Or (no BYOK, local dev only):\n' +
+        '  chanl config set provider http\n' +
+        '  chanl config set httpEndpoint http://localhost:19000';
+    }
+    printError(msg);
+    process.exitCode = 1;
+    throw new Error(msg);
   }
 
   const spinner = ora('Starting scenario execution...').start();
@@ -227,7 +261,8 @@ export function registerScenariosCommand(program: Command): void {
         await runScenarioAction(idOrFile, options, program.opts().format);
       } catch (err) {
         printError(formatError(err));
-        process.exit(1);
+        process.exitCode = 1;
+        throw err;
       }
     });
 
@@ -504,18 +539,17 @@ function printExecutionDetails(execution: any): void {
 
   if (execution.stepResults && execution.stepResults.length > 0) {
     console.log('');
-    console.log(chalk.bold('  Step Results'));
+    console.log(chalk.bold('  Transcript'));
     console.log(chalk.dim('  ' + '─'.repeat(40)));
     for (const step of execution.stepResults) {
-      const stepStatus =
-        step.status === 'completed'
-          ? chalk.green(step.status)
-          : step.status === 'failed'
-            ? chalk.red(step.status)
-            : chalk.yellow(step.status);
-      const score =
-        step.score !== undefined ? ` (${step.score}/100)` : '';
-      console.log(`  ${step.stepId}: ${stepStatus}${score}`);
+      const text = step.actualResponse;
+      if (!text) continue;
+      const isAgent =
+        typeof step.stepId === 'string' && step.stepId.includes('agent');
+      const label = isAgent ? chalk.cyan('Agent') : chalk.magenta('Persona');
+      console.log(`  ${label}  ${chalk.dim('(' + (step.stepId || 'turn') + ')')}`);
+      console.log(`  ${text}`);
+      console.log('');
     }
   }
 }

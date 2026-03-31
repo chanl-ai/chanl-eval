@@ -56,7 +56,7 @@ import {
   ScorecardResult,
   ScorecardResultSchema,
   CriteriaType,
-} from '@chanl-ai/scorecards-core';
+} from '@chanl/scorecards-core';
 import {
   EvaluationService,
   CriteriaHandlerRegistry,
@@ -68,7 +68,7 @@ import {
   ToolCallHandler,
   PromptHandler,
   EvaluationContext,
-} from '@chanl-ai/scorecards-core';
+} from '@chanl/scorecards-core';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mock Agent Adapter — simulates an OpenAI-style agent
