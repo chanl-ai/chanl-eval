@@ -15,6 +15,14 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 
+const LABELS: Record<string, string> = {
+  executions: 'Runs',
+  scenarios: 'Scenarios',
+  personas: 'Personas',
+  scorecards: 'Scorecards',
+  settings: 'Settings',
+};
+
 function capitalize(segment: string) {
   return segment.charAt(0).toUpperCase() + segment.slice(1);
 }
@@ -24,51 +32,36 @@ function generateBreadcrumbs(pathname: string) {
   const breadcrumbs: { name: string; href: string; isCurrentPage: boolean }[] = [];
 
   if (pathSegments.length === 0) {
-    return [{ name: 'Eval', href: '/executions', isCurrentPage: true }];
+    return [{ name: 'Test', href: '/', isCurrentPage: true }];
   }
 
   if (pathSegments.length === 1) {
     const seg = pathSegments[0];
-    const labels: Record<string, string> = {
-      executions: 'Executions',
-      scenarios: 'Scenarios',
-      personas: 'Personas',
-      scorecards: 'Scorecards',
-      settings: 'Settings',
-    };
-    const name = labels[seg] ?? capitalize(seg);
+    const name = LABELS[seg] ?? capitalize(seg);
     return [{ name, href: pathname, isCurrentPage: true }];
   }
 
   const parent = pathSegments[0];
-  const labels: Record<string, string> = {
-    executions: 'Executions',
-    scenarios: 'Scenarios',
-    personas: 'Personas',
-    scorecards: 'Scorecards',
-  };
-  const parentLabel = labels[parent] ?? capitalize(parent);
+  const parentLabel = LABELS[parent] ?? capitalize(parent);
   const parentHref = `/${parent}`;
+
+  breadcrumbs.push({ name: parentLabel, href: parentHref, isCurrentPage: false });
 
   const id = pathSegments[1];
   if (id && id.length === 24 && /^[a-f0-9]+$/.test(id)) {
-    const leaf =
-      parent === 'executions'
-        ? 'Execution'
-        : parent === 'scenarios'
-          ? 'Scenario'
-          : parent === 'personas'
-            ? 'Persona'
-            : parent === 'scorecards'
-              ? 'Scorecard'
-              : 'Details';
-    return [
-      { name: parentLabel, href: parentHref, isCurrentPage: false },
-      { name: leaf, href: pathname, isCurrentPage: true },
-    ];
+    const singularLabels: Record<string, string> = {
+      executions: 'Run',
+      scenarios: 'Scenario',
+      personas: 'Persona',
+      scorecards: 'Scorecard',
+    };
+    const leaf = singularLabels[parent] ?? 'Details';
+    breadcrumbs.push({ name: leaf, href: pathname, isCurrentPage: true });
+  } else {
+    breadcrumbs.push({ name: capitalize(id), href: pathname, isCurrentPage: true });
   }
 
-  return [{ name: pathname, href: pathname, isCurrentPage: true }];
+  return breadcrumbs;
 }
 
 export function SiteHeader() {

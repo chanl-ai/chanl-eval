@@ -1,5 +1,509 @@
-import { redirect } from 'next/navigation';
+'use client';
 
-export default function DashboardHomePage() {
-  redirect('/executions');
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bot, Loader2, Play, User } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { ScorecardWidget } from '@/components/scorecard/scorecard-widget';
+import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
+import { useEvalConfig, type AdapterType } from '@/lib/eval-config';
+import type { ScoreMetric } from '@/components/scorecard/types';
+import type { Execution, Scenario, Persona } from '@chanl/eval-sdk';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface TranscriptMessage {
+  role: 'persona' | 'agent';
+  content: string;
+  stepId?: string;
+  latencyMs?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function buildMetricsFromExecution(execution: Execution): ScoreMetric[] {
+  if (!execution.stepResults || execution.stepResults.length === 0) return [];
+
+  const passed = execution.stepResults.filter((s) => s.score != null && s.score > 0).length;
+  const total = execution.stepResults.length;
+
+  return [
+    {
+      name: 'Conversation Quality',
+      score: passed,
+      maxScore: total,
+      status: passed >= total * 0.8 ? 'pass' : 'fail',
+    },
+  ];
+}
+
+function extractTranscript(execution: Execution): TranscriptMessage[] {
+  if (!execution.stepResults) return [];
+
+  const messages: TranscriptMessage[] = [];
+  for (const step of execution.stepResults) {
+    const stepAny = step as Record<string, unknown>;
+    const isAgent =
+      typeof step.stepId === 'string' && step.stepId.includes('agent');
+
+    // Handle actualResponse / expectedResponse as persona / agent
+    const actualResponse = stepAny.actualResponse as string | undefined;
+    if (actualResponse) {
+      messages.push({
+        role: isAgent ? 'agent' : 'persona',
+        content: actualResponse,
+        stepId: step.stepId,
+        latencyMs: typeof stepAny.duration === 'number' ? stepAny.duration : undefined,
+      });
+    }
+  }
+  return messages;
+}
+
+// ---------------------------------------------------------------------------
+// Transcript Message Component
+// ---------------------------------------------------------------------------
+
+function MessageBubble({ message }: { message: TranscriptMessage }) {
+  const isAgent = message.role === 'agent';
+
+  return (
+    <div
+      className={`flex gap-3 ${isAgent ? 'flex-row-reverse' : ''}`}
+      data-testid={`message-${message.role}`}
+    >
+      <div className="shrink-0 pt-1">
+        {isAgent ? (
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <Bot className="h-4 w-4 text-primary" />
+          </div>
+        ) : (
+          <BeautifulAvatar name="Persona" platform="persona" size="sm" />
+        )}
+      </div>
+      <div
+        className={`max-w-[80%] space-y-1 ${isAgent ? 'items-end text-right' : ''}`}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            {isAgent ? 'Agent' : 'Persona'}
+          </span>
+          {message.latencyMs != null && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+              {formatDuration(message.latencyMs)}
+            </Badge>
+          )}
+        </div>
+        <div
+          className={`rounded-lg px-3 py-2 text-sm ${
+            isAgent
+              ? 'bg-primary/10 text-foreground'
+              : 'bg-muted text-foreground'
+          }`}
+        >
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Playground Page
+// ---------------------------------------------------------------------------
+
+export default function PlaygroundPage() {
+  const {
+    client,
+    adapterType,
+    setAdapterType,
+    agentApiKey,
+    setAgentApiKey,
+  } = useEvalConfig();
+  const queryClient = useQueryClient();
+
+  // Form state
+  const [systemPrompt, setSystemPrompt] = useState(
+    'You are a helpful customer support agent. Be friendly, concise, and professional.',
+  );
+  const [model, setModel] = useState('gpt-4o-mini');
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
+
+  // Execution state
+  const [isRunning, setIsRunning] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
+  const [completedExecution, setCompletedExecution] = useState<Execution | null>(null);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch scenarios and personas (NO apiKey guard)
+  const scenariosQuery = useQuery({
+    queryKey: ['scenarios'],
+    queryFn: () => client.scenarios.list({ limit: 100 }),
+  });
+
+  const personasQuery = useQuery({
+    queryKey: ['personas'],
+    queryFn: () => client.personas.list({ limit: 100 }),
+  });
+
+  const scenarios = scenariosQuery.data?.scenarios ?? [];
+  const personas = personasQuery.data?.personas ?? [];
+
+  // Auto-select first scenario/persona when loaded
+  useEffect(() => {
+    if (scenarios.length > 0 && !selectedScenarioId) {
+      setSelectedScenarioId(scenarios[0].id);
+    }
+  }, [scenarios, selectedScenarioId]);
+
+  useEffect(() => {
+    if (personas.length > 0 && !selectedPersonaId) {
+      setSelectedPersonaId(personas[0].id);
+    }
+  }, [personas, selectedPersonaId]);
+
+  // Auto-scroll transcript
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [transcript]);
+
+  const handleRun = useCallback(async () => {
+    if (!agentApiKey) {
+      toast.error('Enter your API key to run tests');
+      return;
+    }
+    if (!selectedScenarioId) {
+      toast.error('Select a scenario to run');
+      return;
+    }
+
+    setIsRunning(true);
+    setTranscript([]);
+    setCompletedExecution(null);
+
+    try {
+      // Execute the scenario
+      const execution = await client.scenarios.execute(selectedScenarioId, {
+        mode: 'text',
+        personaId: selectedPersonaId || undefined,
+        adapterType,
+        adapterConfig: {
+          apiKey: agentApiKey,
+          model,
+          systemPrompt,
+        },
+      } as never);
+
+      const execAny = execution as unknown as { executionId?: string; id: string };
+      const execRef = execAny.executionId || execAny.id;
+
+      if (!execRef) {
+        throw new Error('No execution ID returned');
+      }
+
+      toast.success('Test started...');
+
+      // Poll for completion
+      const completed = await client.executions.waitForCompletion(execRef, {
+        intervalMs: 1500,
+        timeoutMs: 120000,
+      });
+
+      // Extract transcript from completed execution
+      const messages = extractTranscript(completed);
+      setTranscript(messages);
+      setCompletedExecution(completed);
+
+      // Invalidate executions list
+      void queryClient.invalidateQueries({ queryKey: ['executions'] });
+
+      if (completed.status === 'completed') {
+        toast.success(
+          `Test completed ${completed.overallScore != null ? `- Score: ${completed.overallScore}` : ''}`,
+        );
+      } else {
+        toast.error(`Test ${completed.status}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Execution failed');
+    } finally {
+      setIsRunning(false);
+    }
+  }, [
+    agentApiKey,
+    selectedScenarioId,
+    selectedPersonaId,
+    adapterType,
+    model,
+    systemPrompt,
+    client,
+    queryClient,
+  ]);
+
+  return (
+    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Test Your Agent</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Configure your agent, pick a scenario, and run a simulated conversation.
+        </p>
+      </div>
+
+      {/* Configuration */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* System Prompt - spans 2 columns on large */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium">System Prompt</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="Enter your agent's system prompt..."
+              className="min-h-[120px] font-mono text-sm resize-y"
+              data-testid="system-prompt"
+            />
+          </CardContent>
+        </Card>
+
+        {/* API Configuration */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium">Model Configuration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="adapter" className="text-sm">Provider</Label>
+              <Select
+                value={adapterType}
+                onValueChange={(v) => setAdapterType(v as AdapterType)}
+              >
+                <SelectTrigger id="adapter" data-testid="adapter-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="anthropic">Anthropic</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="model" className="text-sm">Model</Label>
+              <Select value={model} onValueChange={setModel}>
+                <SelectTrigger id="model" data-testid="model-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {adapterType === 'openai' ? (
+                    <>
+                      <SelectItem value="gpt-4o-mini">gpt-4o-mini</SelectItem>
+                      <SelectItem value="gpt-4o">gpt-4o</SelectItem>
+                      <SelectItem value="gpt-4.1-mini">gpt-4.1-mini</SelectItem>
+                      <SelectItem value="gpt-4.1">gpt-4.1</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4</SelectItem>
+                      <SelectItem value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="api-key" className="text-sm">
+                API Key
+              </Label>
+              <Input
+                id="api-key"
+                type="password"
+                value={agentApiKey}
+                onChange={(e) => setAgentApiKey(e.target.value)}
+                placeholder="sk-..."
+                autoComplete="off"
+                data-testid="api-key-input"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Stays on your machine. Never sent to Chanl.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Scenario & Persona Row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-2 sm:col-span-1 lg:col-span-2">
+          <Label className="text-sm">Scenario</Label>
+          {scenariosQuery.isLoading ? (
+            <Skeleton className="h-9 w-full" />
+          ) : (
+            <Select
+              value={selectedScenarioId}
+              onValueChange={setSelectedScenarioId}
+            >
+              <SelectTrigger data-testid="scenario-select">
+                <SelectValue placeholder="Select a scenario..." />
+              </SelectTrigger>
+              <SelectContent>
+                {scenarios.map((s: Scenario) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="flex items-center gap-2">
+                      {s.name}
+                      {s.difficulty && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 ml-1">
+                          {s.difficulty}
+                        </Badge>
+                      )}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <div className="space-y-2 sm:col-span-1 lg:col-span-1">
+          <Label className="text-sm">Persona</Label>
+          {personasQuery.isLoading ? (
+            <Skeleton className="h-9 w-full" />
+          ) : (
+            <Select
+              value={selectedPersonaId}
+              onValueChange={setSelectedPersonaId}
+            >
+              <SelectTrigger data-testid="persona-select">
+                <SelectValue placeholder="Select a persona..." />
+              </SelectTrigger>
+              <SelectContent>
+                {personas.map((p: Persona) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      {p.name}
+                      <span className="text-muted-foreground text-xs">{p.emotion}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <div className="flex items-end">
+          <Button
+            onClick={handleRun}
+            disabled={isRunning || !agentApiKey || !selectedScenarioId}
+            className="w-full"
+            size="lg"
+            data-testid="run-test-button"
+          >
+            {isRunning ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Running...
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Run Test
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Running indicator */}
+      {isRunning && transcript.length === 0 && (
+        <Card>
+          <CardContent className="flex items-center justify-center gap-3 py-12">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span className="text-sm text-muted-foreground">
+              Running scenario... this may take 30-60 seconds
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Transcript */}
+      {transcript.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-medium">Conversation</CardTitle>
+              {completedExecution && (
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={completedExecution.status === 'completed' ? 'default' : 'destructive'}
+                  >
+                    {completedExecution.status}
+                  </Badge>
+                  {completedExecution.duration != null && (
+                    <Badge variant="outline" className="font-mono text-xs">
+                      {formatDuration(completedExecution.duration)}
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="scrollbar-thin max-h-[50vh] space-y-4 overflow-y-auto pr-1">
+              {transcript.map((msg, i) => (
+                <MessageBubble key={`${msg.stepId ?? i}-${i}`} message={msg} />
+              ))}
+              <div ref={transcriptEndRef} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Scorecard Results */}
+      {completedExecution && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium">Scorecard</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ScorecardWidget
+              metrics={buildMetricsFromExecution(completedExecution)}
+              overallScorePercentage={
+                completedExecution.overallScore != null
+                  ? completedExecution.overallScore
+                  : undefined
+              }
+            />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 }

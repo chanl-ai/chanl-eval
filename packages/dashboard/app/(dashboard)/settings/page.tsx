@@ -11,8 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { useEvalConfig, type AdapterType } from '@/lib/eval-config';
 import { EvalClient } from '@chanl/eval-sdk';
+import { CheckCircle, Loader2, XCircle } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
@@ -27,116 +30,158 @@ export default function SettingsPage() {
     setAgentApiKey,
   } = useEvalConfig();
 
+  const [isTesting, setIsTesting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
   async function testConnection() {
+    setIsTesting(true);
+    setConnectionStatus('idle');
     try {
       const c = new EvalClient({ baseUrl, apiKey });
       const h = await c.health();
+      setConnectionStatus('success');
       toast.success(`Connected: ${h.status} (v${h.version})`);
     } catch (e: unknown) {
+      setConnectionStatus('error');
       toast.error(e instanceof Error ? e.message : 'Connection failed');
+    } finally {
+      setIsTesting(false);
     }
   }
 
-  function saveRunSettings() {
-    toast.success('Run settings saved');
-  }
-
   return (
-    <>
-      <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>chanl-eval server</CardTitle>
-            <CardDescription>
-              Same REST API as the CLI. On first server boot, copy the API key from the server log
-              if none exists yet — or set <code className="text-xs">NEXT_PUBLIC_CHANL_EVAL_API_KEY</code> in{' '}
-              <code className="text-xs">packages/dashboard/.env.local</code> (see{' '}
-              <code className="text-xs">.env.example</code>).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="baseUrl">Server URL</Label>
-              <Input
-                id="baseUrl"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="http://localhost:18005"
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="apiKey">X-API-Key</Label>
-              <Input
-                id="apiKey"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Paste bootstrap key"
-                autoComplete="off"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="secondary" onClick={testConnection}>
-                Test connection
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Scenario runs (agent under test)</CardTitle>
-            <CardDescription>
-              Provider and API key for the adapter that talks to your agent (OpenAI or Anthropic).
-              Used when you click Run on a scenario.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Adapter</Label>
-              <Select
-                value={adapterType}
-                onValueChange={(v) => setAdapterType(v as AdapterType)}
-              >
-                <SelectTrigger className="w-full max-w-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="anthropic">Anthropic</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="agentKey">Agent API key</Label>
-              <Input
-                id="agentKey"
-                type="password"
-                value={agentApiKey}
-                onChange={(e) => setAgentApiKey(e.target.value)}
-                placeholder="sk-..."
-                autoComplete="off"
-              />
-            </div>
-            <Button type="button" variant="outline" onClick={saveRunSettings}>
-              Save run settings
-            </Button>
-          </CardContent>
-        </Card>
-
-        <p className="text-muted-foreground text-sm">
-          API docs:{' '}
-          <a
-            className="text-primary underline-offset-4 hover:underline"
-            href={`${baseUrl.replace(/\/$/, '')}/api/docs`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {baseUrl.replace(/\/$/, '')}/api/docs
-          </a>
+    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Configure your eval server connection and agent credentials
         </p>
       </div>
-    </>
+
+      {/* Server Connection */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-medium">Server Connection</CardTitle>
+          <CardDescription>
+            The chanl-eval server that stores scenarios, personas, and test results.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="baseUrl">Server URL</Label>
+            <Input
+              id="baseUrl"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="http://localhost:18005/api/v1"
+              autoComplete="off"
+              data-testid="server-url"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="apiKey">
+              API Key <span className="text-muted-foreground font-normal">(optional - for shared servers)</span>
+            </Label>
+            <Input
+              id="apiKey"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Leave empty for local development"
+              autoComplete="off"
+              data-testid="api-key"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={testConnection}
+              disabled={isTesting}
+              data-testid="test-connection"
+            >
+              {isTesting ? (
+                <>
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                'Test Connection'
+              )}
+            </Button>
+            {connectionStatus === 'success' && (
+              <span className="flex items-center gap-1.5 text-sm text-chart-6">
+                <CheckCircle className="h-4 w-4" />
+                Connected
+              </span>
+            )}
+            {connectionStatus === 'error' && (
+              <span className="flex items-center gap-1.5 text-sm text-destructive">
+                <XCircle className="h-4 w-4" />
+                Failed
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Separator />
+
+      {/* Agent Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-medium">Agent Under Test</CardTitle>
+          <CardDescription>
+            Provider and API key for the LLM that powers your agent. Used when running scenarios from the playground.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Adapter</Label>
+            <Select
+              value={adapterType}
+              onValueChange={(v) => setAdapterType(v as AdapterType)}
+            >
+              <SelectTrigger className="w-full max-w-xs" data-testid="adapter-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="openai">OpenAI</SelectItem>
+                <SelectItem value="anthropic">Anthropic</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="agentKey">Agent API Key</Label>
+            <Input
+              id="agentKey"
+              type="password"
+              value={agentApiKey}
+              onChange={(e) => setAgentApiKey(e.target.value)}
+              placeholder="sk-..."
+              autoComplete="off"
+              data-testid="agent-api-key"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              This key stays in your browser's local storage. It is sent directly to the LLM provider, never stored on the eval server.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* API Docs link */}
+      <p className="text-sm text-muted-foreground">
+        API docs:{' '}
+        <a
+          className="text-primary underline-offset-4 hover:underline"
+          href={`${baseUrl.replace(/\/api\/v1$/, '').replace(/\/$/, '')}/api/docs`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {baseUrl.replace(/\/api\/v1$/, '').replace(/\/$/, '')}/api/docs
+        </a>
+      </p>
+    </div>
   );
 }

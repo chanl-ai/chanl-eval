@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,12 +26,12 @@ export default function ScorecardDetailPage() {
   const params = useParams();
   const id = typeof params.id === 'string' ? params.id : '';
   const qc = useQueryClient();
-  const { client, apiKey } = useEvalConfig();
+  const { client } = useEvalConfig();
 
   const q = useQuery({
-    queryKey: ['scorecard', id, apiKey],
+    queryKey: ['scorecard', id],
     queryFn: () => client.scorecards.get(id),
-    enabled: !!apiKey && !!id,
+    enabled: !!id,
   });
 
   const [name, setName] = useState('');
@@ -66,46 +68,72 @@ export default function ScorecardDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const scorecard = q.data;
+
   return (
-    <>
-      <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
-        <Link href="/scorecards" className="text-muted-foreground text-sm hover:underline">
-          ← Scorecards
-        </Link>
-        {!apiKey ? (
-          <p className="text-muted-foreground text-sm">
-            Configure API key in <Link href="/settings">Settings</Link>.
-          </p>
-        ) : q.isLoading ? (
+    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+      <Link
+        href="/scorecards"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Back to Scorecards
+      </Link>
+
+      {q.isLoading ? (
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-full" />
           <Skeleton className="h-64 w-full" />
-        ) : q.isError ? (
-          <p className="text-destructive">{(q.error as Error).message}</p>
-        ) : q.data ? (
+        </div>
+      ) : q.isError ? (
+        <Card>
+          <CardContent className="py-6">
+            <p className="text-destructive text-sm">{(q.error as Error).message}</p>
+          </CardContent>
+        </Card>
+      ) : scorecard ? (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">{scorecard.name}</h1>
+            {scorecard.status && (
+              <Badge variant="outline">{scorecard.status}</Badge>
+            )}
+            {scorecard.passingThreshold != null && (
+              <Badge variant="secondary">Pass: {scorecard.passingThreshold}%</Badge>
+            )}
+          </div>
+
           <Card>
-            <CardHeader>
-              <CardTitle>Edit scorecard</CardTitle>
-              <CardDescription>Metadata only — criteria editing via API for now.</CardDescription>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium">Edit Scorecard</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    data-testid="scorecard-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-2">
-                <Label>Status</Label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger className="max-w-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">draft</SelectItem>
-                    <SelectItem value="active">active</SelectItem>
-                    <SelectItem value="inactive">inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pt">Passing threshold (0–100)</Label>
+                <Label htmlFor="pt">Passing Threshold (0-100)</Label>
                 <Input
                   id="pt"
                   type="number"
@@ -113,6 +141,7 @@ export default function ScorecardDetailPage() {
                   max={100}
                   value={passingThreshold}
                   onChange={(e) => setPassingThreshold(e.target.value)}
+                  className="max-w-[200px]"
                 />
               </div>
               <div className="space-y-2">
@@ -121,16 +150,23 @@ export default function ScorecardDetailPage() {
                   id="description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe what this scorecard evaluates..."
                   rows={4}
                 />
               </div>
-              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? 'Saving…' : 'Save'}
-              </Button>
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => saveMutation.mutate()}
+                  disabled={saveMutation.isPending}
+                  data-testid="save-scorecard"
+                >
+                  {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
-        ) : null}
-      </div>
-    </>
+        </>
+      ) : null}
+    </div>
   );
 }
