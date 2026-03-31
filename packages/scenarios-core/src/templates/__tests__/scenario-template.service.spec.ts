@@ -72,22 +72,21 @@ describe('ScenarioTemplateService', () => {
       expect(tmpl.variables).toHaveLength(1);
     });
 
-    it('should create with workspaceId', async () => {
-      const wsId = new Types.ObjectId().toString();
+    it('should create with createdBy', async () => {
       const tmpl = await service.create(
         { name: 'WS Template', category: 'sales', prompt: 'Test' },
-        wsId,
+        'system',
       );
-      expect(tmpl.workspaceId?.toString()).toBe(wsId);
+      expect(tmpl.name).toBe('WS Template');
     });
 
-    it('should create without workspaceId (OSS mode)', async () => {
+    it('should create without createdBy (OSS mode)', async () => {
       const tmpl = await service.create({
         name: 'OSS Template',
         category: 'custom',
         prompt: 'Test',
       });
-      expect(tmpl.workspaceId).toBeUndefined();
+      expect(tmpl.name).toBe('OSS Template');
     });
   });
 

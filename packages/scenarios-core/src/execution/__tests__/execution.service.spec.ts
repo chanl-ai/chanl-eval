@@ -256,32 +256,6 @@ describe('ExecutionService', () => {
       );
     });
 
-    it('should set workspaceId on execution doc when provided', async () => {
-      // Create a workspace-scoped scenario
-      const wsId = new Types.ObjectId().toString();
-      const wsScenario = await scenarioModel.create({
-        name: 'WS Scenario',
-        prompt: 'Test prompt',
-        category: 'support',
-        difficulty: 'easy',
-        status: 'active',
-        workspaceId: new Types.ObjectId(wsId),
-        personaIds: [new Types.ObjectId(personaId)],
-        agentIds: [new Types.ObjectId(agentId)],
-        createdBy: 'test',
-        tags: [],
-      });
-
-      const executionId = await service.execute(
-        wsScenario._id.toString(),
-        {},
-        wsId,
-      );
-
-      const doc = await executionModel.findOne({ executionId });
-      expect(doc!.workspaceId!.toString()).toBe(wsId);
-    });
-
     it('should throw NotFoundException for non-existent scenario', async () => {
       const fakeId = new Types.ObjectId().toString();
       await expect(service.execute(fakeId)).rejects.toThrow(
@@ -305,28 +279,6 @@ describe('ExecutionService', () => {
       await expect(
         service.execute(draftScenario._id.toString()),
       ).rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw NotFoundException when workspaceId does not match', async () => {
-      const wsId1 = new Types.ObjectId().toString();
-      const wsId2 = new Types.ObjectId().toString();
-
-      const wsScenario = await scenarioModel.create({
-        name: 'WS Scenario 2',
-        prompt: 'Test prompt',
-        category: 'support',
-        difficulty: 'easy',
-        status: 'active',
-        workspaceId: new Types.ObjectId(wsId1),
-        personaIds: [new Types.ObjectId(personaId)],
-        agentIds: [new Types.ObjectId(agentId)],
-        createdBy: 'test',
-        tags: [],
-      });
-
-      await expect(
-        service.execute(wsScenario._id.toString(), {}, wsId2),
-      ).rejects.toThrow(NotFoundException);
     });
 
     it('should set triggeredBy from options', async () => {
@@ -359,37 +311,6 @@ describe('ExecutionService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw NotFoundException when workspaceId does not match', async () => {
-      const wsId = new Types.ObjectId().toString();
-      const wsScenario = await scenarioModel.create({
-        name: 'WS Scenario 3',
-        prompt: 'Test',
-        category: 'support',
-        difficulty: 'easy',
-        status: 'active',
-        workspaceId: new Types.ObjectId(wsId),
-        personaIds: [new Types.ObjectId(personaId)],
-        agentIds: [new Types.ObjectId(agentId)],
-        createdBy: 'test',
-        tags: [],
-      });
-
-      const executionId = await service.execute(
-        wsScenario._id.toString(),
-        {},
-        wsId,
-      );
-
-      // Should succeed with correct workspace
-      const result = await service.getExecution(executionId, wsId);
-      expect(result).toBeDefined();
-
-      // Should fail with wrong workspace
-      const wrongWs = new Types.ObjectId().toString();
-      await expect(
-        service.getExecution(executionId, wrongWs),
-      ).rejects.toThrow(NotFoundException);
-    });
   });
 
   // ──────────────── listExecutions() ────────────────
@@ -488,34 +409,6 @@ describe('ExecutionService', () => {
       expect(result.total).toBe(5);
     });
 
-    it('should filter by workspaceId', async () => {
-      const wsId = new Types.ObjectId().toString();
-      const wsScenario = await scenarioModel.create({
-        name: 'WS List Scenario',
-        prompt: 'Test',
-        category: 'support',
-        difficulty: 'easy',
-        status: 'active',
-        workspaceId: new Types.ObjectId(wsId),
-        personaIds: [new Types.ObjectId(personaId)],
-        agentIds: [new Types.ObjectId(agentId)],
-        createdBy: 'test',
-        tags: [],
-      });
-
-      await service.execute(wsScenario._id.toString(), {}, wsId);
-      await service.execute(scenarioId); // no workspace
-
-      const result = await service.listExecutions(
-        undefined,
-        undefined,
-        wsId,
-      );
-
-      expect(result.executions).toHaveLength(1);
-      expect(result.total).toBe(1);
-    });
-
     it('should return empty results when no executions match', async () => {
       const result = await service.listExecutions({ status: 'failed' });
 
@@ -596,38 +489,6 @@ describe('ExecutionService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should respect workspaceId when cancelling', async () => {
-      const wsId = new Types.ObjectId().toString();
-      const wsScenario = await scenarioModel.create({
-        name: 'WS Cancel Scenario',
-        prompt: 'Test',
-        category: 'support',
-        difficulty: 'easy',
-        status: 'active',
-        workspaceId: new Types.ObjectId(wsId),
-        personaIds: [new Types.ObjectId(personaId)],
-        agentIds: [new Types.ObjectId(agentId)],
-        createdBy: 'test',
-        tags: [],
-      });
-
-      const executionId = await service.execute(
-        wsScenario._id.toString(),
-        {},
-        wsId,
-      );
-
-      // Wrong workspace should fail
-      const wrongWs = new Types.ObjectId().toString();
-      await expect(
-        service.cancelExecution(executionId, wrongWs),
-      ).rejects.toThrow(NotFoundException);
-
-      // Correct workspace should succeed
-      await service.cancelExecution(executionId, wsId);
-      const doc = await executionModel.findOne({ executionId });
-      expect(doc!.status).toBe('cancelled');
-    });
   });
 });
 

@@ -73,7 +73,6 @@ describe('BootstrapService', () => {
     expect(mockApiKeyService.hasAnyKeys).toHaveBeenCalled();
     expect(mockApiKeyService.createApiKey).toHaveBeenCalledWith('bootstrap');
     expect(mockPersonaService.createDefaultPersonas).toHaveBeenCalledWith(
-      undefined,
       'system',
     );
     expect(
