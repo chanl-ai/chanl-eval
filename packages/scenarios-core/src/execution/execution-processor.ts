@@ -25,6 +25,7 @@ import {
   resolvePersonaLlmKey,
 } from './persona-llm';
 import { buildOpenAiJudge } from './judge-llm';
+import { buildTemplateVariables, renderPersonaTemplate } from './template-renderer';
 
 @Processor(QUEUE_NAMES.SCENARIO_EXECUTION)
 export class ExecutionProcessor {
@@ -85,25 +86,41 @@ export class ExecutionProcessor {
       await job.progress(30);
 
       // 4. Generate persona system prompt
-      const personaSystemPrompt = persona
-        ? this.personaSimulator.toSystemPrompt(
-            {
-              name: persona.name,
-              emotion: persona.emotion,
-              speechStyle: persona.speechStyle,
-              intentClarity: persona.intentClarity,
-              backgroundNoise: persona.backgroundNoise,
-              description: persona.description,
-              backstory: persona.backstory,
-              gender: persona.gender,
-              language: persona.language,
-              accent: persona.accent,
-              behavior: persona.behavior,
-              conversationTraits: persona.conversationTraits,
-            },
-            scenario.prompt,
-          )
-        : scenario.prompt;
+      // Priority: Liquid template (if set) → code-generated → scenario prompt fallback
+      const personaTraits = persona
+        ? {
+            name: persona.name,
+            emotion: persona.emotion,
+            speechStyle: persona.speechStyle,
+            intentClarity: persona.intentClarity,
+            backgroundNoise: persona.backgroundNoise,
+            description: persona.description,
+            backstory: persona.backstory,
+            gender: persona.gender,
+            language: persona.language,
+            accent: persona.accent,
+            behavior: persona.behavior,
+            conversationTraits: persona.conversationTraits,
+          }
+        : null;
+
+      let personaSystemPrompt: string;
+      if (scenario.promptTemplate && personaTraits) {
+        // Try Liquid template first — falls back to code-generated on failure
+        const templateVars = buildTemplateVariables(personaTraits, scenario.prompt, {
+          name: scenario.name,
+          description: scenario.description,
+          category: scenario.category,
+          difficulty: scenario.difficulty,
+          promptVariables: scenario.promptVariables,
+        });
+        const rendered = await renderPersonaTemplate(scenario.promptTemplate, templateVars);
+        personaSystemPrompt = rendered || this.personaSimulator.toSystemPrompt(personaTraits, scenario.prompt);
+      } else if (personaTraits) {
+        personaSystemPrompt = this.personaSimulator.toSystemPrompt(personaTraits, scenario.prompt);
+      } else {
+        personaSystemPrompt = scenario.prompt;
+      }
 
       await job.progress(40);
 

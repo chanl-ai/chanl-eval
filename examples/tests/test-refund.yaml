@@ -1,0 +1,31 @@
+# Example test file — run with: chanl test examples/tests/test-refund.yaml
+# Tests an angry-customer refund scenario with pass/fail assertions.
+
+scenario: angry-customer-refund    # slug or ID of an existing scenario
+agent: ../agents/support-bot.yaml  # optional: agent YAML to use (relative to this file)
+
+assertions:
+  - type: keyword
+    must_include: ["refund", "policy"]
+    description: "Agent mentions refund policy"
+
+  - type: keyword
+    must_not_include: ["lawsuit", "attorney"]
+    description: "Agent avoids legal language"
+
+  - type: response_time
+    max_seconds: 5
+    description: "Agent responds within 5 seconds"
+
+  - type: prompt
+    rubric: "Agent successfully de-escalated the customer's frustration"
+    min_score: 7
+    description: "De-escalation check"
+
+  - type: tool_call
+    expected: ["check_order"]
+    description: "Agent checks order before processing"
+
+  - type: score
+    min_score: 70
+    description: "Overall quality score meets minimum"

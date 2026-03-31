@@ -5,7 +5,7 @@ import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import ora from 'ora';
 import { get, post, formatError } from '../client';
-import { printError, printWarning } from '../output';
+import { printError, printWarning, printSuccess } from '../output';
 import { loadConfig } from '../config';
 import { loadAgentYaml, type AgentDefinition } from '../agent-loader';
 import {
@@ -14,6 +14,12 @@ import {
   type Assertion,
   type AssertionResult,
 } from '../assertions';
+import {
+  saveBaseline,
+  loadBaseline,
+  compareWithBaseline,
+  printBaselineComparison,
+} from '../baseline';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */

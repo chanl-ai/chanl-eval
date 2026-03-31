@@ -55,6 +55,20 @@ export class Scenario {
   @Prop({ required: true })
   prompt!: string;
 
+  /**
+   * Optional Liquid template for the persona system prompt.
+   * When set, this template is rendered with persona + scenario variables
+   * and replaces the code-generated persona prompt.
+   *
+   * Available variables: {{ persona.name }}, {{ persona.emotion }},
+   * {{ scenario.prompt }}, {{ scenario.category }}, and any promptVariables.
+   *
+   * chanl cloud extends this with: emotional arcs, reactive behaviors,
+   * and advanced variable diagnostics.
+   */
+  @Prop({ type: String, required: false })
+  promptTemplate?: string;
+
   @Prop({
     type: [
       {
