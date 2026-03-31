@@ -11,6 +11,11 @@ async function bootstrap() {
   // CORS
   app.enableCors();
 
+  // Global prefix — matches chanl-platform for seamless cloud migration
+  app.setGlobalPrefix('api/v1', {
+    exclude: ['health', 'health/ready'],
+  });
+
   // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({

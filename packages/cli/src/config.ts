@@ -19,7 +19,7 @@ export interface CliConfig {
 }
 
 const DEFAULT_CONFIG: CliConfig = {
-  server: 'http://localhost:18005',
+  server: 'http://localhost:18005/api/v1',
   apiKey: '',
   provider: '',
   openaiApiKey: '',

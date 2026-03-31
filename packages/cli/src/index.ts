@@ -18,7 +18,16 @@ export function createProgram(): Command {
     .name('chanl')
     .description('CLI for chanl-eval: AI agent testing framework')
     .version(VERSION, '-v, --version', 'Output the current version')
-    .option('-f, --format <format>', 'Output format: table or json', 'table');
+    .option('-f, --format <format>', 'Output format: table or json', 'table')
+    .option('--json', 'Shorthand for --format json');
+
+  // --json is a shorthand for --format json
+  program.hook('preAction', (_thisCommand, _actionCommand) => {
+    const opts = program.opts();
+    if (opts.json) {
+      opts.format = 'json';
+    }
+  });
 
   // Initialize analytics on startup
   initAnalytics();

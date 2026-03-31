@@ -16,7 +16,7 @@ const STORAGE_ADAPTER = 'chanl-eval-adapter-type';
 const STORAGE_AGENT_KEY = 'chanl-eval-agent-api-key';
 
 function envServer(): string {
-  return process.env.NEXT_PUBLIC_CHANL_EVAL_SERVER || 'http://localhost:18005';
+  return process.env.NEXT_PUBLIC_CHANL_EVAL_SERVER || 'http://localhost:18005/api/v1';
 }
 
 function envApiKey(): string {

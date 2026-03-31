@@ -76,7 +76,7 @@ describe('New CLI Commands', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'config.json'),
       JSON.stringify({
-        server: 'http://localhost:18005',
+        server: 'http://localhost:18005/api/v1',
         apiKey: 'test-key',
         provider: 'http',
         httpEndpoint: 'http://localhost:19000',

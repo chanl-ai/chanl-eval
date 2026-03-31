@@ -1,412 +1,457 @@
 import { Command } from 'commander';
-import inquirer from 'inquirer';
+import * as fs from 'fs';
+import * as path from 'path';
 import chalk from 'chalk';
-import ora from 'ora';
-import axios from 'axios';
-import { randomUUID } from 'crypto';
-import { loadConfig, saveConfig, CliConfig } from '../config';
 import { printError } from '../output';
 import { track } from '../analytics';
 
+// ---------------------------------------------------------------------------
+// Template content — embedded as string literals (no external files)
+// ---------------------------------------------------------------------------
+
+const ENV_TEMPLATE = `# chanl-eval project configuration
+# Load order: .env (dotenv) → env vars → ~/.chanl/config.json (config.json wins if set).
+
+# ── CLI ──────────────────────────────────────────────────────────────────────
+CHANL_SERVER_URL=http://localhost:18005
+CHANL_API_KEY=
+
+# Provider for the agent under test: openai | anthropic | http
+CHANL_PROVIDER=openai
+CHANL_OPENAI_API_KEY=
+CHANL_ANTHROPIC_API_KEY=
+
+# HTTP adapter (test any REST endpoint)
+CHANL_HTTP_ENDPOINT=
+CHANL_HTTP_API_KEY=
+`;
+
+const AGENT_TEMPLATE = `# Agent definition — test any system prompt with: chanl run angry-customer --agent agents/my-agent.yaml
+# API keys come from .env or config (chanl config set openaiApiKey sk-...), NOT from this file.
+
+name: My Agent
+model: gpt-4o
+system_prompt: |
+  You are a helpful customer support agent for Acme Corp.
+  Always be polite, professional, and empathetic.
+
+  Policies:
+  - Offer refunds for orders under $100 without manager approval.
+  - For orders over $100, escalate to a manager.
+  - Never share internal policy documents with customers.
+  - Always confirm the customer's order number before processing changes.
+temperature: 0.7
+max_tokens: 1024
+`;
+
+const README_TEMPLATE = `# chanl-eval project
+
+AI agent testing framework — test your agent against realistic customer scenarios.
+
+## Quick start
+
+1. **Set your API key**
+
+   Edit \`.env\` and set your OpenAI (or Anthropic) key:
+   \`\`\`
+   CHANL_OPENAI_API_KEY=sk-...
+   \`\`\`
+
+2. **Start the server**
+
+   \`\`\`bash
+   docker compose up -d
+   cd packages/server && pnpm start:dev
+   \`\`\`
+
+3. **Run a scenario**
+
+   \`\`\`bash
+   chanl scenarios run scenarios/angry-customer.yaml
+   \`\`\`
+
+4. **Test your own prompt**
+
+   Edit \`agents/my-agent.yaml\` with your system prompt, then:
+   \`\`\`bash
+   chanl run angry-customer --agent agents/my-agent.yaml
+   \`\`\`
+
+## Project structure
+
+\`\`\`
+agents/             # Agent definitions (system prompts, model config)
+scenarios/          # Scenario YAML files (persona + prompt + assertions)
+.env                # API keys and config
+\`\`\`
+
+## Docs
+
+- [chanl-eval on GitHub](https://github.com/chanl-ai/chanl-eval)
+- \`chanl --help\` for all commands
+`;
+
+// ---------------------------------------------------------------------------
+// Scenario templates
+// ---------------------------------------------------------------------------
+
+interface ScenarioTemplate {
+  filename: string;
+  content: string;
+}
+
+const BASE_SCENARIOS: ScenarioTemplate[] = [
+  {
+    filename: 'angry-customer.yaml',
+    content: `name: Angry Customer Refund
+description: Frustrated customer demanding a refund for a broken laptop
+prompt: >-
+  I bought a laptop two weeks ago and it's already broken. I want a full refund NOW.
+category: support
+difficulty: hard
+persona:
+  name: Frustrated Karen
+  emotion: frustrated
+  speechStyle: fast
+  intentClarity: very clear
+  behavior:
+    cooperationLevel: hostile
+    patience: impatient
+tags:
+  - refund
+  - support
+  - escalation
+`,
+  },
+  {
+    filename: 'billing-dispute.yaml',
+    content: `name: Billing Dispute
+description: Customer questioning an unexpected charge on their account
+prompt: >-
+  I just noticed a charge of $49.99 on my credit card from your company.
+  I never authorized this. What is going on?
+category: support
+difficulty: medium
+persona:
+  name: Concerned Account Holder
+  emotion: worried
+  speechStyle: normal
+  intentClarity: clear
+  behavior:
+    cooperationLevel: neutral
+    patience: moderate
+tags:
+  - billing
+  - support
+  - dispute
+`,
+  },
+  {
+    filename: 'product-inquiry.yaml',
+    content: `name: Product Inquiry
+description: Friendly customer asking about product features and pricing
+prompt: >-
+  Hi! I'm looking at the Pro plan on your website. Can you tell me what's
+  included and whether there's a free trial?
+category: sales
+difficulty: easy
+persona:
+  name: Curious Prospect
+  emotion: neutral
+  speechStyle: normal
+  intentClarity: clear
+  behavior:
+    cooperationLevel: cooperative
+    patience: patient
+tags:
+  - sales
+  - inquiry
+  - pricing
+`,
+  },
+];
+
+// -- customer-support template scenarios ------------------------------------
+
+const CUSTOMER_SUPPORT_SCENARIOS: ScenarioTemplate[] = [
+  ...BASE_SCENARIOS,
+  {
+    filename: 'technical-issue.yaml',
+    content: `name: Technical Issue
+description: Customer struggling with a technical problem and getting frustrated
+prompt: >-
+  Your app keeps crashing every time I try to upload a file. I've tried
+  restarting my phone three times. This is ridiculous.
+category: support
+difficulty: medium
+persona:
+  name: Confused Elderly Customer
+  emotion: confused
+  speechStyle: slow
+  intentClarity: vague
+  behavior:
+    cooperationLevel: cooperative
+    patience: patient
+tags:
+  - technical
+  - support
+  - app-issue
+`,
+  },
+  {
+    filename: 'escalation-request.yaml',
+    content: `name: Escalation Request
+description: Impatient executive demanding to speak with a manager immediately
+prompt: >-
+  I've been a premium customer for five years and this is the third time
+  I'm calling about the same issue. I want to speak with a manager RIGHT NOW.
+category: support
+difficulty: hard
+persona:
+  name: Impatient Executive
+  emotion: angry
+  speechStyle: fast
+  intentClarity: very clear
+  behavior:
+    cooperationLevel: hostile
+    patience: none
+tags:
+  - escalation
+  - support
+  - vip
+`,
+  },
+];
+
+// -- sales template scenarios -----------------------------------------------
+
+const SALES_SCENARIOS: ScenarioTemplate[] = [
+  {
+    filename: 'cold-outreach.yaml',
+    content: `name: Cold Outreach Response
+description: Prospect responding to a cold email with mild interest
+prompt: >-
+  I got your email about your analytics platform. We're currently using
+  a competitor but our contract is up in two months. What makes you different?
+category: sales
+difficulty: medium
+persona:
+  name: Skeptical Buyer
+  emotion: neutral
+  speechStyle: normal
+  intentClarity: clear
+  behavior:
+    cooperationLevel: neutral
+    patience: moderate
+tags:
+  - sales
+  - outreach
+  - comparison
+`,
+  },
+  {
+    filename: 'pricing-negotiation.yaml',
+    content: `name: Pricing Negotiation
+description: Budget-conscious buyer pushing back on pricing
+prompt: >-
+  We like the product but the pricing is way above our budget. Our team
+  is only 5 people. Is there a startup discount or a smaller plan?
+category: sales
+difficulty: medium
+persona:
+  name: Budget-Conscious Startup Founder
+  emotion: neutral
+  speechStyle: normal
+  intentClarity: clear
+  behavior:
+    cooperationLevel: cooperative
+    patience: moderate
+tags:
+  - sales
+  - pricing
+  - negotiation
+`,
+  },
+  {
+    filename: 'demo-request.yaml',
+    content: `name: Demo Request
+description: Enthusiastic prospect requesting a product demo
+prompt: >-
+  I saw your product on Product Hunt and I'm really interested.
+  Can we schedule a demo this week? We need something like this for our team.
+category: sales
+difficulty: easy
+persona:
+  name: Eager Early Adopter
+  emotion: excited
+  speechStyle: fast
+  intentClarity: very clear
+  behavior:
+    cooperationLevel: cooperative
+    patience: patient
+tags:
+  - sales
+  - demo
+  - inbound
+`,
+  },
+];
+
+const TEMPLATE_MAP: Record<string, ScenarioTemplate[]> = {
+  'customer-support': CUSTOMER_SUPPORT_SCENARIOS,
+  'sales': SALES_SCENARIOS,
+};
+
+const AVAILABLE_TEMPLATES = Object.keys(TEMPLATE_MAP);
+
+// ---------------------------------------------------------------------------
+// Scaffolding logic
+// ---------------------------------------------------------------------------
+
+export interface InitOptions {
+  template?: string;
+}
+
+/**
+ * Scaffold a chanl-eval project directory.
+ *
+ * @param targetDir - Absolute path to the directory to scaffold into
+ * @param options   - Template selection
+ * @returns Object describing created files (for testing)
+ */
+export function scaffoldProject(
+  targetDir: string,
+  options: InitOptions = {},
+): { files: string[]; dirs: string[] } {
+  const createdFiles: string[] = [];
+  const createdDirs: string[] = [];
+
+  // Resolve scenario set
+  const scenarios = options.template
+    ? TEMPLATE_MAP[options.template] || BASE_SCENARIOS
+    : BASE_SCENARIOS;
+
+  // Create directories
+  const agentsDir = path.join(targetDir, 'agents');
+  const scenariosDir = path.join(targetDir, 'scenarios');
+
+  for (const dir of [targetDir, agentsDir, scenariosDir]) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      createdDirs.push(dir);
+    }
+  }
+
+  // Write files (skip if they already exist to avoid overwriting user work)
+  const filesToWrite: Array<{ rel: string; content: string }> = [
+    { rel: '.env', content: ENV_TEMPLATE },
+    { rel: 'agents/my-agent.yaml', content: AGENT_TEMPLATE },
+    { rel: 'README.md', content: README_TEMPLATE },
+    ...scenarios.map((s) => ({
+      rel: `scenarios/${s.filename}`,
+      content: s.content,
+    })),
+  ];
+
+  for (const { rel, content } of filesToWrite) {
+    const abs = path.join(targetDir, rel);
+    if (!fs.existsSync(abs)) {
+      fs.writeFileSync(abs, content, 'utf-8');
+      createdFiles.push(rel);
+    }
+  }
+
+  return { files: createdFiles, dirs: createdDirs };
+}
+
+// ---------------------------------------------------------------------------
+// CLI command registration
+// ---------------------------------------------------------------------------
+
 export function registerInitCommand(program: Command): void {
   program
-    .command('init')
-    .description('Interactive project setup for chanl-eval')
-    .action(async () => {
+    .command('init [directory]')
+    .description('Scaffold a chanl-eval project with agent and scenario files')
+    .option(
+      '-t, --template <name>',
+      `Industry template: ${AVAILABLE_TEMPLATES.join(', ')}`,
+    )
+    .action(async (directory: string | undefined, options: InitOptions) => {
       try {
-        await runInit();
+        runInit(directory, options);
       } catch (err: any) {
-        if (err.message === 'User force closed the prompt') {
-          console.log('\nSetup cancelled.');
-          process.exit(0);
-        }
         printError(err.message);
         process.exit(1);
       }
     });
 }
 
-async function runInit(): Promise<void> {
+function runInit(directory: string | undefined, options: InitOptions): void {
+  // Validate template name
+  if (options.template && !TEMPLATE_MAP[options.template]) {
+    printError(
+      `Unknown template "${options.template}". Available: ${AVAILABLE_TEMPLATES.join(', ')}`,
+    );
+    process.exit(1);
+  }
+
+  // Resolve target directory
+  const targetDir = directory
+    ? path.resolve(process.cwd(), directory)
+    : process.cwd();
+
+  const { files } = scaffoldProject(targetDir, options);
+
+  if (files.length === 0) {
+    console.log(
+      chalk.yellow('Project already initialized') +
+        ' — all files already exist.',
+    );
+    return;
+  }
+
+  // Print success
   console.log('');
-  console.log(chalk.bold('  Welcome to chanl-eval!'));
-  console.log(chalk.dim('  AI agent testing framework'));
+  console.log(chalk.green('\u2713') + chalk.bold(' Created chanl-eval project'));
   console.log('');
 
-  const config = loadConfig();
-
-  // 1. LLM Provider
-  const { provider } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'provider',
-      message: 'LLM Provider:',
-      choices: [
-        { name: 'OpenAI', value: 'openai' },
-        { name: 'Anthropic', value: 'anthropic' },
-        { name: 'Custom HTTP endpoint', value: 'custom' },
-      ],
-      default: config.provider || 'openai',
-    },
-  ]);
-
-  config.provider = provider;
-
-  // 2. Provider API key
-  if (provider === 'openai') {
-    const { openaiApiKey } = await inquirer.prompt([
-      {
-        type: 'password',
-        name: 'openaiApiKey',
-        message: 'OpenAI API Key:',
-        mask: '*',
-        validate: (input: string) =>
-          input.startsWith('sk-') || 'Must start with sk-',
-        when: !config.openaiApiKey,
-      },
-    ]);
-    if (openaiApiKey) config.openaiApiKey = openaiApiKey;
-  } else if (provider === 'anthropic') {
-    const { anthropicApiKey } = await inquirer.prompt([
-      {
-        type: 'password',
-        name: 'anthropicApiKey',
-        message: 'Anthropic API Key:',
-        mask: '*',
-        validate: (input: string) =>
-          input.startsWith('sk-ant-') || 'Must start with sk-ant-',
-        when: !config.anthropicApiKey,
-      },
-    ]);
-    if (anthropicApiKey) config.anthropicApiKey = anthropicApiKey;
+  // List created files
+  const displayDir = directory || '.';
+  for (const f of files) {
+    console.log(chalk.dim(`  ${displayDir}/${f}`));
   }
 
-  // 3. Voice testing
-  const { voiceEnabled } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'voiceEnabled',
-      message: 'Enable voice testing? (requires Twilio)',
-      choices: [
-        { name: 'No (text only)', value: false },
-        { name: 'Yes', value: true },
-      ],
-      default: false,
-    },
-  ]);
+  // Next steps
+  console.log('');
+  console.log(chalk.bold('  Next steps:'));
+  console.log(
+    `  1. Set your API key:     Edit .env \u2192 set CHANL_OPENAI_API_KEY=sk-...`,
+  );
+  console.log(
+    `  2. Start the server:     docker compose up -d && cd packages/server && pnpm start:dev`,
+  );
+  console.log(
+    `  3. Run a scenario:       chanl scenarios run scenarios/angry-customer.yaml`,
+  );
+  console.log('');
+  console.log('  Or test a prompt directly:');
+  console.log(
+    `  4. Edit agents/my-agent.yaml with your system prompt`,
+  );
+  console.log(
+    `  5. chanl run angry-customer --agent agents/my-agent.yaml`,
+  );
+  console.log('');
+  console.log(
+    chalk.dim('  \uD83D\uDCDA Docs: https://github.com/chanl-ai/chanl-eval'),
+  );
 
-  if (voiceEnabled) {
-    const twilioAnswers = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'twilioAccountSid',
-        message: 'Twilio Account SID:',
-        validate: (input: string) =>
-          input.startsWith('AC') || 'Must start with AC',
-        when: !config.twilioAccountSid,
-      },
-      {
-        type: 'password',
-        name: 'twilioAuthToken',
-        message: 'Twilio Auth Token:',
-        mask: '*',
-        when: !config.twilioAuthToken,
-      },
-      {
-        type: 'input',
-        name: 'twilioPhoneNumber',
-        message: 'Twilio Phone Number (E.164 format):',
-        validate: (input: string) =>
-          input.startsWith('+') || 'Must start with +',
-        when: !config.twilioPhoneNumber,
-      },
-    ]);
-
-    if (twilioAnswers.twilioAccountSid)
-      config.twilioAccountSid = twilioAnswers.twilioAccountSid;
-    if (twilioAnswers.twilioAuthToken)
-      config.twilioAuthToken = twilioAnswers.twilioAuthToken;
-    if (twilioAnswers.twilioPhoneNumber)
-      config.twilioPhoneNumber = twilioAnswers.twilioPhoneNumber;
-  }
-
-  // 4. Analytics
-  const { analytics } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'analytics',
-      message: 'Anonymous usage analytics? (helps improve chanl)',
-      choices: [
-        { name: 'Yes (recommended)', value: true },
-        { name: 'No', value: false },
-      ],
-      default: true,
-    },
-  ]);
-
-  config.analytics = analytics;
-  if (analytics && !config.analyticsId) {
-    config.analyticsId = randomUUID();
-  }
-
-  // Save config so far
-  saveConfig(config);
-
-  // 5. Start server?
-  const { startServer } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'startServer',
-      message: 'Start server now? (requires Docker)',
-      choices: [
-        { name: 'Yes', value: true },
-        { name: 'No (run "chanl server start" later)', value: false },
-      ],
-      default: true,
-    },
-  ]);
-
-  if (startServer) {
-    // Check docker
-    if (!hasDocker()) {
-      console.log('');
-      printError(
-        'Docker not found. Install Docker Desktop:\n  https://docs.docker.com/get-docker/',
-      );
-      console.log('');
-      console.log('After installing Docker, run:');
-      console.log('  chanl server start');
-      saveConfig(config);
-      return;
-    }
-
-    await startServerAndSeed(config);
-  } else {
-    console.log('');
-    console.log(chalk.bold('  Configuration saved!'));
-    console.log('');
-    console.log('  Get started:');
-    console.log('    chanl server start');
-    console.log('    chanl scenarios list');
-  }
-
-  // Track init event
+  // Track analytics
   track('cli_init', {
     os: process.platform,
     node_version: process.version,
-    provider_type: provider,
-    voice_enabled: voiceEnabled,
+    template: options.template || 'none',
+    files_created: files.length,
+    directory: directory ? 'custom' : 'cwd',
   });
-
-  // First-run analytics notice
-  if (analytics) {
-    console.log('');
-    console.log(
-      chalk.dim(
-        'chanl collects anonymous usage data to improve the tool.',
-      ),
-    );
-    console.log(
-      chalk.dim('Run "chanl analytics disable" to opt out.'),
-    );
-  }
-}
-
-async function startServerAndSeed(config: CliConfig): Promise<void> {
-  const { execFileSync } = require('child_process');
-  const fs = require('fs');
-  const path = require('path');
-  const os = require('os');
-
-  // Find compose file
-  let composeFile = findComposeFile();
-  if (!composeFile) {
-    // Generate default compose file in ~/.chanl/
-    const chanlDir = path.join(os.homedir(), '.chanl');
-    if (!fs.existsSync(chanlDir)) {
-      fs.mkdirSync(chanlDir, { recursive: true });
-    }
-    composeFile = path.join(chanlDir, 'docker-compose.yml');
-    fs.writeFileSync(composeFile, getDefaultComposeYaml(), 'utf-8');
-    console.log(chalk.dim(`  Generated ${composeFile}`));
-  }
-
-  // Start containers
-  const spinner = ora('Starting server...').start();
-  try {
-    const dc = getDockerCmd();
-    if (!dc) throw new Error('Docker not available');
-
-    const args = [...dc.args, '-f', composeFile, 'up', '-d'];
-    execFileSync(dc.cmd, args, { stdio: 'pipe', timeout: 120000 });
-  } catch (err: any) {
-    spinner.fail('Failed to start containers');
-    printError(err.message);
-    return;
-  }
-
-  // Wait for healthy
-  const steps = [
-    { label: 'MongoDB ready', check: () => true },
-    { label: 'Redis ready', check: () => true },
-    { label: `Server ready on ${config.server}`, check: () => true },
-  ];
-
-  try {
-    spinner.text = 'Waiting for server to be healthy...';
-    const health = await waitForHealth(config.server, 60000);
-    spinner.succeed('Server is running');
-
-    for (const step of steps) {
-      console.log(chalk.green('  ✓') + ` ${step.label}`);
-    }
-
-    // Get or create API key
-    if (!config.apiKey) {
-      try {
-        const res = await axios.post(`${config.server}/api-keys`, {
-          name: 'cli-init',
-        });
-        const key = res.data?.key;
-        if (key) {
-          config.apiKey = key;
-          saveConfig(config);
-          console.log('');
-          console.log(
-            chalk.green('  ✓') +
-              ` API key: ${key.slice(0, 8)}...${key.slice(-4)}`,
-          );
-        }
-      } catch {
-        // Keys may already exist (bootstrap created one)
-        // Try to read from server logs or use existing config
-      }
-    }
-
-    // Show seed status
-    if (health.seeded) {
-      console.log(chalk.green('  ✓') + ' Default data seeded');
-    }
-  } catch {
-    spinner.warn('Server containers started but health check timed out');
-    console.log('  Check logs: chanl server logs server');
-    return;
-  }
-
-  saveConfig(config);
-
-  console.log('');
-  console.log(chalk.bold('  Get started:'));
-  console.log('    chanl scenarios list');
-  console.log('    chanl run angry-customer-refund');
-  console.log('    chanl server logs');
-}
-
-function hasDocker(): boolean {
-  try {
-    require('child_process').execFileSync('docker', ['version'], {
-      stdio: 'pipe',
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function getDockerCmd(): { cmd: string; args: string[] } | null {
-  try {
-    require('child_process').execFileSync('docker', ['compose', 'version'], {
-      stdio: 'pipe',
-    });
-    return { cmd: 'docker', args: ['compose'] };
-  } catch {
-    // fall through
-  }
-  try {
-    require('child_process').execFileSync('docker-compose', ['version'], {
-      stdio: 'pipe',
-    });
-    return { cmd: 'docker-compose', args: [] };
-  } catch {
-    // fall through
-  }
-  return null;
-}
-
-function findComposeFile(): string | null {
-  const fs = require('fs');
-  const path = require('path');
-  const os = require('os');
-
-  const candidates = [
-    path.resolve('docker-compose.yml'),
-    path.resolve('docker-compose.yaml'),
-    path.join(os.homedir(), '.chanl', 'docker-compose.yml'),
-  ];
-
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return null;
-}
-
-async function waitForHealth(
-  serverUrl: string,
-  timeoutMs: number,
-): Promise<any> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const res = await axios.get(`${serverUrl}/health`, { timeout: 3000 });
-      if (res.data?.status === 'ok') return res.data;
-    } catch {
-      // not ready
-    }
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-  throw new Error('Health check timed out');
-}
-
-function getDefaultComposeYaml(): string {
-  return `version: '3.8'
-
-services:
-  mongodb:
-    image: mongo:7
-    ports:
-      - "27217:27017"
-    volumes:
-      - chanl-mongo-data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6479:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  server:
-    image: ghcr.io/chanl-ai/chanl-eval-server:latest
-    ports:
-      - "18005:18005"
-    environment:
-      - MONGODB_URI=mongodb://mongodb:27017/chanl-eval
-      - REDIS_URL=redis://redis:6379
-      - PORT=18005
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-volumes:
-  chanl-mongo-data:
-`;
 }

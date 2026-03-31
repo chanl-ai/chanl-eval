@@ -44,7 +44,7 @@ describe('Config', () => {
   it('loadConfig returns defaults when no config file exists', () => {
     const { loadConfig } = requireFresh();
     const config = loadConfig();
-    expect(config.server).toBe('http://localhost:18005');
+    expect(config.server).toBe('http://localhost:18005/api/v1');
     expect(config.apiKey).toBe('');
   });
 
@@ -113,7 +113,7 @@ describe('Config', () => {
 
     const config = loadConfig();
     // Should return defaults
-    expect(config.server).toBe('http://localhost:18005');
+    expect(config.server).toBe('http://localhost:18005/api/v1');
     expect(config.apiKey).toBe('');
   });
 
