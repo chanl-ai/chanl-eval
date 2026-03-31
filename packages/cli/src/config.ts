@@ -66,11 +66,20 @@ export function loadConfig(): CliConfig {
   if (!('apiKey' in fromFile) && process.env.CHANL_API_KEY) {
     merged.apiKey = process.env.CHANL_API_KEY;
   }
+  if (!('provider' in fromFile) && process.env.CHANL_PROVIDER) {
+    merged.provider = process.env.CHANL_PROVIDER;
+  }
   if (!('openaiApiKey' in fromFile) && process.env.CHANL_OPENAI_API_KEY) {
     merged.openaiApiKey = process.env.CHANL_OPENAI_API_KEY;
   }
   if (!('anthropicApiKey' in fromFile) && process.env.CHANL_ANTHROPIC_API_KEY) {
     merged.anthropicApiKey = process.env.CHANL_ANTHROPIC_API_KEY;
+  }
+  if (!('httpEndpoint' in fromFile) && process.env.CHANL_HTTP_ENDPOINT) {
+    merged.httpEndpoint = process.env.CHANL_HTTP_ENDPOINT;
+  }
+  if (!('httpApiKey' in fromFile) && process.env.CHANL_HTTP_API_KEY) {
+    merged.httpApiKey = process.env.CHANL_HTTP_API_KEY;
   }
   return merged;
 }

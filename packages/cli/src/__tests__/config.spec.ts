@@ -20,8 +20,11 @@ describe('Config', () => {
     process.env.CHANL_CONFIG_DIR = tmpDir;
     delete process.env.CHANL_SERVER_URL;
     delete process.env.CHANL_API_KEY;
+    delete process.env.CHANL_PROVIDER;
     delete process.env.CHANL_OPENAI_API_KEY;
     delete process.env.CHANL_ANTHROPIC_API_KEY;
+    delete process.env.CHANL_HTTP_ENDPOINT;
+    delete process.env.CHANL_HTTP_API_KEY;
   });
 
   afterEach(() => {
@@ -52,6 +55,19 @@ describe('Config', () => {
     const config = loadConfig();
     expect(config.server).toBe('http://env:9999');
     expect(config.apiKey).toBe('env-key');
+  });
+
+  it('loadConfig fills provider and adapter keys from env', () => {
+    process.env.CHANL_PROVIDER = 'anthropic';
+    process.env.CHANL_ANTHROPIC_API_KEY = 'sk-ant-test';
+    process.env.CHANL_HTTP_ENDPOINT = 'http://my-agent:8080';
+    process.env.CHANL_HTTP_API_KEY = 'http-secret';
+    const { loadConfig } = requireFresh();
+    const config = loadConfig();
+    expect(config.provider).toBe('anthropic');
+    expect(config.anthropicApiKey).toBe('sk-ant-test');
+    expect(config.httpEndpoint).toBe('http://my-agent:8080');
+    expect(config.httpApiKey).toBe('http-secret');
   });
 
   it('saveConfig creates config file and loadConfig reads it back', () => {
