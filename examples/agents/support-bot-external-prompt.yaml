@@ -1,0 +1,7 @@
+# Example agent definition with external prompt file.
+# The system_prompt_file path is relative to this YAML file's location.
+
+name: Support Bot v2 (external prompt)
+model: gpt-4o
+system_prompt_file: ./prompts/support-v2.md
+temperature: 0.7

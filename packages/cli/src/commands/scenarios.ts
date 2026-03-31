@@ -554,24 +554,9 @@ function printExecutionDetails(execution: any): void {
         : chalk.yellow;
 
   console.log(chalk.bold('Execution Results'));
-  console.log(chalk.dim('─'.repeat(50)));
+  console.log(chalk.dim('\u2500'.repeat(60)));
   console.log(`  ID:       ${execution.executionId || execution.id || ''}`);
   console.log(`  Status:   ${statusColor(execution.status)}`);
-
-  if (
-    execution.overallScore !== undefined &&
-    execution.overallScore !== null
-  ) {
-    const scoreColor =
-      execution.overallScore >= 80
-        ? chalk.green
-        : execution.overallScore >= 50
-          ? chalk.yellow
-          : chalk.red;
-    console.log(
-      `  Score:    ${scoreColor(execution.overallScore + '/100')}`,
-    );
-  }
 
   if (execution.duration) {
     console.log(`  Duration: ${(execution.duration / 1000).toFixed(1)}s`);
@@ -583,51 +568,273 @@ function printExecutionDetails(execution: any): void {
     );
   }
 
-  if (execution.metrics) {
-    const m = execution.metrics;
-    console.log('');
-    console.log(chalk.bold('  Metrics'));
-    console.log(chalk.dim('  ' + '─'.repeat(40)));
-    if (m.totalSteps) {
-      console.log(
-        `  Steps:    ${m.completedSteps || 0}/${m.totalSteps} completed, ${m.failedSteps || 0} failed`,
-      );
-    }
-    if (m.responseTime !== undefined) {
-      console.log(`  Resp Time: ${m.responseTime}ms`);
-    }
-    if (m.accuracy !== undefined) {
-      console.log(`  Accuracy:  ${m.accuracy}%`);
-    }
-    if (m.completion !== undefined) {
-      console.log(`  Completion: ${m.completion}%`);
-    }
-  }
-
-  if (execution.errorMessages && execution.errorMessages.length > 0) {
-    console.log('');
-    console.log(chalk.bold.red('  Errors'));
-    console.log(chalk.dim('  ' + '─'.repeat(40)));
-    for (const msg of execution.errorMessages) {
-      console.log(`  - ${msg}`);
-    }
-  }
-
+  // -- Transcript --------------------------------------------------------
   if (execution.stepResults && execution.stepResults.length > 0) {
     console.log('');
     console.log(chalk.bold('  Transcript'));
-    console.log(chalk.dim('  ' + '─'.repeat(40)));
+    console.log(chalk.dim('  ' + '\u2500'.repeat(52)));
     for (const step of execution.stepResults) {
       const text = step.actualResponse;
       if (!text) continue;
       const isAgent =
         typeof step.stepId === 'string' && step.stepId.includes('agent');
-      const label = isAgent ? chalk.cyan('Agent') : chalk.magenta('Persona');
-      console.log(`  ${label}  ${chalk.dim('(' + (step.stepId || 'turn') + ')')}`);
-      console.log(`  ${text}`);
+      const label = isAgent
+        ? chalk.cyan.bold('Agent')
+        : chalk.magenta.bold('Persona');
+      const latencyTag =
+        isAgent && step.duration
+          ? chalk.dim(` [${step.duration}ms]`)
+          : '';
+      console.log(`  ${label}${latencyTag}`);
+      // Wrap text at ~68 chars, indented
+      const lines = wordWrap(text, 68);
+      for (const line of lines) {
+        console.log(`    ${line}`);
+      }
       console.log('');
     }
   }
+
+  // -- Score with visual bar ---------------------------------------------
+  if (
+    execution.overallScore !== undefined &&
+    execution.overallScore !== null
+  ) {
+    console.log(chalk.bold('  Score'));
+    console.log(chalk.dim('  ' + '\u2500'.repeat(52)));
+    const score = Math.round(execution.overallScore);
+    const scoreColor =
+      score >= 80
+        ? chalk.green
+        : score >= 50
+          ? chalk.yellow
+          : chalk.red;
+    const bar = buildScoreBar(score, 20);
+    console.log(`  ${scoreColor(`${score}/100`)} ${bar}`);
+    console.log('');
+  }
+
+  // -- Scorecard criteria results ----------------------------------------
+  const criteriaResults = extractCriteriaResults(execution);
+  if (criteriaResults.length > 0) {
+    console.log(chalk.bold('  Scorecard'));
+    console.log(chalk.dim('  ' + '\u2500'.repeat(52)));
+    for (const cr of criteriaResults) {
+      const icon = cr.passed ? chalk.green('\u2713') : chalk.red('\u2717');
+      const nameStr = cr.name || cr.key || 'criterion';
+      const typeStr = cr.type ? chalk.dim(` [${cr.type}]`) : '';
+      const scoreStr =
+        cr.score !== undefined && cr.score !== null
+          ? chalk.dim(` (${cr.score})`)
+          : '';
+      const reasonStr = cr.reasoning
+        ? chalk.dim(`  ${truncate(cr.reasoning, 60)}`)
+        : '';
+      console.log(`  ${icon} ${nameStr}${typeStr}${scoreStr}`);
+      if (reasonStr) {
+        console.log(`  ${reasonStr}`);
+      }
+    }
+    console.log('');
+  }
+
+  // -- Latency stats -----------------------------------------------------
+  const latencyStats = computeLatencyStats(execution);
+  if (latencyStats) {
+    console.log(chalk.bold('  Latency'));
+    console.log(chalk.dim('  ' + '\u2500'.repeat(52)));
+    console.log(
+      `  Avg response:  ${chalk.cyan(latencyStats.avg + 'ms')}`,
+    );
+    console.log(
+      `  Slowest turn:  ${chalk.yellow(latencyStats.max + 'ms')}${latencyStats.slowestTurn ? chalk.dim(` (turn ${latencyStats.slowestTurn})`) : ''}`,
+    );
+    if (latencyStats.min !== latencyStats.max) {
+      console.log(
+        `  Fastest turn:  ${chalk.green(latencyStats.min + 'ms')}`,
+      );
+    }
+    console.log(`  Total turns:   ${latencyStats.count}`);
+    console.log('');
+  }
+
+  // -- Metrics -----------------------------------------------------------
+  if (execution.metrics) {
+    const m = execution.metrics;
+    const hasMetrics =
+      m.totalSteps || m.accuracy !== undefined || m.completion !== undefined;
+    if (hasMetrics) {
+      console.log(chalk.bold('  Metrics'));
+      console.log(chalk.dim('  ' + '\u2500'.repeat(52)));
+      if (m.totalSteps) {
+        console.log(
+          `  Steps:      ${m.completedSteps || 0}/${m.totalSteps} completed, ${m.failedSteps || 0} failed`,
+        );
+      }
+      if (m.accuracy !== undefined) {
+        console.log(`  Accuracy:   ${m.accuracy}%`);
+      }
+      if (m.completion !== undefined) {
+        console.log(`  Completion: ${m.completion}%`);
+      }
+      console.log('');
+    }
+  }
+
+  // -- Errors ------------------------------------------------------------
+  if (execution.errorMessages && execution.errorMessages.length > 0) {
+    console.log(chalk.bold.red('  Errors'));
+    console.log(chalk.dim('  ' + '\u2500'.repeat(52)));
+    for (const msg of execution.errorMessages) {
+      console.log(`  ${chalk.red('\u2717')} ${msg}`);
+    }
+    console.log('');
+  }
+
+  // -- Cloud teaser (subtle, one line) -----------------------------------
+  console.log(
+    chalk.dim(
+      '  \u{1F4A1} chanl cloud \u2192 dashboard, voice testing, trends \u2192 chanl.ai',
+    ),
+  );
+}
+
+/**
+ * Build a visual score bar using block characters.
+ * Filled blocks for the score portion, light shade for the remainder.
+ */
+function buildScoreBar(score: number, width: number): string {
+  const clamped = Math.max(0, Math.min(100, score));
+  const filled = Math.round((clamped / 100) * width);
+  const empty = width - filled;
+  const filledChar = '\u2588'; // full block
+  const emptyChar = '\u2591'; // light shade
+
+  const bar = filledChar.repeat(filled) + emptyChar.repeat(empty);
+  if (score >= 80) return chalk.green(bar);
+  if (score >= 50) return chalk.yellow(bar);
+  return chalk.red(bar);
+}
+
+/**
+ * Compute latency statistics from agent response times in stepResults.
+ */
+function computeLatencyStats(
+  execution: any,
+): {
+  avg: number;
+  max: number;
+  min: number;
+  count: number;
+  slowestTurn: number | null;
+} | null {
+  if (!execution.stepResults || execution.stepResults.length === 0) {
+    return null;
+  }
+
+  const agentSteps = execution.stepResults.filter(
+    (s: any) =>
+      typeof s.stepId === 'string' &&
+      s.stepId.includes('agent') &&
+      s.duration > 0,
+  );
+
+  if (agentSteps.length === 0) return null;
+
+  let total = 0;
+  let max = 0;
+  let min = Infinity;
+  let slowestTurn: number | null = null;
+
+  for (const step of agentSteps) {
+    const d = step.duration;
+    total += d;
+    if (d > max) {
+      max = d;
+      // Extract turn number from stepId like "turn-2-agent"
+      const match = step.stepId.match(/turn-(\d+)/);
+      slowestTurn = match ? parseInt(match[1], 10) + 1 : null;
+    }
+    if (d < min) {
+      min = d;
+    }
+  }
+
+  return {
+    avg: Math.round(total / agentSteps.length),
+    max,
+    min: min === Infinity ? 0 : min,
+    count: agentSteps.length,
+    slowestTurn,
+  };
+}
+
+/**
+ * Extract scorecard criteria results from execution data.
+ * Criteria results may be present at the top level (if the API enriches the response)
+ * or nested in execution metadata.
+ */
+function extractCriteriaResults(
+  execution: any,
+): Array<{
+  name: string;
+  key: string;
+  type?: string;
+  score?: number;
+  passed: boolean;
+  reasoning?: string;
+}> {
+  // Top-level criteriaResults (if API returns enriched data)
+  if (execution.criteriaResults && Array.isArray(execution.criteriaResults)) {
+    return execution.criteriaResults.map((cr: any) => ({
+      name: cr.criteriaName || cr.criteriaKey || '',
+      key: cr.criteriaKey || '',
+      type: cr.type,
+      score: typeof cr.result === 'number' ? cr.result : undefined,
+      passed: !!cr.passed,
+      reasoning: cr.reasoning,
+    }));
+  }
+
+  // Nested in metadata (if execution processor stored them)
+  if (execution.metadata?.scorecardResult?.criteriaResults) {
+    return execution.metadata.scorecardResult.criteriaResults.map(
+      (cr: any) => ({
+        name: cr.criteriaName || cr.criteriaKey || '',
+        key: cr.criteriaKey || '',
+        type: cr.type,
+        score: typeof cr.result === 'number' ? cr.result : undefined,
+        passed: !!cr.passed,
+        reasoning: cr.reasoning,
+      }),
+    );
+  }
+
+  return [];
+}
+
+/**
+ * Simple word wrap for transcript display.
+ */
+function wordWrap(text: string, maxWidth: number): string[] {
+  if (!text) return [''];
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    if (
+      currentLine.length + word.length + 1 > maxWidth &&
+      currentLine.length > 0
+    ) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = currentLine ? currentLine + ' ' + word : word;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines.length > 0 ? lines : [''];
 }
 
 /** Convert a name to a URL-friendly slug. */
