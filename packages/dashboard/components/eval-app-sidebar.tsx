@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Beaker,
+  BookOpen,
   ClipboardList,
   ExternalLink,
   FileText,
@@ -40,6 +41,7 @@ const dataNav = [
 ];
 
 const bottomNav = [
+  { title: 'Getting Started', href: '/getting-started', icon: BookOpen },
   { title: 'Settings', href: '/settings', icon: Settings },
 ];
 

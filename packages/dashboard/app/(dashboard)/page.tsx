@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bot,
+  BookOpen,
   Loader2,
   Lock,
   MoreHorizontal,
@@ -12,6 +14,7 @@ import {
   Save,
   Share2,
   User,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -189,6 +192,30 @@ export default function PlaygroundPage() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
 
+  // Getting started banner
+  const [showBanner, setShowBanner] = useState(false);
+  useEffect(() => {
+    try {
+      const dismissed = localStorage.getItem('chanl-eval-onboarding-dismissed');
+      const visited = localStorage.getItem('chanl-eval-playground-visited');
+      if (dismissed !== 'true' && visited !== 'true') {
+        setShowBanner(true);
+      }
+      localStorage.setItem('chanl-eval-playground-visited', 'true');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const dismissBanner = useCallback(() => {
+    setShowBanner(false);
+    try {
+      localStorage.setItem('chanl-eval-onboarding-dismissed', 'true');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   // Execution state
   const [isRunning, setIsRunning] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
@@ -329,6 +356,34 @@ export default function PlaygroundPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+      {/* ── Getting Started banner ── */}
+      {showBanner && (
+        <div
+          className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3"
+          data-testid="getting-started-banner"
+        >
+          <div className="flex items-center gap-2.5">
+            <BookOpen className="h-4 w-4 text-primary shrink-0" />
+            <p className="text-sm text-foreground">
+              New here? Check the{' '}
+              <Link
+                href="/getting-started"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Getting Started guide
+              </Link>
+            </p>
+          </div>
+          <button
+            onClick={dismissBanner}
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Dismiss banner"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* ── Header row ── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
