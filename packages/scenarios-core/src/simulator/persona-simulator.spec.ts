@@ -18,7 +18,7 @@ describe('PersonaSimulatorService', () => {
 
       const prompt = simulator.toSystemPrompt(persona, 'I need a refund');
 
-      expect(prompt).toContain('simulating a user');
+      expect(prompt).toContain('You are Test User');
       expect(prompt).toContain('I need a refund');
     });
 
@@ -167,7 +167,7 @@ describe('PersonaSimulatorService', () => {
       const prompt = simulator.toSystemPrompt(persona, 'test');
 
       expect(prompt).toContain('Stay in character');
-      expect(prompt).toContain('conversational and realistic');
+      expect(prompt).toContain('CUSTOMER, not the agent');
     });
   });
 

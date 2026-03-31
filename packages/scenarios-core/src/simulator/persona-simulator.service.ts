@@ -38,64 +38,274 @@ export interface VoiceConfig {
 @Injectable()
 export class PersonaSimulatorService {
   /**
-   * Convert persona traits into an LLM system prompt
+   * Convert persona traits into an LLM system prompt.
+   *
+   * OSS version: covers basic trait mapping, cooperation levels, patience,
+   * conversation flow, and character building. Produces meaningfully different
+   * conversations between e.g. a hostile persona vs a cooperative one.
+   *
+   * chanl cloud extends this with: emotional arcs (escalation/de-escalation),
+   * reactive behaviors (jargon/apology detection), negotiation tactics,
+   * voice-native speech patterns, and Liquid template customization.
    */
   toSystemPrompt(persona: PersonaTraits, scenarioPrompt: string): string {
     const parts: string[] = [];
 
-    parts.push(
-      'You are simulating a user in a conversation with a customer service agent.',
-    );
-    parts.push(`\nYour goal: ${scenarioPrompt}`);
+    // Character identity
+    parts.push(`You are ${persona.name || 'a customer'}.`);
+
+    // Character paragraph — build from available traits
+    const characterParagraph = this.buildCharacterParagraph(persona);
+    if (characterParagraph) {
+      parts.push('');
+      parts.push('## Who you are');
+      parts.push(characterParagraph);
+    }
+
+    // Scenario context
+    parts.push('');
+    parts.push("## Why you're contacting support");
+    parts.push(scenarioPrompt);
 
     // Emotional state
-    parts.push('\n\n## Emotional State');
+    parts.push('');
+    parts.push('## Emotional State');
     parts.push(this.getEmotionPrompt(persona.emotion));
 
     // Communication style
-    parts.push('\n\n## Communication Style');
+    parts.push('');
+    parts.push('## Communication Style');
     parts.push(this.getCommunicationStylePrompt(persona));
 
     // Intent clarity
-    parts.push('\n\n## How to Express Your Needs');
+    parts.push('');
+    parts.push('## How to Express Your Needs');
     parts.push(this.getIntentClarityPrompt(persona.intentClarity));
 
-    // Cooperation level (from behavior traits)
-    const cooperationLevel = persona.behavior?.cooperationLevel;
-    if (cooperationLevel) {
-      parts.push('\n\n## Cooperation Level');
-      parts.push(this.getCooperationPrompt(cooperationLevel));
+    // Cooperation — what you'll accept and when you'll escalate
+    const cooperation = persona.behavior?.cooperationLevel;
+    if (cooperation) {
+      const negotiation = this.getNegotiationStyle(cooperation);
+      parts.push('');
+      parts.push('## What you want');
+      parts.push(`- Goal: Get your issue resolved`);
+      parts.push(`- You'll accept: ${negotiation.acceptable}`);
+      parts.push(`- You'll escalate if: ${negotiation.escalation}`);
+      parts.push(
+        "- You're satisfied when: the agent confirms a specific resolution, not vague promises",
+      );
+
+      parts.push('');
+      parts.push('## Cooperation Level');
+      parts.push(this.getCooperationPrompt(cooperation));
     }
 
-    // Patience
+    // Patience — how you react to delays, repeats, scripts
     const patience = persona.behavior?.patience;
     if (patience) {
-      parts.push('\n\n## Patience');
+      const reactions = this.getPatienceReactions(patience);
+      parts.push('');
+      parts.push('## Patience & Reactions');
       parts.push(this.getPatiencePrompt(patience));
+      parts.push(`- If agent makes you repeat yourself → ${reactions.repeat}`);
+      parts.push(`- If agent gives scripted response → ${reactions.scripted}`);
+      parts.push(`- If agent asks for verification → ${reactions.verification}`);
     }
+
+    // Conversation flow guidance
+    parts.push('');
+    parts.push('## How the conversation flows');
+    parts.push(
+      "OPENING: State your reason in 1-2 sentences. Don't dump your whole story.",
+    );
+    parts.push(
+      "EXPLAINING: Give details when asked. Add info gradually. Don't repeat what you already said.",
+    );
+    const negotiation = this.getNegotiationStyle(cooperation || 'cooperative');
+    parts.push(`NEGOTIATING: ${negotiation.style}`);
+    parts.push(
+      'CLOSING: If satisfied, confirm details and wrap up. If not, express disappointment.',
+    );
 
     // Interruption behavior
     const interruptionFrequency =
       persona.conversationTraits?.interruptionFrequency;
     if (interruptionFrequency && interruptionFrequency !== 'never') {
-      parts.push('\n\n## Interruption Behavior');
+      parts.push('');
+      parts.push('## Interruption Behavior');
       parts.push(this.getInterruptionPrompt(interruptionFrequency));
+    }
+
+    // Conversation habits
+    if (persona.conversationTraits) {
+      const habits = this.getConversationHabits(persona.conversationTraits);
+      if (habits.length) {
+        parts.push('');
+        parts.push('## Your conversation habits');
+        habits.forEach((h) => parts.push(`- ${h}`));
+      }
     }
 
     // Backstory
     if (persona.backstory) {
-      parts.push('\n\n## Your Background');
+      parts.push('');
+      parts.push('## Your Background');
       parts.push(persona.backstory);
     }
 
-    // Final instruction
+    // Pacing guidance
+    parts.push('');
+    parts.push('## Pacing');
     parts.push(
-      '\n\n## Important',
-      'Stay in character throughout the conversation. Respond naturally as this persona would respond.',
-      'Keep responses conversational and realistic - not too long or too short.',
+      "- Don't repeat your issue after the agent acknowledges it",
+    );
+    parts.push(
+      "- Don't restate details you already provided — move the conversation forward",
+    );
+    parts.push(
+      "- If the agent resolved your issue, confirm and say goodbye — don't drag it out",
+    );
+    parts.push(
+      '- If nothing is progressing after several exchanges, mention you need to get going',
+    );
+
+    // Final instruction
+    parts.push('');
+    parts.push(
+      'Stay in character throughout the conversation. You are the CUSTOMER, not the agent. Never switch roles.',
     );
 
     return parts.join('\n');
+  }
+
+  /**
+   * Build a character paragraph from combined persona traits.
+   */
+  private buildCharacterParagraph(persona: PersonaTraits): string {
+    const parts: string[] = [];
+    if (persona.description) parts.push(persona.description);
+    if (persona.backstory) parts.push(persona.backstory);
+
+    const traitFragments: string[] = [];
+    if (persona.emotion && persona.emotion !== 'neutral')
+      traitFragments.push(`feeling ${persona.emotion}`);
+    if (persona.behavior?.personality)
+      traitFragments.push(persona.behavior.personality);
+    if (persona.behavior?.patience)
+      traitFragments.push(`${persona.behavior.patience} patience`);
+    if (persona.behavior?.communicationStyle)
+      traitFragments.push(
+        `${persona.behavior.communicationStyle} communicator`,
+      );
+    if (traitFragments.length) {
+      parts.push(`You're ${traitFragments.join(', ')}.`);
+    }
+    if (persona.speechStyle && persona.speechStyle !== 'normal') {
+      parts.push(`You tend to speak at a ${persona.speechStyle} pace.`);
+    }
+
+    return (
+      parts.join(' ') ||
+      `A customer who is feeling ${persona.emotion || 'neutral'}.`
+    );
+  }
+
+  /**
+   * Get patience-based reactions to common agent behaviors.
+   */
+  private getPatienceReactions(patience: string): {
+    repeat: string;
+    scripted: string;
+    verification: string;
+  } {
+    switch (patience) {
+      case 'very impatient':
+        return {
+          repeat: 'visibly annoyed, voice gets terse',
+          scripted: '"I need an actual answer, not a script."',
+          verification: 'sigh, give info quickly',
+        };
+      case 'impatient':
+        return {
+          repeat: 'more irritated each time',
+          scripted: 'push harder for a real answer',
+          verification: 'comply quickly, slight edge in voice',
+        };
+      case 'patient':
+      case 'very patient':
+        return {
+          repeat: 'comply but note you already mentioned it',
+          scripted: 'listen politely, then redirect to your situation',
+          verification: 'cooperate easily',
+        };
+      default:
+        // neutral
+        return {
+          repeat: 'mildly frustrated but comply',
+          scripted: '"I appreciate that, but my situation is different..."',
+          verification: 'cooperate normally',
+        };
+    }
+  }
+
+  /**
+   * Get negotiation style based on cooperation level.
+   */
+  private getNegotiationStyle(cooperation: string): {
+    acceptable: string;
+    escalation: string;
+    style: string;
+  } {
+    switch (cooperation) {
+      case 'hostile':
+      case 'difficult':
+        return {
+          acceptable: 'only a full resolution — no half-measures',
+          escalation: 'agent stalls, deflects, or offers less than promised',
+          style:
+            "Push hard. Don't accept the first offer. Demand specifics.",
+        };
+      case 'very cooperative':
+        return {
+          acceptable: 'a reasonable compromise with clear next steps',
+          escalation: 'agent is dismissive or refuses to help entirely',
+          style: 'Accept a good offer readily. Thank the agent for their help.',
+        };
+      default:
+        // cooperative, neutral
+        return {
+          acceptable: 'a fair resolution with a specific commitment',
+          escalation:
+            'agent refuses without checking or gives the runaround',
+          style:
+            "Push once if the first offer isn't enough. Accept with good reason.",
+        };
+    }
+  }
+
+  /**
+   * Build conversation habit list from traits.
+   */
+  private getConversationHabits(
+    traits: PersonaTraits['conversationTraits'],
+  ): string[] {
+    if (!traits) return [];
+    const habits: string[] = [];
+    if (traits.goesOffTopic)
+      habits.push(
+        'You occasionally go off-topic with a brief tangent before getting back on track.',
+      );
+    if (traits.repeatsInformation)
+      habits.push(
+        'You tend to repeat key details to make sure the agent heard you.',
+      );
+    if (traits.asksClarifyingQuestions)
+      habits.push(
+        "You ask clarifying questions when something isn't clear.",
+      );
+    if (traits.interruptionFrequency === 'often')
+      habits.push('You tend to interject before the agent finishes.');
+    return habits;
   }
 
   /**
@@ -150,9 +360,9 @@ export class PersonaSimulatorService {
       annoyed:
         'You are annoyed and short-tempered. Express mild displeasure and be somewhat curt.',
       frustrated:
-        'You are frustrated and impatient. Express dissatisfaction with delays, unclear answers, or repeated questions. Your tone should convey annoyance.',
+        'You are frustrated and impatient. Express dissatisfaction with delays, unclear answers, or repeated questions.',
       irritated:
-        'You are irritated and on edge. Be confrontational when provoked. Express your displeasure clearly and firmly.',
+        'You are irritated and on edge. Be confrontational when provoked. Express your displeasure clearly.',
       curious:
         'You are curious and inquisitive. Ask many follow-up questions. Want to understand everything fully.',
       distracted:
@@ -242,7 +452,7 @@ export class PersonaSimulatorService {
       impatient:
         'Be impatient. Express frustration with delays. Ask "how long will this take?" frequently.',
       'very impatient':
-        'Be extremely impatient. Demand immediate answers. Threaten to escalate or leave if things take too long. Interrupt the agent if they are too slow.',
+        'Be extremely impatient. Demand immediate answers. Threaten to escalate or leave if things take too long.',
     };
 
     return prompts[patience] || prompts.neutral;

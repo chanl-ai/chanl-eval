@@ -1089,7 +1089,7 @@ describe('PersonaSimulator integration', () => {
       'I want a refund for my broken product',
     );
 
-    expect(prompt).toContain('simulating a user');
+    expect(prompt).toContain('You are Test Karen');
     expect(prompt).toContain('I want a refund for my broken product');
     expect(prompt).toContain('frustrated');
     expect(prompt).toContain('Cooperation Level');

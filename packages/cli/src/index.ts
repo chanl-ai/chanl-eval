@@ -37,6 +37,7 @@ export function createProgram(): Command {
   program
     .command('run [scenario]')
     .description('Run a scenario (shortcut for "chanl scenarios run")')
+    .option('--agent <path>', 'Path to agent YAML file (test prompts without deploying)')
     .option('--agent-id <agentId>', 'Override agent ID')
     .option('--persona-id <personaId>', 'Override persona ID')
     .option('--scorecard-id <scorecardId>', 'Override scorecard ID')

@@ -7,6 +7,7 @@ import ora from 'ora';
 import { get, post, formatError } from '../client';
 import { printOutput, printSuccess, printError, truncate } from '../output';
 import { loadConfig } from '../config';
+import { loadAgentYaml, type AgentDefinition } from '../agent-loader';
 
 /**
  * Shared run action — used by both `chanl scenarios run` and `chanl run`.
@@ -14,6 +15,7 @@ import { loadConfig } from '../config';
 export async function runScenarioAction(
   idOrNameOrFile: string | undefined,
   options: {
+    agent?: string;
     agentId?: string;
     personaId?: string;
     scorecardId?: string;
@@ -100,6 +102,7 @@ export async function runScenarioAction(
 async function executeAndPoll(
   scenarioId: string,
   options: {
+    agent?: string;
     agentId?: string;
     personaId?: string;
     scorecardId?: string;
@@ -116,27 +119,99 @@ async function executeAndPoll(
   if (options.mode) executeDto.mode = options.mode;
   if (options.dryRun) executeDto.dryRun = true;
 
-  // Inject adapter config from CLI config
   const config = loadConfig();
-  if (config.provider === 'openai' && config.openaiApiKey) {
-    executeDto.adapterType = 'openai';
-    executeDto.adapterConfig = { apiKey: config.openaiApiKey };
-  } else if (config.provider === 'anthropic' && config.anthropicApiKey) {
-    executeDto.adapterType = 'anthropic';
-    executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
-  } else if (config.provider === 'http' && config.httpEndpoint) {
-    executeDto.adapterType = 'http';
-    executeDto.adapterConfig = {
-      endpoint: config.httpEndpoint,
-      ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
-    };
-  } else if (config.openaiApiKey) {
-    // Fallback: if openaiApiKey is set but no provider specified, use openai
-    executeDto.adapterType = 'openai';
-    executeDto.adapterConfig = { apiKey: config.openaiApiKey };
-  } else if (config.anthropicApiKey) {
-    executeDto.adapterType = 'anthropic';
-    executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
+
+  // If --agent is provided, load the agent YAML and use it to configure the adapter
+  let agentDef: AgentDefinition | undefined;
+  if (options.agent) {
+    try {
+      agentDef = loadAgentYaml(options.agent, config.provider || undefined);
+      console.log(chalk.dim(`Using agent: ${agentDef.name} (${agentDef.provider}:${agentDef.model || agentDef.httpEndpoint})`));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      printError(`Failed to load agent YAML: ${message}`);
+      process.exitCode = 1;
+      throw err;
+    }
+  }
+
+  // Resolve adapter type and config — agent YAML overrides CLI config for provider/model
+  if (agentDef) {
+    // Agent YAML determines provider and model; API keys still come from config/.env
+    if (agentDef.provider === 'openai') {
+      if (!config.openaiApiKey) {
+        const msg = `Agent "${agentDef.name}" uses OpenAI but no API key is configured. Set it with: chanl config set openaiApiKey sk-...`;
+        printError(msg);
+        process.exitCode = 1;
+        throw new Error(msg);
+      }
+      executeDto.adapterType = 'openai';
+      executeDto.adapterConfig = {
+        apiKey: config.openaiApiKey,
+        model: agentDef.model,
+        systemPrompt: agentDef.systemPrompt,
+        ...(agentDef.temperature !== undefined ? { temperature: agentDef.temperature } : {}),
+        ...(agentDef.maxTokens !== undefined ? { maxTokens: agentDef.maxTokens } : {}),
+      };
+    } else if (agentDef.provider === 'anthropic') {
+      if (!config.anthropicApiKey) {
+        const msg = `Agent "${agentDef.name}" uses Anthropic but no API key is configured. Set it with: chanl config set anthropicApiKey sk-ant-...`;
+        printError(msg);
+        process.exitCode = 1;
+        throw new Error(msg);
+      }
+      executeDto.adapterType = 'anthropic';
+      executeDto.adapterConfig = {
+        apiKey: config.anthropicApiKey,
+        model: agentDef.model,
+        systemPrompt: agentDef.systemPrompt,
+        ...(agentDef.temperature !== undefined ? { temperature: agentDef.temperature } : {}),
+        ...(agentDef.maxTokens !== undefined ? { maxTokens: agentDef.maxTokens } : {}),
+      };
+    } else if (agentDef.provider === 'http') {
+      const endpoint = agentDef.httpEndpoint || config.httpEndpoint;
+      if (!endpoint) {
+        const msg = `Agent "${agentDef.name}" uses HTTP provider but no endpoint is configured.`;
+        printError(msg);
+        process.exitCode = 1;
+        throw new Error(msg);
+      }
+      executeDto.adapterType = 'http';
+      executeDto.adapterConfig = {
+        endpoint,
+        systemPrompt: agentDef.systemPrompt,
+        ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
+        ...(agentDef.temperature !== undefined ? { temperature: agentDef.temperature } : {}),
+        ...(agentDef.maxTokens !== undefined ? { maxTokens: agentDef.maxTokens } : {}),
+      };
+    } else {
+      const msg = `Unsupported provider "${agentDef.provider}" in agent YAML.`;
+      printError(msg);
+      process.exitCode = 1;
+      throw new Error(msg);
+    }
+  } else {
+    // Original logic: inject adapter config from CLI config
+    if (config.provider === 'openai' && config.openaiApiKey) {
+      executeDto.adapterType = 'openai';
+      executeDto.adapterConfig = { apiKey: config.openaiApiKey };
+    } else if (config.provider === 'anthropic' && config.anthropicApiKey) {
+      executeDto.adapterType = 'anthropic';
+      executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
+    } else if (config.provider === 'http' && config.httpEndpoint) {
+      executeDto.adapterType = 'http';
+      executeDto.adapterConfig = {
+        endpoint: config.httpEndpoint,
+        ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
+      };
+    } else if (config.openaiApiKey) {
+      // Fallback: if openaiApiKey is set but no provider specified, use openai
+      executeDto.adapterType = 'openai';
+      executeDto.adapterConfig = { apiKey: config.openaiApiKey };
+    } else if (config.anthropicApiKey) {
+      executeDto.adapterType = 'anthropic';
+      executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
+    }
   }
 
   if (!executeDto.adapterType) {
@@ -249,6 +324,7 @@ export function registerScenariosCommand(program: Command): void {
   scenarios
     .command('run [idOrFile]')
     .description('Execute a scenario by ID, name, or from a YAML file')
+    .option('--agent <path>', 'Path to agent YAML file (test prompts without deploying)')
     .option('--agent-id <agentId>', 'Override agent ID')
     .option('--persona-id <personaId>', 'Override persona ID')
     .option('--scorecard-id <scorecardId>', 'Override scorecard ID')
