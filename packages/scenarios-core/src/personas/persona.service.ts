@@ -15,7 +15,6 @@ export class PersonaService {
 
   /**
    * Create a new persona.
-   * workspaceId is optional for OSS mode (no workspaces).
    */
   async create(
     createPersonaDto: CreatePersonaDto,
@@ -39,8 +38,7 @@ export class PersonaService {
   }
 
   /**
-   * Find all personas, optionally filtered by workspace.
-   * When workspaceId is not provided, returns all personas (OSS mode).
+   * Find all personas with optional filters.
    */
   async findAll(
     filters?: {
@@ -205,7 +203,7 @@ export class PersonaService {
   }
 
   /**
-   * Create default personas. workspaceId is optional for OSS mode.
+   * Create default personas. Idempotent -- skips if defaults already exist.
    */
   async createDefaultPersonas(
     createdBy?: string,

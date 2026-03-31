@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
+import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import type { Scorecard } from '@chanl/eval-sdk';
 
@@ -21,14 +22,11 @@ export default function ScorecardsListPage() {
   const scorecards = q.data?.scorecards ?? [];
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Scorecards</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Evaluation rubrics that grade your agent's conversation quality
-        </p>
-      </div>
-
+    <PageLayout
+      icon={ClipboardList}
+      title="Scorecards"
+      description="Evaluation rubrics that grade your agent's conversation quality"
+    >
       {q.isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -95,6 +93,6 @@ export default function ScorecardsListPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }

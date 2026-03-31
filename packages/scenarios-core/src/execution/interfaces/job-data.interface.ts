@@ -4,7 +4,6 @@
 export interface ScenarioExecutionJobData {
   executionId: string;
   scenarioId: string;
-  workspaceId?: string;
   adapterType?: string;
   adapterConfig?: Record<string, any>;
   personaId?: string;

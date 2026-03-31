@@ -21,6 +21,7 @@ const LABELS: Record<string, string> = {
   personas: 'Personas',
   scorecards: 'Scorecards',
   settings: 'Settings',
+  'getting-started': 'Getting Started',
 };
 
 function capitalize(segment: string) {
@@ -32,7 +33,7 @@ function generateBreadcrumbs(pathname: string) {
   const breadcrumbs: { name: string; href: string; isCurrentPage: boolean }[] = [];
 
   if (pathSegments.length === 0) {
-    return [{ name: 'Test', href: '/', isCurrentPage: true }];
+    return [{ name: 'Playground', href: '/', isCurrentPage: true }];
   }
 
   if (pathSegments.length === 1) {
@@ -48,17 +49,23 @@ function generateBreadcrumbs(pathname: string) {
   breadcrumbs.push({ name: parentLabel, href: parentHref, isCurrentPage: false });
 
   const id = pathSegments[1];
-  if (id && id.length === 24 && /^[a-f0-9]+$/.test(id)) {
-    const singularLabels: Record<string, string> = {
-      executions: 'Run',
-      scenarios: 'Scenario',
-      personas: 'Persona',
-      scorecards: 'Scorecard',
-    };
-    const leaf = singularLabels[parent] ?? 'Details';
-    breadcrumbs.push({ name: leaf, href: pathname, isCurrentPage: true });
+  const singularLabels: Record<string, string> = {
+    executions: 'Run',
+    scenarios: 'Scenario',
+    personas: 'Persona',
+    scorecards: 'Scorecard',
+  };
+
+  if (singularLabels[parent]) {
+    // Detail page under a known parent — show "Run abc123" or "Scenario abc123"
+    const shortId = id.length > 8 ? id.slice(-8) : id;
+    breadcrumbs.push({
+      name: `${singularLabels[parent]} ${shortId}`,
+      href: pathname,
+      isCurrentPage: true,
+    });
   } else {
-    breadcrumbs.push({ name: capitalize(id), href: pathname, isCurrentPage: true });
+    breadcrumbs.push({ name: LABELS[id] ?? capitalize(id), href: pathname, isCurrentPage: true });
   }
 
   return breadcrumbs;

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
+import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import type { Scenario } from '@chanl/eval-sdk';
 
@@ -31,24 +32,21 @@ export default function ScenariosListPage() {
   const scenarios = q.data?.scenarios ?? [];
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Scenarios</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Test scenarios that define how personas interact with your agent
-          </p>
-        </div>
-        {scenarios.length > 0 && (
+    <PageLayout
+      icon={FileText}
+      title="Scenarios"
+      description="Test scenarios that define how personas interact with your agent"
+      actions={
+        scenarios.length > 0 ? (
           <Button asChild size="sm" variant="outline">
             <Link href="/scenarios">
               <Plus className="mr-2 h-3.5 w-3.5" />
               Create Scenario
             </Link>
           </Button>
-        )}
-      </div>
-
+        ) : undefined
+      }
+    >
       {q.isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -126,6 +124,6 @@ export default function ScenariosListPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }

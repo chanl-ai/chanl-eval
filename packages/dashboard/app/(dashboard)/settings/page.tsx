@@ -12,9 +12,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig, type AdapterType } from '@/lib/eval-config';
 import { EvalClient } from '@chanl/eval-sdk';
-import { CheckCircle, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle, Loader2, Settings, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -50,14 +51,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure your eval server connection and agent credentials
-        </p>
-      </div>
-
+    <PageLayout
+      icon={Settings}
+      title="Settings"
+      description="Configure your eval server connection and agent credentials"
+    >
       {/* Server Connection */}
       <Card>
         <CardHeader>
@@ -182,6 +180,6 @@ export default function SettingsPage() {
           {baseUrl.replace(/\/api\/v1$/, '').replace(/\/$/, '')}/api/docs
         </a>
       </p>
-    </div>
+    </PageLayout>
   );
 }

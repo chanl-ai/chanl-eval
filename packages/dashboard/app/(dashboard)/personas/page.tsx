@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
 import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
+import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import type { Persona } from '@chanl/eval-sdk';
 
@@ -22,14 +23,11 @@ export default function PersonasListPage() {
   const personas = q.data?.personas ?? [];
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Personas</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Simulated customers that test your agent with different personalities and behaviors
-        </p>
-      </div>
-
+    <PageLayout
+      icon={UserCircle}
+      title="Personas"
+      description="Simulated customers that test your agent with different personalities and behaviors"
+    >
       {q.isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -102,6 +100,6 @@ export default function PersonasListPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }

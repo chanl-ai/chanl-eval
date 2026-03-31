@@ -717,7 +717,7 @@ describe('ScorecardsService', () => {
       expect(all.data).toHaveLength(1);
     });
 
-    it('should create default scorecard without workspaceId', async () => {
+    it('should create default scorecard (local mode)', async () => {
       const scorecardId =
         await service.createDefaultScorecardIfNeeded();
 

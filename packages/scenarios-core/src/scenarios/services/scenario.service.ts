@@ -31,7 +31,6 @@ export class ScenarioService {
 
   /**
    * Create a new scenario.
-   * workspaceId is optional for OSS mode (no workspaces).
    */
   async create(
     createScenarioDto: CreateScenarioDto,
@@ -102,8 +101,7 @@ export class ScenarioService {
   }
 
   /**
-   * Find all scenarios, optionally filtered by workspace.
-   * When workspaceId is not provided, returns all scenarios (OSS mode).
+   * Find all scenarios with optional filters and pagination.
    */
   async findAll(
     filters?: {
