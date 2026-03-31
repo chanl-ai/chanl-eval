@@ -85,9 +85,12 @@ export default function RunsListPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {/* Status filter above table */}
-          <div className="flex items-center gap-3">
+        <DataTable
+          columns={columns}
+          data={rows}
+          filterColumn="scenarioName"
+          filterPlaceholder="Filter by scenario..."
+          toolbarRight={
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger size="sm" className="w-[140px]">
                 <SelectValue placeholder="Status" />
@@ -101,24 +104,17 @@ export default function RunsListPage() {
                 <SelectItem value="error">Error</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          <DataTable
-            columns={columns}
-            data={rows}
-            filterColumn="scenarioName"
-            filterPlaceholder="Filter by scenario..."
-            onRowClick={handleRowClick}
-            emptyState={
-              <EmptyState
-                icon={ScrollText}
-                title="No test runs yet"
-                description="Run your first scenario test from the playground to see results here."
-                action={{ label: 'Go to Playground', href: '/' }}
-              />
-            }
-          />
-        </div>
+          }
+          onRowClick={handleRowClick}
+          emptyState={
+            <EmptyState
+              icon={ScrollText}
+              title="No test runs yet"
+              description="Run your first scenario test from the playground to see results here."
+              action={{ label: 'Go to Playground', href: '/' }}
+            />
+          }
+        />
       )}
     </PageLayout>
   );

@@ -36,6 +36,8 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   filterColumn?: string;
   filterPlaceholder?: string;
+  /** Extra toolbar content rendered on the same row as the search filter */
+  toolbarRight?: React.ReactNode;
   emptyState?: React.ReactNode;
   onRowClick?: (row: TData) => void;
 }
@@ -45,6 +47,7 @@ export function DataTable<TData, TValue>({
   data,
   filterColumn,
   filterPlaceholder = 'Filter...',
+  toolbarRight,
   emptyState,
   onRowClick,
 }: DataTableProps<TData, TValue>) {
@@ -77,20 +80,23 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4" data-testid="data-table">
-      {/* Toolbar */}
-      {filterColumn && (
-        <div className="flex items-center gap-3">
-          <input
-            placeholder={filterPlaceholder}
-            value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ''}
-            onChange={(event) =>
-              table.getColumn(filterColumn)?.setFilterValue(event.target.value)
-            }
-            className="flex h-9 w-full max-w-sm min-w-0 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:ring-inset"
-            data-testid="table-filter-input"
-          />
+      {/* Toolbar — search + custom filters on one row */}
+      {(filterColumn || toolbarRight) && (
+        <div className="flex items-center gap-3" data-testid="table-toolbar">
+          {filterColumn && (
+            <input
+              placeholder={filterPlaceholder}
+              value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ''}
+              onChange={(event) =>
+                table.getColumn(filterColumn)?.setFilterValue(event.target.value)
+              }
+              className="flex h-9 w-full max-w-sm min-w-0 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:ring-inset"
+              data-testid="table-filter-input"
+            />
+          )}
+          {toolbarRight}
           {selectedCount > 0 && (
-            <span className="text-sm text-muted-foreground whitespace-nowrap">
+            <span className="text-sm text-muted-foreground whitespace-nowrap ml-auto">
               {selectedCount} of {totalCount} selected
             </span>
           )}
