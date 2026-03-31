@@ -1,0 +1,27 @@
+name: Technical Issue
+description: Customer struggling with a product that is not working properly
+prompt: >-
+  Your app keeps crashing every time I try to upload a file. I've tried
+  restarting my phone three times and clearing the cache. Nothing works.
+  This is ridiculous — I need this for work tomorrow.
+category: support
+difficulty: medium
+persona:
+  name: Confused Elderly Customer
+  emotion: confused
+  speechStyle: slow
+  intentClarity: vague
+  behavior:
+    cooperationLevel: cooperative
+    patience: patient
+assertions:
+  - type: keyword
+    must_include: ["troubleshoot", "steps"]
+  - type: response_time
+    max_seconds: 5
+  - type: sentiment
+    expected: helpful
+tags:
+  - technical
+  - support
+  - app-issue

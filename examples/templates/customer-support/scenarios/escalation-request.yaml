@@ -1,0 +1,27 @@
+name: Escalation Request
+description: Impatient executive demanding to speak with a manager immediately
+prompt: >-
+  I've been a premium customer for five years and this is the third time
+  I'm calling about the same issue. Your previous agents promised it would
+  be fixed and nothing happened. I want to speak with a manager RIGHT NOW.
+category: support
+difficulty: hard
+persona:
+  name: Impatient Executive
+  emotion: angry
+  speechStyle: fast
+  intentClarity: very clear
+  behavior:
+    cooperationLevel: hostile
+    patience: none
+assertions:
+  - type: keyword
+    must_include: ["manager", "escalate"]
+  - type: response_time
+    max_seconds: 5
+  - type: sentiment
+    expected: empathetic
+tags:
+  - escalation
+  - support
+  - vip

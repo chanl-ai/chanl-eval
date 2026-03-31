@@ -9,6 +9,7 @@ import { registerInitCommand } from './commands/init';
 import { registerAnalyticsCommand } from './commands/analytics';
 import { registerTestCommand } from './commands/test';
 import { registerCompareCommand } from './commands/compare';
+import { registerExecutionsCommand } from './commands/executions';
 import { initAnalytics, track } from './analytics';
 
 const VERSION = '0.1.0';
@@ -45,6 +46,7 @@ export function createProgram(): Command {
   registerAnalyticsCommand(program);
   registerTestCommand(program);
   registerCompareCommand(program);
+  registerExecutionsCommand(program);
 
   // Top-level `run` shortcut → delegates to scenarios run
   program

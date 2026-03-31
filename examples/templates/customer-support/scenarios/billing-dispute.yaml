@@ -1,0 +1,27 @@
+name: Billing Dispute
+description: Double-charged customer wants a credit applied to their account
+prompt: >-
+  I just noticed TWO charges of $49.99 on my credit card from your company
+  this month. I should only have been charged once. I want the duplicate
+  charge reversed immediately.
+category: support
+difficulty: medium
+persona:
+  name: Concerned Account Holder
+  emotion: worried
+  speechStyle: normal
+  intentClarity: clear
+  behavior:
+    cooperationLevel: neutral
+    patience: moderate
+assertions:
+  - type: keyword
+    must_include: ["credit", "charge"]
+  - type: response_time
+    max_seconds: 5
+  - type: sentiment
+    expected: reassuring
+tags:
+  - billing
+  - support
+  - dispute

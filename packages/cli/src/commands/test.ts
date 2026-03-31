@@ -447,95 +447,142 @@ export function registerTestCommand(program: Command): void {
       'Run scenario tests with pass/fail assertions (like jest for AI agents)',
     )
     .option('--json', 'Output results as JSON (for CI)')
-    .action(async (testPath: string, options: { json?: boolean }) => {
-      const format = options.json ? 'json' : program.opts().format;
-      const isJson = format === 'json';
+    .option(
+      '--save-baseline',
+      'Save test results as baseline snapshot (.chanl-baseline.json)',
+    )
+    .option(
+      '--baseline',
+      'Compare results against saved baseline and detect regressions',
+    )
+    .action(
+      async (
+        testPath: string,
+        options: {
+          json?: boolean;
+          saveBaseline?: boolean;
+          baseline?: boolean;
+        },
+      ) => {
+        const format = options.json ? 'json' : program.opts().format;
+        const isJson = format === 'json';
 
-      try {
-        const resolvedPath = path.resolve(testPath);
+        try {
+          const resolvedPath = path.resolve(testPath);
 
-        if (!fs.existsSync(resolvedPath)) {
-          printError(`Path not found: ${resolvedPath}`);
-          process.exit(1);
-        }
-
-        // Collect test files
-        const stat = fs.statSync(resolvedPath);
-        let files: string[];
-
-        if (stat.isDirectory()) {
-          files = fs
-            .readdirSync(resolvedPath)
-            .filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'))
-            .sort()
-            .map((f) => path.join(resolvedPath, f));
-        } else {
-          files = [resolvedPath];
-        }
-
-        if (files.length === 0) {
-          printError('No .yaml test files found in directory');
-          process.exit(1);
-        }
-
-        // Parse all test files upfront to fail fast on bad YAML
-        const testDefs: Array<{ file: string; def: TestDefinition }> = [];
-        for (const file of files) {
-          try {
-            const def = parseTestYaml(file);
-            testDefs.push({ file, def });
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            printError(`Invalid test file ${path.basename(file)}: ${msg}`);
+          if (!fs.existsSync(resolvedPath)) {
+            printError(`Path not found: ${resolvedPath}`);
             process.exit(1);
           }
-        }
 
-        // Run each test file
-        const results: TestFileResult[] = [];
-        const spinner = isJson
-          ? null
-          : ora(`Running ${testDefs.length} test file(s)...`).start();
+          // Collect test files
+          const stat = fs.statSync(resolvedPath);
+          let files: string[];
 
-        for (const { file, def } of testDefs) {
-          const basename = path.basename(file);
+          if (stat.isDirectory()) {
+            files = fs
+              .readdirSync(resolvedPath)
+              .filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'))
+              .sort()
+              .map((f) => path.join(resolvedPath, f));
+          } else {
+            files = [resolvedPath];
+          }
+
+          if (files.length === 0) {
+            printError('No .yaml test files found in directory');
+            process.exit(1);
+          }
+
+          // Parse all test files upfront to fail fast on bad YAML
+          const testDefs: Array<{ file: string; def: TestDefinition }> = [];
+          for (const file of files) {
+            try {
+              const def = parseTestYaml(file);
+              testDefs.push({ file, def });
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              printError(
+                `Invalid test file ${path.basename(file)}: ${msg}`,
+              );
+              process.exit(1);
+            }
+          }
+
+          // Run each test file
+          const results: TestFileResult[] = [];
+          const spinner = isJson
+            ? null
+            : ora(`Running ${testDefs.length} test file(s)...`).start();
+
+          for (const { file, def } of testDefs) {
+            const basename = path.basename(file);
+            if (spinner) {
+              spinner.text = `Running ${basename}...`;
+            }
+
+            try {
+              const result = await runTestFile(file, def);
+              results.push(result);
+            } catch (err) {
+              results.push({
+                file: basename,
+                scenarioName: def.scenario,
+                assertions: [],
+                error: formatError(err),
+              });
+            }
+          }
+
           if (spinner) {
-            spinner.text = `Running ${basename}...`;
+            spinner.stop();
           }
 
-          try {
-            const result = await runTestFile(file, def);
-            results.push(result);
-          } catch (err) {
-            results.push({
-              file: basename,
-              scenarioName: def.scenario,
-              assertions: [],
-              error: formatError(err),
-            });
+          // Compute summary and print
+          const summary = computeSummary(results);
+
+          if (isJson) {
+            printJsonResults(results, summary);
+          } else {
+            printHumanResults(results, summary);
           }
-        }
 
-        if (spinner) {
-          spinner.stop();
-        }
+          // --save-baseline: persist results as baseline snapshot
+          if (options.saveBaseline) {
+            const savedPath = saveBaseline(results);
+            if (!isJson) {
+              printSuccess(`Baseline saved to ${savedPath}`);
+            }
+          }
 
-        // Compute summary and print
-        const summary = computeSummary(results);
+          // --baseline: compare against saved baseline
+          let hasRegressions = false;
+          if (options.baseline) {
+            const baselineData = loadBaseline();
+            if (!baselineData) {
+              printWarning(
+                'No baseline found. Run with --save-baseline first to create one.',
+              );
+            } else {
+              const comparison = compareWithBaseline(results, baselineData);
+              if (!isJson) {
+                printBaselineComparison(comparison);
+              } else {
+                // Append comparison to JSON output
+                console.log(JSON.stringify({ baseline: comparison }, null, 2));
+              }
+              hasRegressions = comparison.hasRegressions;
+            }
+          }
 
-        if (isJson) {
-          printJsonResults(results, summary);
-        } else {
-          printHumanResults(results, summary);
-        }
-
-        // Exit code: 0 if all pass, 1 if any fail
-        if (summary.failed > 0 || summary.errored > 0) {
+          // Exit code: 1 if any test fails, or any assertion regressed
+          if (summary.failed > 0 || summary.errored > 0 || hasRegressions) {
+            process.exit(1);
+          }
+        } catch (err) {
+          printError(formatError(err));
           process.exit(1);
         }
-      } catch (err) {
-        printError(formatError(err));
-        process.exit(1);
-      }
-    });
+      },
+    );
 }

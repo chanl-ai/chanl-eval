@@ -1,0 +1,27 @@
+name: Product Inquiry
+description: Curious customer considering a purchase and asking about features
+prompt: >-
+  Hi! I'm looking at the Pro plan on your website. Can you tell me what's
+  included and whether there's a free trial? I'm comparing a few options
+  and want to make sure this is the right fit for my team.
+category: sales
+difficulty: easy
+persona:
+  name: Curious Prospect
+  emotion: neutral
+  speechStyle: normal
+  intentClarity: clear
+  behavior:
+    cooperationLevel: cooperative
+    patience: patient
+assertions:
+  - type: keyword
+    must_include: ["plan", "features"]
+  - type: response_time
+    max_seconds: 5
+  - type: sentiment
+    expected: informative
+tags:
+  - sales
+  - inquiry
+  - pricing

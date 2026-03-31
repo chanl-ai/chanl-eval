@@ -1,0 +1,26 @@
+name: Angry Customer Refund
+description: Frustrated customer demanding a refund for a broken product
+prompt: >-
+  I bought a laptop two weeks ago and it's already broken. The screen flickers
+  constantly and it overheats within 10 minutes. I want a full refund NOW.
+category: support
+difficulty: hard
+persona:
+  name: Frustrated Karen
+  emotion: frustrated
+  speechStyle: fast
+  intentClarity: very clear
+  behavior:
+    cooperationLevel: hostile
+    patience: impatient
+assertions:
+  - type: keyword
+    must_include: ["refund", "policy"]
+  - type: response_time
+    max_seconds: 5
+  - type: sentiment
+    expected: empathetic
+tags:
+  - refund
+  - support
+  - escalation
