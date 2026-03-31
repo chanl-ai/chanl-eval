@@ -59,7 +59,7 @@ describe('PersonaService', () => {
 
   describe('create()', () => {
     it('should create a persona with all fields and return it with id', async () => {
-      const result = await service.create(validPersonaData, undefined, 'user1');
+      const result = await service.create(validPersonaData, 'user1');
 
       const json = (result as any).toJSON();
       expect(json.id).toBeDefined();
@@ -78,26 +78,12 @@ describe('PersonaService', () => {
       expect(json.isActive).toBe(true);
     });
 
-    it('should create a persona without workspaceId (OSS mode)', async () => {
+    it('should create a persona without createdBy (OSS mode)', async () => {
       const result = await service.create(validPersonaData);
 
       const json = (result as any).toJSON();
       expect(json.id).toBeDefined();
-      expect(json.workspaceId).toBeUndefined();
       expect(json.name).toBe('Test Persona');
-    });
-
-    it('should create a persona with workspaceId when provided', async () => {
-      const workspaceId = '507f1f77bcf86cd799439011';
-      const result = await service.create(
-        validPersonaData,
-        workspaceId,
-        'user1',
-      );
-
-      const json = (result as any).toJSON();
-      expect(json.id).toBeDefined();
-      expect(json.workspaceId.toString()).toBe(workspaceId);
     });
 
     it('should create a persona with agentConfig', async () => {
@@ -142,19 +128,17 @@ describe('PersonaService', () => {
 
   describe('update()', () => {
     it('should update fields and return updated persona', async () => {
-      const created = await service.create(validPersonaData, undefined, 'user1');
+      const created = await service.create(validPersonaData, 'user1');
       const createdJson = (created as any).toJSON();
 
       const updated = await service.update(
         createdJson.id,
         { name: 'Updated Name', emotion: 'calm' },
-        'user2',
       );
 
       const updatedJson = (updated as any).toJSON();
       expect(updatedJson.name).toBe('Updated Name');
       expect(updatedJson.emotion).toBe('calm');
-      expect(updatedJson.lastModifiedBy).toBe('user2');
     });
 
     it('should throw NotFoundException when updating non-existent persona', async () => {
@@ -192,25 +176,8 @@ describe('PersonaService', () => {
       expect(result.total).toBe(2);
     });
 
-    it('should filter by workspaceId when provided', async () => {
-      const ws1 = '507f1f77bcf86cd799439011';
-      const ws2 = '507f1f77bcf86cd799439022';
-
-      await service.create(validPersonaData, ws1);
-      await service.create(
-        { ...validPersonaData, name: 'WS2 Persona' },
-        ws2,
-      );
-
-      const result = await service.findAll(ws1);
-      expect(result.personas.length).toBe(1);
-      expect(result.total).toBe(1);
-    });
-
-    it('should return all personas when no workspaceId provided', async () => {
-      const ws1 = '507f1f77bcf86cd799439011';
-
-      await service.create(validPersonaData, ws1);
+    it('should return all personas when no filters provided', async () => {
+      await service.create(validPersonaData);
       await service.create({ ...validPersonaData, name: 'No WS Persona' });
 
       const result = await service.findAll();
@@ -226,7 +193,7 @@ describe('PersonaService', () => {
         emotion: 'calm',
       });
 
-      const result = await service.findAll(undefined, { emotion: 'calm' });
+      const result = await service.findAll({ emotion: 'calm' });
       expect(result.personas.length).toBe(1);
       expect((result.personas[0] as any).toJSON().name).toBe('Calm One');
     });
@@ -239,7 +206,7 @@ describe('PersonaService', () => {
         gender: 'male',
       });
 
-      const result = await service.findAll(undefined, { gender: 'male' });
+      const result = await service.findAll({ gender: 'male' });
       expect(result.personas.length).toBe(1);
     });
 
@@ -254,7 +221,7 @@ describe('PersonaService', () => {
         tags: ['general'],
       });
 
-      const result = await service.findAll(undefined, {
+      const result = await service.findAll({
         tags: ['urgent'],
       });
       expect(result.personas.length).toBe(1);
@@ -268,7 +235,7 @@ describe('PersonaService', () => {
         });
       }
 
-      const result = await service.findAll(undefined, undefined, {
+      const result = await service.findAll(undefined, {
         limit: 2,
         offset: 0,
       });
@@ -298,10 +265,7 @@ describe('PersonaService', () => {
 
   describe('createDefaultPersonas()', () => {
     it('should create 7 default personas', async () => {
-      const defaults = await service.createDefaultPersonas(
-        undefined,
-        'system',
-      );
+      const defaults = await service.createDefaultPersonas('system');
       expect(defaults.length).toBe(7);
 
       const names = defaults.map((p: any) =>
@@ -317,10 +281,10 @@ describe('PersonaService', () => {
     });
 
     it('should return existing defaults if already created (idempotent)', async () => {
-      const first = await service.createDefaultPersonas(undefined, 'system');
+      const first = await service.createDefaultPersonas('system');
       expect(first.length).toBe(7);
 
-      const second = await service.createDefaultPersonas(undefined, 'system');
+      const second = await service.createDefaultPersonas('system');
       expect(second.length).toBe(7);
 
       // Total count should still be 7, not 14
@@ -328,26 +292,8 @@ describe('PersonaService', () => {
       expect(all.total).toBe(7);
     });
 
-    it('should create defaults with workspaceId when provided', async () => {
-      const workspaceId = '507f1f77bcf86cd799439011';
-      const defaults = await service.createDefaultPersonas(
-        workspaceId,
-        'system',
-      );
-      expect(defaults.length).toBe(7);
-
-      // All should have the workspaceId
-      for (const p of defaults) {
-        const json = (p as any).toJSON ? (p as any).toJSON() : p;
-        expect(json.workspaceId.toString()).toBe(workspaceId);
-      }
-    });
-
     it('should set all defaults as isDefault=true and isActive=true', async () => {
-      const defaults = await service.createDefaultPersonas(
-        undefined,
-        'system',
-      );
+      const defaults = await service.createDefaultPersonas('system');
 
       for (const p of defaults) {
         const json = (p as any).toJSON ? (p as any).toJSON() : p;
@@ -359,37 +305,22 @@ describe('PersonaService', () => {
 
   describe('getDefaultPersonas()', () => {
     it('should return only default personas', async () => {
-      await service.createDefaultPersonas(undefined, 'system');
+      await service.createDefaultPersonas('system');
       await service.create(validPersonaData);
 
       const defaults = await service.getDefaultPersonas();
       expect(defaults.length).toBe(7);
 
-      // The non-default persona should not appear
       for (const p of defaults) {
         const json = (p as any).toJSON ? (p as any).toJSON() : p;
         expect(json.isDefault).toBe(true);
       }
     });
-
-    it('should filter by workspaceId when provided', async () => {
-      const ws1 = '507f1f77bcf86cd799439011';
-      const ws2 = '507f1f77bcf86cd799439022';
-
-      await service.createDefaultPersonas(ws1, 'system');
-      await service.createDefaultPersonas(ws2, 'system');
-
-      const ws1Defaults = await service.getDefaultPersonas(ws1);
-      expect(ws1Defaults.length).toBe(7);
-
-      const ws2Defaults = await service.getDefaultPersonas(ws2);
-      expect(ws2Defaults.length).toBe(7);
-    });
   });
 
   describe('getPersonaStats()', () => {
     it('should return stats for all personas', async () => {
-      await service.createDefaultPersonas(undefined, 'system');
+      await service.createDefaultPersonas('system');
 
       const stats = await service.getPersonaStats();
       expect(stats.totalPersonas).toBe(7);
@@ -414,7 +345,6 @@ describe('PersonaService', () => {
     });
 
     it('should count background noise and interruptions', async () => {
-      // Create personas with various settings
       await service.create({
         ...validPersonaData,
         name: 'Noisy',

@@ -25,9 +25,6 @@ function virtualIdPlugin(schema: any) {
   timestamps: true,
 })
 export class Persona {
-  @Prop({ type: Types.ObjectId, ref: 'Workspace', required: false })
-  workspaceId?: Types.ObjectId;
-
   @Prop({ required: true })
   name!: string;
 
@@ -319,7 +316,7 @@ export class Persona {
   @Prop({ default: false })
   isDefault!: boolean;
 
-  @Prop()
+  @Prop({ default: 'local' })
   createdBy!: string;
 
   @Prop()
@@ -335,11 +332,11 @@ export class Persona {
 export const PersonaSchema = SchemaFactory.createForClass(Persona);
 
 // Add indexes for better query performance
-PersonaSchema.index({ workspaceId: 1, isActive: 1 });
-PersonaSchema.index({ workspaceId: 1, emotion: 1 });
-PersonaSchema.index({ workspaceId: 1, language: 1 });
-PersonaSchema.index({ workspaceId: 1, gender: 1 });
-PersonaSchema.index({ workspaceId: 1, accent: 1 });
+PersonaSchema.index({ isActive: 1 });
+PersonaSchema.index({ emotion: 1 });
+PersonaSchema.index({ language: 1 });
+PersonaSchema.index({ gender: 1 });
+PersonaSchema.index({ accent: 1 });
 PersonaSchema.index({ createdBy: 1 });
 PersonaSchema.index({ tags: 1 });
 

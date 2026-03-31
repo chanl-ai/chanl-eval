@@ -40,14 +40,10 @@ export class ScenarioController {
   @Post()
   async create(
     @Body() createScenarioDto: CreateScenarioDto,
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
   ) {
     try {
       const scenario = await this.scenarioService.create(
         createScenarioDto,
-        workspaceId,
-        userId,
       );
       return { scenario };
     } catch (error: any) {
@@ -68,7 +64,6 @@ export class ScenarioController {
 
   @Get()
   async findAll(
-    @Query('workspaceId') workspaceId?: string,
     @Query('agentId') agentId?: string,
     @Query('status') status?: string,
     @Query('category') category?: string,
@@ -101,7 +96,6 @@ export class ScenarioController {
       };
 
       const result = await this.scenarioService.findAll(
-        workspaceId,
         filters,
         pagination,
       );
@@ -128,10 +122,10 @@ export class ScenarioController {
   }
 
   @Get('stats')
-  async getStats(@Query('workspaceId') workspaceId?: string) {
+  async getStats() {
     try {
       const stats =
-        await this.scenarioService.getScenarioStats(workspaceId);
+        await this.scenarioService.getScenarioStats();
       return { stats };
     } catch (error: any) {
       this.logger.error(
@@ -152,10 +146,9 @@ export class ScenarioController {
   @Get(':id')
   async findOne(
     @Param('id') id: string,
-    @Query('workspaceId') workspaceId?: string,
   ) {
     try {
-      const scenario = await this.scenarioService.findOne(id, workspaceId);
+      const scenario = await this.scenarioService.findOne(id);
       return { scenario };
     } catch (error: any) {
       this.logger.error(
@@ -180,15 +173,11 @@ export class ScenarioController {
   async update(
     @Param('id') id: string,
     @Body() updateScenarioDto: UpdateScenarioDto,
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
   ) {
     try {
       const scenario = await this.scenarioService.update(
         id,
         updateScenarioDto,
-        workspaceId,
-        userId,
       );
       return { scenario };
     } catch (error: any) {
@@ -213,10 +202,9 @@ export class ScenarioController {
   @Delete(':id')
   async remove(
     @Param('id') id: string,
-    @Query('workspaceId') workspaceId?: string,
   ) {
     try {
-      await this.scenarioService.remove(id, workspaceId);
+      await this.scenarioService.remove(id);
       return { deleted: true, message: 'Scenario archived successfully' };
     } catch (error: any) {
       this.logger.error(
@@ -241,15 +229,12 @@ export class ScenarioController {
   async clone(
     @Param('id') id: string,
     @Body() body: { name?: string },
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
   ) {
     try {
       const scenario = await this.scenarioService.clone(
         id,
-        userId,
+        undefined,
         body.name,
-        workspaceId,
       );
       return { scenario };
     } catch (error: any) {
@@ -271,10 +256,9 @@ export class ScenarioController {
   @Post(':id/validate')
   async validate(
     @Param('id') id: string,
-    @Query('workspaceId') workspaceId?: string,
   ) {
     try {
-      const result = await this.scenarioService.validate(id, workspaceId);
+      const result = await this.scenarioService.validate(id);
       return result;
     } catch (error: any) {
       this.logger.error(
@@ -295,15 +279,9 @@ export class ScenarioController {
   @Post(':id/publish')
   async publish(
     @Param('id') id: string,
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
   ) {
     try {
-      const result = await this.scenarioService.publish(
-        id,
-        workspaceId,
-        userId,
-      );
+      const result = await this.scenarioService.publish(id);
       return result;
     } catch (error: any) {
       this.logger.error(
@@ -324,15 +302,9 @@ export class ScenarioController {
   @Post(':id/unpublish')
   async unpublish(
     @Param('id') id: string,
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
   ) {
     try {
-      const result = await this.scenarioService.unpublish(
-        id,
-        workspaceId,
-        userId,
-      );
+      const result = await this.scenarioService.unpublish(id);
       return result;
     } catch (error: any) {
       this.logger.error(
@@ -353,14 +325,10 @@ export class ScenarioController {
   @Post('import/yaml')
   async importYaml(
     @Body() body: { yaml: string },
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
   ) {
     try {
       const scenario = await this.scenarioService.fromYaml(
         body.yaml,
-        workspaceId,
-        userId,
       );
       return { scenario };
     } catch (error: any) {
@@ -382,10 +350,9 @@ export class ScenarioController {
   @Get(':id/export/yaml')
   async exportYaml(
     @Param('id') id: string,
-    @Query('workspaceId') workspaceId?: string,
   ) {
     try {
-      const scenario = await this.scenarioService.findOne(id, workspaceId);
+      const scenario = await this.scenarioService.findOne(id);
       const yamlString = this.scenarioService.toYaml(scenario);
       return { yaml: yamlString };
     } catch (error: any) {

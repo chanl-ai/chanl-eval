@@ -1,8 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, Loader2, Play, User } from 'lucide-react';
+import {
+  Bot,
+  Loader2,
+  Lock,
+  MoreHorizontal,
+  Play,
+  RotateCcw,
+  Save,
+  Share2,
+  User,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -17,8 +27,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { ScorecardWidget } from '@/components/scorecard/scorecard-widget';
 import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
 import { useEvalConfig, type AdapterType } from '@/lib/eval-config';
@@ -70,7 +87,6 @@ function extractTranscript(execution: Execution): TranscriptMessage[] {
     const isAgent =
       typeof step.stepId === 'string' && step.stepId.includes('agent');
 
-    // Handle actualResponse / expectedResponse as persona / agent
     const actualResponse = stepAny.actualResponse as string | undefined;
     if (actualResponse) {
       messages.push({
@@ -83,6 +99,23 @@ function extractTranscript(execution: Execution): TranscriptMessage[] {
   }
   return messages;
 }
+
+// ---------------------------------------------------------------------------
+// Model lists per provider
+// ---------------------------------------------------------------------------
+
+const MODEL_OPTIONS: Record<AdapterType, { value: string; label: string }[]> = {
+  openai: [
+    { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+    { value: 'gpt-4o', label: 'gpt-4o' },
+    { value: 'gpt-4.1-mini', label: 'gpt-4.1-mini' },
+    { value: 'gpt-4.1', label: 'gpt-4.1' },
+  ],
+  anthropic: [
+    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
+  ],
+};
 
 // ---------------------------------------------------------------------------
 // Transcript Message Component
@@ -151,6 +184,8 @@ export default function PlaygroundPage() {
     'You are a helpful customer support agent. Be friendly, concise, and professional.',
   );
   const [model, setModel] = useState('gpt-4o-mini');
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(256);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
 
@@ -160,7 +195,7 @@ export default function PlaygroundPage() {
   const [completedExecution, setCompletedExecution] = useState<Execution | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch scenarios and personas (NO apiKey guard)
+  // Fetch scenarios and personas
   const scenariosQuery = useQuery({
     queryKey: ['scenarios'],
     queryFn: () => client.scenarios.list({ limit: 100 }),
@@ -192,6 +227,31 @@ export default function PlaygroundPage() {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcript]);
 
+  // Reset model when provider changes
+  useEffect(() => {
+    const models = MODEL_OPTIONS[adapterType];
+    if (models.length > 0) {
+      setModel(models[0].value);
+    }
+  }, [adapterType]);
+
+  // Load scenario preset into system prompt
+  const handleLoadScenario = useCallback(
+    (scenarioId: string) => {
+      const scenario = scenarios.find((s: Scenario) => s.id === scenarioId);
+      if (scenario) {
+        setSelectedScenarioId(scenarioId);
+        toast.success(`Loaded scenario: ${scenario.name}`);
+      }
+    },
+    [scenarios],
+  );
+
+  const handleReset = useCallback(() => {
+    setTranscript([]);
+    setCompletedExecution(null);
+  }, []);
+
   const handleRun = useCallback(async () => {
     if (!agentApiKey) {
       toast.error('Enter your API key to run tests');
@@ -207,7 +267,6 @@ export default function PlaygroundPage() {
     setCompletedExecution(null);
 
     try {
-      // Execute the scenario
       const execution = await client.scenarios.execute(selectedScenarioId, {
         mode: 'text',
         personaId: selectedPersonaId || undefined,
@@ -216,6 +275,8 @@ export default function PlaygroundPage() {
           apiKey: agentApiKey,
           model,
           systemPrompt,
+          temperature,
+          maxTokens,
         },
       } as never);
 
@@ -228,18 +289,15 @@ export default function PlaygroundPage() {
 
       toast.success('Test started...');
 
-      // Poll for completion
       const completed = await client.executions.waitForCompletion(execRef, {
         intervalMs: 1500,
         timeoutMs: 120000,
       });
 
-      // Extract transcript from completed execution
       const messages = extractTranscript(completed);
       setTranscript(messages);
       setCompletedExecution(completed);
 
-      // Invalidate executions list
       void queryClient.invalidateQueries({ queryKey: ['executions'] });
 
       if (completed.status === 'completed') {
@@ -261,88 +319,218 @@ export default function PlaygroundPage() {
     adapterType,
     model,
     systemPrompt,
+    temperature,
+    maxTokens,
     client,
     queryClient,
   ]);
 
+  const hasResults = transcript.length > 0 || completedExecution != null;
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Test Your Agent</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure your agent, pick a scenario, and run a simulated conversation.
-        </p>
+      {/* ── Header row ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Playground</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Configure your agent and run simulated conversations.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Scenario preset loader */}
+          <Select
+            value={selectedScenarioId}
+            onValueChange={handleLoadScenario}
+          >
+            <SelectTrigger className="w-[200px]" data-testid="scenario-preset-select">
+              <SelectValue placeholder="Load a scenario..." />
+            </SelectTrigger>
+            <SelectContent>
+              {scenariosQuery.isLoading ? (
+                <div className="px-2 py-1.5">
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              ) : (
+                scenarios.map((s: Scenario) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="flex items-center gap-2">
+                      {s.name}
+                      {s.difficulty && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          {s.difficulty}
+                        </Badge>
+                      )}
+                    </span>
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="secondary" size="sm" disabled>
+                <Save className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Save preset</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="secondary" size="sm" disabled>
+                <Share2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Share</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="secondary" size="sm" disabled>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>More options</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
-      {/* Configuration */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* System Prompt - spans 2 columns on large */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-medium">System Prompt</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder="Enter your agent's system prompt..."
-              className="min-h-[120px] font-mono text-sm resize-y"
-              data-testid="system-prompt"
+      <Separator />
+
+      {/* ── Two-column layout: prompt + settings ── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
+        {/* Left column: System prompt + submit */}
+        <div className="flex flex-col gap-4">
+          <Textarea
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
+            placeholder="You are a helpful customer support agent..."
+            className="min-h-[400px] resize-none font-mono text-sm lg:min-h-[600px]"
+            data-testid="system-prompt"
+          />
+
+          {/* Submit area below textarea */}
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleRun}
+              disabled={isRunning || !agentApiKey || !selectedScenarioId}
+              data-testid="run-test-button"
+            >
+              {isRunning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Running...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Run Test
+                </>
+              )}
+            </Button>
+
+            {hasResults && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleReset}
+                    data-testid="reset-button"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Reset results</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </div>
+
+        {/* Right column: Settings panel */}
+        <div className="space-y-6">
+          {/* Provider */}
+          <div className="space-y-2">
+            <Label htmlFor="provider" className="text-sm">
+              Provider
+            </Label>
+            <Select
+              value={adapterType}
+              onValueChange={(v) => setAdapterType(v as AdapterType)}
+            >
+              <SelectTrigger id="provider" data-testid="adapter-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="openai">OpenAI</SelectItem>
+                <SelectItem value="anthropic">Anthropic</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Model */}
+          <div className="space-y-2">
+            <Label htmlFor="model" className="text-sm">
+              Model
+            </Label>
+            <Select value={model} onValueChange={setModel}>
+              <SelectTrigger id="model" data-testid="model-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODEL_OPTIONS[adapterType].map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Temperature */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Temperature</Label>
+              <span className="text-sm tabular-nums text-muted-foreground">
+                {temperature.toFixed(2)}
+              </span>
+            </div>
+            <Slider
+              value={[temperature]}
+              onValueChange={([v]) => setTemperature(v)}
+              min={0}
+              max={2}
+              step={0.01}
+              data-testid="temperature-slider"
             />
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* API Configuration */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-medium">Model Configuration</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="adapter" className="text-sm">Provider</Label>
-              <Select
-                value={adapterType}
-                onValueChange={(v) => setAdapterType(v as AdapterType)}
-              >
-                <SelectTrigger id="adapter" data-testid="adapter-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="anthropic">Anthropic</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Max Tokens */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Max Tokens</Label>
+              <span className="text-sm tabular-nums text-muted-foreground">
+                {maxTokens}
+              </span>
             </div>
+            <Slider
+              value={[maxTokens]}
+              onValueChange={([v]) => setMaxTokens(v)}
+              min={1}
+              max={4096}
+              step={1}
+              data-testid="max-tokens-slider"
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="model" className="text-sm">Model</Label>
-              <Select value={model} onValueChange={setModel}>
-                <SelectTrigger id="model" data-testid="model-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {adapterType === 'openai' ? (
-                    <>
-                      <SelectItem value="gpt-4o-mini">gpt-4o-mini</SelectItem>
-                      <SelectItem value="gpt-4o">gpt-4o</SelectItem>
-                      <SelectItem value="gpt-4.1-mini">gpt-4.1-mini</SelectItem>
-                      <SelectItem value="gpt-4.1">gpt-4.1</SelectItem>
-                    </>
-                  ) : (
-                    <>
-                      <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4</SelectItem>
-                      <SelectItem value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="api-key" className="text-sm">
-                API Key
-              </Label>
+          {/* API Key */}
+          <div className="space-y-2">
+            <Label htmlFor="api-key" className="text-sm">
+              API Key
+            </Label>
+            <div className="relative">
               <Input
                 id="api-key"
                 type="password"
@@ -350,96 +538,88 @@ export default function PlaygroundPage() {
                 onChange={(e) => setAgentApiKey(e.target.value)}
                 placeholder="sk-..."
                 autoComplete="off"
+                className="pr-8"
                 data-testid="api-key-input"
               />
-              <p className="text-[11px] text-muted-foreground">
-                Stays on your machine. Never sent to Chanl.
-              </p>
+              <Lock className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            <p className="text-[11px] text-muted-foreground">
+              Stays on your machine. Never sent to Chanl.
+            </p>
+          </div>
 
-      {/* Scenario & Persona Row */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="space-y-2 sm:col-span-1 lg:col-span-2">
-          <Label className="text-sm">Scenario</Label>
-          {scenariosQuery.isLoading ? (
-            <Skeleton className="h-9 w-full" />
-          ) : (
-            <Select
-              value={selectedScenarioId}
-              onValueChange={setSelectedScenarioId}
-            >
-              <SelectTrigger data-testid="scenario-select">
-                <SelectValue placeholder="Select a scenario..." />
-              </SelectTrigger>
-              <SelectContent>
-                {scenarios.map((s: Scenario) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="flex items-center gap-2">
-                      {s.name}
-                      {s.difficulty && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 ml-1">
-                          {s.difficulty}
-                        </Badge>
-                      )}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
+          <Separator />
 
-        <div className="space-y-2 sm:col-span-1 lg:col-span-1">
-          <Label className="text-sm">Persona</Label>
-          {personasQuery.isLoading ? (
-            <Skeleton className="h-9 w-full" />
-          ) : (
-            <Select
-              value={selectedPersonaId}
-              onValueChange={setSelectedPersonaId}
-            >
-              <SelectTrigger data-testid="persona-select">
-                <SelectValue placeholder="Select a persona..." />
-              </SelectTrigger>
-              <SelectContent>
-                {personas.map((p: Persona) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <span className="flex items-center gap-2">
-                      {p.name}
-                      <span className="text-muted-foreground text-xs">{p.emotion}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
+          {/* Test Config section */}
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">
+              Test Config
+            </h3>
 
-        <div className="flex items-end">
-          <Button
-            onClick={handleRun}
-            disabled={isRunning || !agentApiKey || !selectedScenarioId}
-            className="w-full"
-            size="lg"
-            data-testid="run-test-button"
-          >
-            {isRunning ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Running...
-              </>
-            ) : (
-              <>
-                <Play className="mr-2 h-4 w-4" />
-                Run Test
-              </>
-            )}
-          </Button>
+            <div className="space-y-4">
+              {/* Scenario */}
+              <div className="space-y-2">
+                <Label className="text-sm">Scenario</Label>
+                {scenariosQuery.isLoading ? (
+                  <Skeleton className="h-9 w-full" />
+                ) : (
+                  <Select
+                    value={selectedScenarioId}
+                    onValueChange={setSelectedScenarioId}
+                  >
+                    <SelectTrigger data-testid="scenario-select">
+                      <SelectValue placeholder="Select a scenario..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {scenarios.map((s: Scenario) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          <span className="flex items-center gap-2">
+                            {s.name}
+                            {s.difficulty && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                {s.difficulty}
+                              </Badge>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {/* Persona */}
+              <div className="space-y-2">
+                <Label className="text-sm">Persona</Label>
+                {personasQuery.isLoading ? (
+                  <Skeleton className="h-9 w-full" />
+                ) : (
+                  <Select
+                    value={selectedPersonaId}
+                    onValueChange={setSelectedPersonaId}
+                  >
+                    <SelectTrigger data-testid="persona-select">
+                      <SelectValue placeholder="Select a persona..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {personas.map((p: Persona) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          <span className="flex items-center gap-2">
+                            {p.name}
+                            <span className="text-xs text-muted-foreground">{p.emotion}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* ── Results area (full width, below both columns) ── */}
 
       {/* Running indicator */}
       {isRunning && transcript.length === 0 && (

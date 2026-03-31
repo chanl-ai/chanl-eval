@@ -414,19 +414,17 @@ describe('EvalClient', () => {
       });
 
       const result = await client.personas.createDefaults();
-      expect(mockInstance.post).toHaveBeenCalledWith('/personas/defaults', null, { params: undefined });
+      expect(mockInstance.post).toHaveBeenCalledWith('/personas/defaults');
       expect(result).toHaveLength(2);
     });
 
-    it('createDefaults() should pass workspaceId', async () => {
+    it('createDefaults() should call POST /personas/defaults', async () => {
       mockInstance.post.mockResolvedValue({
         data: { personas: [] },
       });
 
-      await client.personas.createDefaults('ws-123');
-      expect(mockInstance.post).toHaveBeenCalledWith('/personas/defaults', null, {
-        params: { workspaceId: 'ws-123' },
-      });
+      await client.personas.createDefaults();
+      expect(mockInstance.post).toHaveBeenCalledWith('/personas/defaults');
     });
   });
 

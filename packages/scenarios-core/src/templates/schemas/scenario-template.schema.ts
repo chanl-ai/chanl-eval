@@ -46,9 +46,6 @@ function virtualIdPlugin(schema: any) {
 export class ScenarioTemplate {
   _id?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Workspace', required: false })
-  workspaceId?: Types.ObjectId;
-
   @Prop({ required: true })
   name!: string;
 

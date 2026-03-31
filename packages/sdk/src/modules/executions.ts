@@ -34,7 +34,6 @@ export class ExecutionsModule {
    */
   async list(params?: ListExecutionsParams): Promise<ListExecutionsResponse> {
     const queryParams: Record<string, string | number | boolean> = {};
-    if (params?.workspaceId) queryParams.workspaceId = params.workspaceId;
     if (params?.scenarioId) queryParams.scenarioId = params.scenarioId;
     if (params?.agentId) queryParams.agentId = params.agentId;
     if (params?.personaId) queryParams.personaId = params.personaId;

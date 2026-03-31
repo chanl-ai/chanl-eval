@@ -27,9 +27,6 @@ function virtualIdPlugin(schema: any) {
   timestamps: true,
 })
 export class Scenario {
-  @Prop({ type: Types.ObjectId, ref: 'Workspace', required: false })
-  workspaceId?: Types.ObjectId;
-
   @Prop({ required: true })
   name!: string;
 
@@ -265,7 +262,7 @@ export class Scenario {
   parentScenarioId?: Types.ObjectId;
 
   // Permissions and ownership
-  @Prop({ required: true })
+  @Prop({ required: true, default: 'local' })
   createdBy!: string;
 
   @Prop()
@@ -284,8 +281,8 @@ export const ScenarioSchema = SchemaFactory.createForClass(Scenario);
 ScenarioSchema.plugin(virtualIdPlugin);
 
 // Add indexes for better query performance
-ScenarioSchema.index({ workspaceId: 1, status: 1 });
-ScenarioSchema.index({ workspaceId: 1, category: 1 });
+ScenarioSchema.index({ status: 1 });
+ScenarioSchema.index({ category: 1 });
 ScenarioSchema.index({ createdBy: 1 });
 ScenarioSchema.index({ tags: 1 });
 ScenarioSchema.index({ 'metrics.lastExecuted': 1 });

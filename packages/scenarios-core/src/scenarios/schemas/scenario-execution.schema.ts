@@ -84,9 +84,6 @@ export class ScenarioExecution {
   @Prop({ required: false, type: Types.ObjectId, ref: 'Scorecard' })
   scorecardId?: Types.ObjectId;
 
-  @Prop({ required: false, type: Types.ObjectId, ref: 'Workspace' })
-  workspaceId?: Types.ObjectId;
-
   @Prop({ required: true, unique: true })
   executionId!: string;
 
@@ -272,7 +269,6 @@ export const ScenarioExecutionSchema =
 
 // Add indexes for better query performance
 ScenarioExecutionSchema.index({ scenarioId: 1, status: 1 });
-ScenarioExecutionSchema.index({ workspaceId: 1, startTime: -1 });
 ScenarioExecutionSchema.index({ executionId: 1 }, { unique: true });
 ScenarioExecutionSchema.index({ agentId: 1, status: 1 });
 ScenarioExecutionSchema.index({ personaId: 1, status: 1 });

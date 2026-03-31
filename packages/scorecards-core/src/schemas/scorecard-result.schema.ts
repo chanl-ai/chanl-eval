@@ -53,9 +53,6 @@ function virtualIdPlugin(schema: any) {
 export class ScorecardResult {
   _id?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Workspace' })
-  workspaceId?: Types.ObjectId;
-
   @Prop({ required: true, type: Types.ObjectId, ref: 'Scorecard' })
   scorecardId!: Types.ObjectId;
 
@@ -67,9 +64,6 @@ export class ScorecardResult {
 
   @Prop()
   agentId?: string;
-
-  @Prop()
-  userId?: string;
 
   @Prop()
   scenarioExecutionId?: string;
@@ -101,6 +95,6 @@ export class ScorecardResult {
 
 export const ScorecardResultSchema =
   SchemaFactory.createForClass(ScorecardResult);
-ScorecardResultSchema.index({ workspaceId: 1, scorecardId: 1 });
+ScorecardResultSchema.index({ scorecardId: 1 });
 ScorecardResultSchema.index({ callId: 1 });
 ScorecardResultSchema.plugin(virtualIdPlugin);

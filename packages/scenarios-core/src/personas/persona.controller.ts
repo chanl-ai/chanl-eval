@@ -40,14 +40,10 @@ export class PersonaController {
   @Post()
   async create(
     @Body() createPersonaDto: CreatePersonaDto,
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
   ) {
     try {
       const persona = await this.personaService.create(
         createPersonaDto,
-        workspaceId,
-        userId,
       );
       return {
         persona,
@@ -70,7 +66,6 @@ export class PersonaController {
 
   @Get()
   async findAll(
-    @Query('workspaceId') workspaceId?: string,
     @Query('emotion') emotion?: string,
     @Query('language') language?: string,
     @Query('gender') gender?: string,
@@ -114,7 +109,6 @@ export class PersonaController {
       };
 
       const result = await this.personaService.findAll(
-        workspaceId,
         filters,
         pagination,
       );
@@ -141,10 +135,10 @@ export class PersonaController {
   }
 
   @Get('defaults')
-  async getDefaults(@Query('workspaceId') workspaceId?: string) {
+  async getDefaults() {
     try {
       const personas =
-        await this.personaService.getDefaultPersonas(workspaceId);
+        await this.personaService.getDefaultPersonas();
 
       return {
         personas,
@@ -166,15 +160,9 @@ export class PersonaController {
   }
 
   @Post('defaults')
-  async createDefaults(
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
-  ) {
+  async createDefaults() {
     try {
-      const personas = await this.personaService.createDefaultPersonas(
-        workspaceId,
-        userId,
-      );
+      const personas = await this.personaService.createDefaultPersonas();
 
       return {
         personas,
@@ -196,9 +184,9 @@ export class PersonaController {
   }
 
   @Get('stats')
-  async getStats(@Query('workspaceId') workspaceId?: string) {
+  async getStats() {
     try {
-      const stats = await this.personaService.getPersonaStats(workspaceId);
+      const stats = await this.personaService.getPersonaStats();
 
       return {
         stats,
@@ -250,13 +238,11 @@ export class PersonaController {
   async update(
     @Param('id') id: string,
     @Body() updatePersonaDto: UpdatePersonaDto,
-    @Query('userId') userId?: string,
   ) {
     try {
       const persona = await this.personaService.update(
         id,
         updatePersonaDto,
-        userId,
       );
 
       return {

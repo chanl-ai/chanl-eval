@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import { Persona, PersonaDocument } from './schemas/persona.schema';
 import { CreatePersonaDto } from './dto/create-persona.dto';
 import { UpdatePersonaDto } from './dto/update-persona.dto';
@@ -19,18 +19,13 @@ export class PersonaService {
    */
   async create(
     createPersonaDto: CreatePersonaDto,
-    workspaceId?: string,
-    userId?: string,
+    createdBy?: string,
   ): Promise<Persona> {
     try {
       const data: any = {
         ...createPersonaDto,
-        createdBy: userId,
+        createdBy: createdBy || 'local',
       };
-
-      if (workspaceId) {
-        data.workspaceId = new Types.ObjectId(workspaceId);
-      }
 
       const persona = new this.personaModel(data);
       return await persona.save();
@@ -48,7 +43,6 @@ export class PersonaService {
    * When workspaceId is not provided, returns all personas (OSS mode).
    */
   async findAll(
-    workspaceId?: string,
     filters?: {
       emotion?: string;
       language?: string;
@@ -68,10 +62,6 @@ export class PersonaService {
   ): Promise<{ personas: Persona[]; total: number }> {
     try {
       const query: any = {};
-
-      if (workspaceId) {
-        query.workspaceId = new Types.ObjectId(workspaceId);
-      }
 
       // Apply filters
       if (filters) {
@@ -143,17 +133,12 @@ export class PersonaService {
   async update(
     id: string,
     updatePersonaDto: UpdatePersonaDto,
-    userId?: string,
   ): Promise<Persona> {
     try {
       const updateQuery: any = {
         ...updatePersonaDto,
         updatedAt: new Date(),
       };
-
-      if (userId) {
-        updateQuery.lastModifiedBy = userId;
-      }
 
       const persona = await this.personaModel.findByIdAndUpdate(
         id,
@@ -202,16 +187,12 @@ export class PersonaService {
   /**
    * Get default personas, optionally filtered by workspace.
    */
-  async getDefaultPersonas(workspaceId?: string): Promise<Persona[]> {
+  async getDefaultPersonas(): Promise<Persona[]> {
     try {
       const query: any = {
         isDefault: true,
         isActive: true,
       };
-
-      if (workspaceId) {
-        query.workspaceId = new Types.ObjectId(workspaceId);
-      }
 
       return await this.personaModel.find(query).exec();
     } catch (error: any) {
@@ -227,11 +208,10 @@ export class PersonaService {
    * Create default personas. workspaceId is optional for OSS mode.
    */
   async createDefaultPersonas(
-    workspaceId?: string,
     createdBy?: string,
   ): Promise<Persona[]> {
     try {
-      const existingDefaults = await this.getDefaultPersonas(workspaceId);
+      const existingDefaults = await this.getDefaultPersonas();
       if (existingDefaults.length > 0) {
         return existingDefaults;
       }
@@ -351,24 +331,18 @@ export class PersonaService {
         },
       ];
 
-      const insertData = defaultPersonas.map((persona) => {
-        const doc: any = {
-          ...persona,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        if (workspaceId) {
-          doc.workspaceId = new Types.ObjectId(workspaceId);
-        }
-        return doc;
-      });
+      const insertData = defaultPersonas.map((persona) => ({
+        ...persona,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
 
       const personas = (await this.personaModel.insertMany(
         insertData,
       )) as Persona[];
 
       this.logger.log(
-        `Created ${personas.length} default personas${workspaceId ? ` for workspace ${workspaceId}` : ''}`,
+        `Created ${personas.length} default personas`,
       );
       return personas;
     } catch (error: any) {
@@ -383,7 +357,7 @@ export class PersonaService {
   /**
    * Get persona statistics, optionally filtered by workspace.
    */
-  async getPersonaStats(workspaceId?: string): Promise<{
+  async getPersonaStats(): Promise<{
     totalPersonas: number;
     activePersonas: number;
     languages: number;
@@ -399,13 +373,8 @@ export class PersonaService {
     withInterruptions: number;
   }> {
     try {
-      const matchStage: any = {};
-      if (workspaceId) {
-        matchStage.workspaceId = new Types.ObjectId(workspaceId);
-      }
-
       const stats = await this.personaModel.aggregate([
-        { $match: matchStage },
+        { $match: {} },
         {
           $group: {
             _id: null,

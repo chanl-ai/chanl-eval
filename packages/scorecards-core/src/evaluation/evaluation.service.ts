@@ -20,10 +20,8 @@ import {
 } from '../handlers';
 
 export interface EvaluateOptions {
-  workspaceId?: string;
   callId?: string;
   agentId?: string;
-  userId?: string;
   scenarioExecutionId?: string;
 }
 
@@ -84,11 +82,9 @@ export class EvaluationService {
 
     // 3. Create result record with status='processing'
     const result = await this.resultModel.create({
-      workspaceId: options.workspaceId,
       scorecardId,
       callId: options.callId,
       agentId: options.agentId,
-      userId: options.userId,
       scenarioExecutionId: options.scenarioExecutionId,
       status: 'processing',
       criteriaResults: [],

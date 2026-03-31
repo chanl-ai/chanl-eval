@@ -54,7 +54,6 @@ export class BootstrapService implements OnApplicationBootstrap {
 
     // 2. Seed default personas
     const personas = await this.personaService.createDefaultPersonas(
-      undefined,
       'system',
     );
     summary.push(`${personas.length} personas`);

@@ -22,7 +22,6 @@ export class PersonasModule {
    */
   async list(params?: ListPersonasParams): Promise<ListPersonasResponse> {
     const queryParams: Record<string, string | number | boolean> = {};
-    if (params?.workspaceId) queryParams.workspaceId = params.workspaceId;
     if (params?.emotion) queryParams.emotion = params.emotion;
     if (params?.language) queryParams.language = params.language;
     if (params?.gender) queryParams.gender = params.gender;
@@ -91,9 +90,8 @@ export class PersonasModule {
   /**
    * Create default personas for a workspace.
    */
-  async createDefaults(workspaceId?: string): Promise<Persona[]> {
-    const params = workspaceId ? { workspaceId } : undefined;
-    const response = await this.http.post('/personas/defaults', null, { params });
+  async createDefaults(): Promise<Persona[]> {
+    const response = await this.http.post('/personas/defaults');
     const data = unwrapResponse<any>(response);
     return data.personas || [];
   }

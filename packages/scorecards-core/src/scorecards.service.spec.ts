@@ -92,17 +92,6 @@ describe('ScorecardsService', () => {
       expect(scorecard.categoryIds).toEqual([]);
     });
 
-    it('should create a scorecard with workspaceId', async () => {
-      const workspaceId = new Types.ObjectId().toString();
-      const scorecard = await service.createScorecard(
-        { name: 'Workspace Scorecard' },
-        workspaceId,
-      );
-
-      expect(scorecard).toBeDefined();
-      expect(scorecard.workspaceId?.toString()).toBe(workspaceId);
-    });
-
     it('should create a scorecard with default values', async () => {
       const scorecard = await service.createScorecard({
         name: 'Defaults Scorecard',
@@ -728,19 +717,16 @@ describe('ScorecardsService', () => {
       expect(all.data).toHaveLength(1);
     });
 
-    it('should create default scorecard with workspaceId', async () => {
-      const workspaceId = new Types.ObjectId().toString();
+    it('should create default scorecard without workspaceId', async () => {
       const scorecardId =
-        await service.createDefaultScorecardIfNeeded(workspaceId);
+        await service.createDefaultScorecardIfNeeded();
 
       expect(scorecardId).toBeDefined();
 
       const scorecard = await service.findScorecardById(
         scorecardId!.toString(),
-        workspaceId,
       );
       expect(scorecard).toBeDefined();
-      expect(scorecard!.workspaceId?.toString()).toBe(workspaceId);
     });
   });
 

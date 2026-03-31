@@ -44,15 +44,11 @@ export class ScenarioExecutionController {
   async execute(
     @Param('id') scenarioId: string,
     @Body() executeDto: ExecuteScenarioDto,
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
   ) {
     try {
       const execution = await this.executionService.execute(
         scenarioId,
         executeDto,
-        workspaceId,
-        userId,
       );
       return { execution };
     } catch (error: any) {
@@ -77,7 +73,6 @@ export class ScenarioExecutionController {
   @Get(':id/executions')
   async getScenarioExecutions(
     @Param('id') scenarioId: string,
-    @Query('workspaceId') workspaceId?: string,
     @Query('page') pageStr?: string,
     @Query('limit') limitStr?: string,
   ) {
@@ -88,7 +83,6 @@ export class ScenarioExecutionController {
 
       const result = await this.executionService.findByScenario(
         scenarioId,
-        workspaceId,
         { limit, offset },
       );
 
@@ -115,7 +109,6 @@ export class ScenarioExecutionController {
 
   @Get('executions')
   async getAllExecutions(
-    @Query('workspaceId') workspaceId?: string,
     @Query('scenarioId') scenarioId?: string,
     @Query('agentId') agentId?: string,
     @Query('personaId') personaId?: string,
@@ -143,7 +136,6 @@ export class ScenarioExecutionController {
       const offset = (page - 1) * limit;
 
       const result = await this.executionService.findAll(
-        workspaceId,
         filters,
         { limit, offset },
       );
@@ -172,12 +164,10 @@ export class ScenarioExecutionController {
   @Get('executions/:executionId')
   async getExecution(
     @Param('executionId') executionId: string,
-    @Query('workspaceId') workspaceId?: string,
   ) {
     try {
       const execution = await this.executionService.findOne(
         executionId,
-        workspaceId,
       );
       return { execution };
     } catch (error: any) {
@@ -202,10 +192,9 @@ export class ScenarioExecutionController {
   @Delete('executions/:executionId')
   async cancelExecution(
     @Param('executionId') executionId: string,
-    @Query('workspaceId') workspaceId?: string,
   ) {
     try {
-      await this.executionService.cancel(executionId, workspaceId);
+      await this.executionService.cancel(executionId);
       return {
         deleted: true,
         message: 'Execution cancelled successfully',
@@ -233,15 +222,11 @@ export class ScenarioExecutionController {
   async retryExecution(
     @Param('executionId') executionId: string,
     @Body() retryDto: RetryExecutionDto,
-    @Query('workspaceId') workspaceId?: string,
-    @Query('userId') userId?: string,
   ) {
     try {
       const execution = await this.executionService.retry(
         executionId,
         retryDto,
-        workspaceId,
-        userId,
       );
       return { execution };
     } catch (error: any) {

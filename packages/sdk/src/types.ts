@@ -67,7 +67,6 @@ export interface Scenario {
       stability?: number;
     };
   }>;
-  workspaceId?: string;
   createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -116,7 +115,6 @@ export interface CreateScenarioDto {
 export interface UpdateScenarioDto extends Partial<CreateScenarioDto> {}
 
 export interface ListScenariosParams {
-  workspaceId?: string;
   agentId?: string;
   status?: string;
   category?: string;
@@ -157,7 +155,6 @@ export interface Execution {
     status: string;
     score?: number;
   }>;
-  workspaceId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -176,7 +173,6 @@ export interface ExecuteScenarioDto {
 }
 
 export interface ListExecutionsParams {
-  workspaceId?: string;
   scenarioId?: string;
   agentId?: string;
   personaId?: string;
@@ -268,7 +264,6 @@ export interface Persona {
   };
   isActive?: boolean;
   isDefault?: boolean;
-  workspaceId?: string;
   createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -341,7 +336,6 @@ export interface UpdatePersonaDto extends Partial<CreatePersonaDto> {
 }
 
 export interface ListPersonasParams {
-  workspaceId?: string;
   emotion?: string;
   language?: string;
   gender?: string;
@@ -373,7 +367,6 @@ export interface Scorecard {
   passingThreshold?: number;
   scoringAlgorithm?: string;
   tags?: string[];
-  workspaceId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

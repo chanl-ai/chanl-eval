@@ -56,25 +56,20 @@ export class ScorecardsService {
 
   async createScorecard(
     dto: CreateScorecardDto,
-    workspaceId?: string,
   ): Promise<Scorecard> {
     const scorecard = new this.scorecardModel({
       ...dto,
-      workspaceId: workspaceId
-        ? new Types.ObjectId(workspaceId)
-        : undefined,
       categoryIds: [],
     });
     const saved = await scorecard.save();
     this.logger.log(
-      `Created scorecard ${saved._id}${workspaceId ? ` for workspace ${workspaceId}` : ''}`,
+      `Created scorecard ${saved._id}`,
     );
     return saved;
   }
 
   async findAllScorecards(
     options: {
-      workspaceId?: string;
       status?: string;
       tags?: string[];
       search?: string;
@@ -86,9 +81,6 @@ export class ScorecardsService {
   ): Promise<PaginatedResponse<Scorecard>> {
     const filter: FilterQuery<ScorecardDocument> = {};
 
-    if (options.workspaceId) {
-      filter.workspaceId = new Types.ObjectId(options.workspaceId);
-    }
     if (options.status) {
       filter.status = options.status;
     }
@@ -135,30 +127,16 @@ export class ScorecardsService {
 
   async findScorecardById(
     scorecardId: string,
-    workspaceId?: string,
   ): Promise<Scorecard | null> {
-    const filter: FilterQuery<ScorecardDocument> = {
-      _id: new Types.ObjectId(scorecardId),
-    };
-    if (workspaceId) {
-      filter.workspaceId = new Types.ObjectId(workspaceId);
-    }
-    return this.scorecardModel.findOne(filter);
+    return this.scorecardModel.findById(scorecardId);
   }
 
   async updateScorecard(
     scorecardId: string,
     dto: UpdateScorecardDto,
-    workspaceId?: string,
   ): Promise<Scorecard | null> {
-    const filter: FilterQuery<ScorecardDocument> = {
-      _id: new Types.ObjectId(scorecardId),
-    };
-    if (workspaceId) {
-      filter.workspaceId = new Types.ObjectId(workspaceId);
-    }
-    return this.scorecardModel.findOneAndUpdate(
-      filter,
+    return this.scorecardModel.findByIdAndUpdate(
+      scorecardId,
       { $set: dto },
       { new: true },
     );
@@ -166,16 +144,10 @@ export class ScorecardsService {
 
   async deleteScorecard(
     scorecardId: string,
-    workspaceId?: string,
   ): Promise<boolean> {
-    const filter: FilterQuery<ScorecardDocument> = {
+    const result = await this.scorecardModel.deleteOne({
       _id: new Types.ObjectId(scorecardId),
-    };
-    if (workspaceId) {
-      filter.workspaceId = new Types.ObjectId(workspaceId);
-    }
-
-    const result = await this.scorecardModel.deleteOne(filter);
+    });
 
     if (result.deletedCount === 0) {
       return false;
@@ -198,10 +170,9 @@ export class ScorecardsService {
   async createCategory(
     scorecardId: string,
     dto: CreateScorecardCategoryDto,
-    workspaceId?: string,
   ): Promise<ScorecardCategory> {
     // Verify scorecard exists
-    const scorecard = await this.findScorecardById(scorecardId, workspaceId);
+    const scorecard = await this.findScorecardById(scorecardId);
     if (!scorecard) {
       throw new NotFoundException(`Scorecard ${scorecardId} not found`);
     }
@@ -227,10 +198,9 @@ export class ScorecardsService {
 
   async findCategoriesByScorecard(
     scorecardId: string,
-    workspaceId?: string,
   ): Promise<ScorecardCategory[]> {
     // Verify scorecard exists
-    const scorecard = await this.findScorecardById(scorecardId, workspaceId);
+    const scorecard = await this.findScorecardById(scorecardId);
     if (!scorecard) {
       throw new NotFoundException(`Scorecard ${scorecardId} not found`);
     }
@@ -243,33 +213,15 @@ export class ScorecardsService {
 
   async findCategoryById(
     categoryId: string,
-    workspaceId?: string,
   ): Promise<ScorecardCategory | null> {
-    const category = await this.categoryModel.findById(categoryId);
-    if (!category) {
-      return null;
-    }
-
-    // If workspaceId provided, verify parent scorecard belongs to workspace
-    if (workspaceId) {
-      const scorecard = await this.findScorecardById(
-        category.scorecardId.toString(),
-        workspaceId,
-      );
-      if (!scorecard) {
-        return null;
-      }
-    }
-
-    return category;
+    return this.categoryModel.findById(categoryId);
   }
 
   async updateCategory(
     categoryId: string,
     dto: UpdateScorecardCategoryDto,
-    workspaceId?: string,
   ): Promise<ScorecardCategory | null> {
-    const category = await this.findCategoryById(categoryId, workspaceId);
+    const category = await this.findCategoryById(categoryId);
     if (!category) {
       return null;
     }
@@ -283,9 +235,8 @@ export class ScorecardsService {
 
   async deleteCategory(
     categoryId: string,
-    workspaceId?: string,
   ): Promise<boolean> {
-    const category = await this.findCategoryById(categoryId, workspaceId);
+    const category = await this.findCategoryById(categoryId);
     if (!category) {
       return false;
     }
@@ -313,16 +264,15 @@ export class ScorecardsService {
     scorecardId: string,
     categoryId: string,
     dto: CreateScorecardCriteriaDto,
-    workspaceId?: string,
   ): Promise<ScorecardCriteria> {
     // Verify scorecard exists
-    const scorecard = await this.findScorecardById(scorecardId, workspaceId);
+    const scorecard = await this.findScorecardById(scorecardId);
     if (!scorecard) {
       throw new NotFoundException(`Scorecard ${scorecardId} not found`);
     }
 
     // Verify category exists
-    const category = await this.findCategoryById(categoryId, workspaceId);
+    const category = await this.findCategoryById(categoryId);
     if (!category) {
       throw new NotFoundException(`Category ${categoryId} not found`);
     }
@@ -353,10 +303,9 @@ export class ScorecardsService {
 
   async findCriteriaByCategory(
     categoryId: string,
-    workspaceId?: string,
   ): Promise<ScorecardCriteria[]> {
     // Verify category exists
-    const category = await this.findCategoryById(categoryId, workspaceId);
+    const category = await this.findCategoryById(categoryId);
     if (!category) {
       throw new NotFoundException(`Category ${categoryId} not found`);
     }
@@ -369,10 +318,9 @@ export class ScorecardsService {
 
   async findCriteriaByScorecard(
     scorecardId: string,
-    workspaceId?: string,
   ): Promise<ScorecardCriteria[]> {
     // Verify scorecard exists
-    const scorecard = await this.findScorecardById(scorecardId, workspaceId);
+    const scorecard = await this.findScorecardById(scorecardId);
     if (!scorecard) {
       throw new NotFoundException(`Scorecard ${scorecardId} not found`);
     }
@@ -385,33 +333,15 @@ export class ScorecardsService {
 
   async findCriteriaById(
     criteriaId: string,
-    workspaceId?: string,
   ): Promise<ScorecardCriteria | null> {
-    const criteria = await this.criteriaModel.findById(criteriaId);
-    if (!criteria) {
-      return null;
-    }
-
-    // If workspaceId provided, verify parent scorecard belongs to workspace
-    if (workspaceId) {
-      const scorecard = await this.findScorecardById(
-        criteria.scorecardId.toString(),
-        workspaceId,
-      );
-      if (!scorecard) {
-        return null;
-      }
-    }
-
-    return criteria;
+    return this.criteriaModel.findById(criteriaId);
   }
 
   async updateCriteria(
     criteriaId: string,
     dto: UpdateScorecardCriteriaDto,
-    workspaceId?: string,
   ): Promise<ScorecardCriteria | null> {
-    const criteria = await this.findCriteriaById(criteriaId, workspaceId);
+    const criteria = await this.findCriteriaById(criteriaId);
     if (!criteria) {
       return null;
     }
@@ -425,9 +355,8 @@ export class ScorecardsService {
 
   async deleteCriteria(
     criteriaId: string,
-    workspaceId?: string,
   ): Promise<boolean> {
-    const criteria = await this.findCriteriaById(criteriaId, workspaceId);
+    const criteria = await this.findCriteriaById(criteriaId);
     if (!criteria) {
       return false;
     }
@@ -452,13 +381,9 @@ export class ScorecardsService {
 
   async createResult(
     dto: CreateScorecardResultDto,
-    workspaceId?: string,
   ): Promise<ScorecardResult> {
     // Verify scorecard exists
-    const scorecard = await this.findScorecardById(
-      dto.scorecardId,
-      workspaceId,
-    );
+    const scorecard = await this.findScorecardById(dto.scorecardId);
     if (!scorecard) {
       throw new NotFoundException(`Scorecard ${dto.scorecardId} not found`);
     }
@@ -466,9 +391,6 @@ export class ScorecardsService {
     const result = new this.resultModel({
       ...dto,
       scorecardId: new Types.ObjectId(dto.scorecardId),
-      workspaceId: workspaceId
-        ? new Types.ObjectId(workspaceId)
-        : undefined,
     });
     const saved = await result.save();
 
@@ -480,7 +402,6 @@ export class ScorecardsService {
 
   async findAllResults(
     options: {
-      workspaceId?: string;
       scorecardId?: string;
       status?: string;
       page?: number;
@@ -491,9 +412,6 @@ export class ScorecardsService {
   ): Promise<PaginatedResponse<ScorecardResult>> {
     const filter: FilterQuery<ScorecardResultDocument> = {};
 
-    if (options.workspaceId) {
-      filter.workspaceId = new Types.ObjectId(options.workspaceId);
-    }
     if (options.scorecardId) {
       filter.scorecardId = new Types.ObjectId(options.scorecardId);
     }
@@ -534,41 +452,22 @@ export class ScorecardsService {
 
   async findResultById(
     resultId: string,
-    workspaceId?: string,
   ): Promise<ScorecardResult | null> {
-    const filter: FilterQuery<ScorecardResultDocument> = {
-      _id: new Types.ObjectId(resultId),
-    };
-    if (workspaceId) {
-      filter.workspaceId = new Types.ObjectId(workspaceId);
-    }
-    return this.resultModel.findOne(filter);
+    return this.resultModel.findById(resultId);
   }
 
   async findResultsByCall(
     callId: string,
-    workspaceId?: string,
   ): Promise<ScorecardResult[]> {
-    const filter: FilterQuery<ScorecardResultDocument> = {
-      callId,
-    };
-    if (workspaceId) {
-      filter.workspaceId = new Types.ObjectId(workspaceId);
-    }
-    return this.resultModel.find(filter);
+    return this.resultModel.find({ callId });
   }
 
   async deleteResult(
     resultId: string,
-    workspaceId?: string,
   ): Promise<boolean> {
-    const filter: FilterQuery<ScorecardResultDocument> = {
+    const result = await this.resultModel.deleteOne({
       _id: new Types.ObjectId(resultId),
-    };
-    if (workspaceId) {
-      filter.workspaceId = new Types.ObjectId(workspaceId);
-    }
-    const result = await this.resultModel.deleteOne(filter);
+    });
     return result.deletedCount > 0;
   }
 
@@ -581,18 +480,9 @@ export class ScorecardsService {
    * Resolution: Most recently created active scorecard.
    * Returns null if no active scorecards exist.
    */
-  async getDefault(
-    workspaceId?: string,
-  ): Promise<{ scorecard: Scorecard; source: 'most_recent' } | null> {
-    const filter: FilterQuery<ScorecardDocument> = {
-      status: 'active',
-    };
-    if (workspaceId) {
-      filter.workspaceId = new Types.ObjectId(workspaceId);
-    }
-
+  async getDefault(): Promise<{ scorecard: Scorecard; source: 'most_recent' } | null> {
     const scorecard = await this.scorecardModel
-      .findOne(filter)
+      .findOne({ status: 'active' })
       .sort({ createdAt: -1 })
       .exec();
 
@@ -610,23 +500,14 @@ export class ScorecardsService {
    * Create a default scorecard if none exists.
    * Used to ensure at least one scorecard exists for evaluation.
    */
-  async createDefaultScorecardIfNeeded(
-    workspaceId?: string,
-  ): Promise<Types.ObjectId | null> {
+  async createDefaultScorecardIfNeeded(): Promise<Types.ObjectId | null> {
     try {
       // Check if an active scorecard already exists
-      const filter: FilterQuery<ScorecardDocument> = {
-        status: 'active',
-      };
-      if (workspaceId) {
-        filter.workspaceId = new Types.ObjectId(workspaceId);
-      }
-
-      const existing = await this.scorecardModel.findOne(filter).exec();
+      const existing = await this.scorecardModel.findOne({ status: 'active' }).exec();
 
       if (existing) {
         this.logger.log(
-          `Default scorecard already exists${workspaceId ? ` for workspace ${workspaceId}` : ''}: ${existing._id}`,
+          `Default scorecard already exists: ${existing._id}`,
         );
         return existing._id as Types.ObjectId;
       }
@@ -635,14 +516,11 @@ export class ScorecardsService {
       const defaultData = this.getDefaultScorecardData();
 
       // Create the scorecard
-      const createdScorecard = await this.createScorecard(
-        {
-          name: defaultData.name,
-          description: defaultData.description,
-          status: defaultData.status,
-        },
-        workspaceId,
-      );
+      const createdScorecard = await this.createScorecard({
+        name: defaultData.name,
+        description: defaultData.description,
+        status: defaultData.status,
+      });
 
       const scorecardId = (createdScorecard as any)._id;
       if (!scorecardId) {
@@ -663,7 +541,6 @@ export class ScorecardsService {
             description: categoryData.description,
             weight: categoryData.weight,
           },
-          workspaceId,
         );
 
         const categoryIdStr =
@@ -681,13 +558,12 @@ export class ScorecardsService {
               settings: criteriaData.settings,
               threshold: criteriaData.threshold,
             },
-            workspaceId,
           );
         }
       }
 
       this.logger.log(
-        `Created default scorecard ${scorecardObjectId}${workspaceId ? ` for workspace ${workspaceId}` : ''}`,
+        `Created default scorecard ${scorecardObjectId}`,
       );
 
       return scorecardObjectId;

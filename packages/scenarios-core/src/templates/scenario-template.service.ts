@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import {
   ScenarioTemplate,
   ScenarioTemplateDocument,
@@ -31,15 +31,11 @@ export class ScenarioTemplateService {
 
   async create(
     dto: CreateTemplateDto,
-    workspaceId?: string,
-    userId?: string,
+    createdBy?: string,
   ): Promise<ScenarioTemplateDocument> {
     const template = await this.templateModel.create({
       ...dto,
-      workspaceId: workspaceId
-        ? new Types.ObjectId(workspaceId)
-        : undefined,
-      createdBy: userId,
+      createdBy: createdBy || 'local',
       status: 'published',
     });
     return template;
@@ -50,7 +46,6 @@ export class ScenarioTemplateService {
       category?: string;
       status?: string;
       search?: string;
-      workspaceId?: string;
     },
     pagination?: { page?: number; limit?: number },
   ): Promise<PaginatedTemplates> {
@@ -58,9 +53,6 @@ export class ScenarioTemplateService {
 
     if (filters?.category) query.category = filters.category;
     if (filters?.status) query.status = filters.status;
-    if (filters?.workspaceId) {
-      query.workspaceId = new Types.ObjectId(filters.workspaceId);
-    }
     if (filters?.search) {
       query.$or = [
         { name: { $regex: filters.search, $options: 'i' } },
@@ -96,11 +88,10 @@ export class ScenarioTemplateService {
   async update(
     id: string,
     dto: UpdateTemplateDto,
-    userId?: string,
   ): Promise<ScenarioTemplateDocument> {
     const template = await this.templateModel.findByIdAndUpdate(
       id,
-      { ...dto, updatedBy: userId },
+      { ...dto },
       { new: true },
     );
     if (!template) {
@@ -127,8 +118,6 @@ export class ScenarioTemplateService {
   async instantiate(
     id: string,
     dto: InstantiateTemplateDto,
-    workspaceId?: string,
-    userId?: string,
   ): Promise<Record<string, any>> {
     const template = await this.findOne(id);
 
@@ -184,10 +173,6 @@ export class ScenarioTemplateService {
 
     if (template.defaultPersonaConfig) {
       scenarioData.defaultPersonaConfig = template.defaultPersonaConfig;
-    }
-
-    if (workspaceId) {
-      scenarioData.workspaceId = workspaceId;
     }
 
     return scenarioData;
@@ -247,7 +232,6 @@ export class ScenarioTemplateService {
   async clone(
     id: string,
     name?: string,
-    userId?: string,
   ): Promise<ScenarioTemplateDocument> {
     const original = await this.findOne(id);
     const { _id, __v, createdAt, updatedAt, id: _idAlias, ...rest } =
@@ -257,7 +241,6 @@ export class ScenarioTemplateService {
       ...rest,
       name: name || `${original.name} (Clone)`,
       status: 'draft',
-      createdBy: userId,
       usageStats: { timesUsed: 0 },
     });
 
@@ -268,26 +251,18 @@ export class ScenarioTemplateService {
    * Seed built-in templates into the database.
    * Returns templates created (skips duplicates by name).
    */
-  async seedBuiltInTemplates(
-    workspaceId?: string,
-  ): Promise<ScenarioTemplateDocument[]> {
+  async seedBuiltInTemplates(): Promise<ScenarioTemplateDocument[]> {
     const builtIns = getBuiltInTemplates();
     const created: ScenarioTemplateDocument[] = [];
 
     for (const tmpl of builtIns) {
       const existing = await this.templateModel.findOne({
         name: tmpl.name,
-        ...(workspaceId
-          ? { workspaceId: new Types.ObjectId(workspaceId) }
-          : {}),
       });
 
       if (!existing) {
         const doc = await this.templateModel.create({
           ...tmpl,
-          workspaceId: workspaceId
-            ? new Types.ObjectId(workspaceId)
-            : undefined,
           createdBy: 'system',
           status: 'published',
           visibility: 'public',

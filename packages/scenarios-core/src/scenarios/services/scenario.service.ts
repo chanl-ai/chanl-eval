@@ -35,8 +35,7 @@ export class ScenarioService {
    */
   async create(
     createScenarioDto: CreateScenarioDto,
-    workspaceId?: string,
-    userId?: string,
+    createdBy?: string,
   ): Promise<Scenario> {
     try {
       const isDraft = createScenarioDto.status === 'draft';
@@ -76,12 +75,8 @@ export class ScenarioService {
         status: createScenarioDto.status || 'active',
         personaIds,
         agentIds,
-        createdBy: userId || 'system',
+        createdBy: createdBy || 'local',
       };
-
-      if (workspaceId) {
-        scenarioData.workspaceId = new Types.ObjectId(workspaceId);
-      }
 
       if (
         createScenarioDto.scorecardId &&
@@ -111,7 +106,6 @@ export class ScenarioService {
    * When workspaceId is not provided, returns all scenarios (OSS mode).
    */
   async findAll(
-    workspaceId?: string,
     filters?: {
       agentId?: string;
       status?: string;
@@ -129,10 +123,6 @@ export class ScenarioService {
   ): Promise<{ scenarios: Scenario[]; total: number }> {
     try {
       const query: any = {};
-
-      if (workspaceId) {
-        query.workspaceId = new Types.ObjectId(workspaceId);
-      }
 
       if (filters) {
         if (filters.agentId) {
@@ -176,15 +166,11 @@ export class ScenarioService {
   /**
    * Find scenario by ID
    */
-  async findOne(id: string, workspaceId?: string): Promise<Scenario> {
+  async findOne(id: string): Promise<Scenario> {
     try {
       const scenario = await this.scenarioModel.findById(id);
 
       if (!scenario) {
-        throw new NotFoundException(`Scenario with ID ${id} not found`);
-      }
-
-      if (workspaceId && scenario.workspaceId?.toString() !== workspaceId) {
         throw new NotFoundException(`Scenario with ID ${id} not found`);
       }
 
@@ -207,18 +193,12 @@ export class ScenarioService {
   async update(
     id: string,
     updateScenarioDto: UpdateScenarioDto,
-    workspaceId?: string,
-    userId?: string,
   ): Promise<Scenario> {
     try {
       const updateQuery: any = {
         ...updateScenarioDto,
         updatedAt: new Date(),
       };
-
-      if (userId) {
-        updateQuery.lastModifiedBy = userId;
-      }
 
       // Convert arrays to ObjectIds
       if (
@@ -277,14 +257,10 @@ export class ScenarioService {
   /**
    * Delete a scenario (archive -- soft delete)
    */
-  async remove(id: string, workspaceId?: string): Promise<void> {
+  async remove(id: string): Promise<void> {
     try {
       const scenario = await this.scenarioModel.findById(id).exec();
       if (!scenario) {
-        throw new NotFoundException(`Scenario with ID ${id} not found`);
-      }
-
-      if (workspaceId && scenario.workspaceId?.toString() !== workspaceId) {
         throw new NotFoundException(`Scenario with ID ${id} not found`);
       }
 
@@ -309,12 +285,11 @@ export class ScenarioService {
    */
   async clone(
     id: string,
-    userId?: string,
+    createdBy?: string,
     name?: string,
-    workspaceId?: string,
   ): Promise<Scenario> {
     try {
-      const originalScenario = await this.findOne(id, workspaceId);
+      const originalScenario = await this.findOne(id);
 
       const scenarioDoc = originalScenario as any;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -327,7 +302,7 @@ export class ScenarioService {
         status: 'draft',
         version: 1,
         parentScenarioId: parentId,
-        createdBy: userId || 'system',
+        createdBy: createdBy || 'local',
         lastModifiedBy: undefined,
         metrics: {
           totalExecutions: 0,
@@ -357,7 +332,6 @@ export class ScenarioService {
    */
   async validate(
     id: string,
-    workspaceId?: string,
     personaLookup?: (personaId: string) => Promise<any>,
   ): Promise<{
     valid: boolean;
@@ -365,7 +339,7 @@ export class ScenarioService {
     warnings: string[];
   }> {
     try {
-      const scenario = await this.findOne(id, workspaceId);
+      const scenario = await this.findOne(id);
       const errors: string[] = [];
       const warnings: string[] = [];
 
@@ -421,21 +395,18 @@ export class ScenarioService {
    */
   async publish(
     id: string,
-    workspaceId?: string,
-    userId?: string,
     personaLookup?: (personaId: string) => Promise<any>,
   ): Promise<{
     scenario: Scenario;
     previousStatus: string;
   }> {
     try {
-      const scenario = await this.findOne(id, workspaceId);
+      const scenario = await this.findOne(id);
       const previousStatus = scenario.status;
 
       // Validate before publishing
       const validation = await this.validate(
         id,
-        workspaceId,
         personaLookup,
       );
       if (!validation.valid) {
@@ -449,7 +420,6 @@ export class ScenarioService {
         {
           status: 'active',
           updatedAt: new Date(),
-          lastModifiedBy: userId,
         },
         { new: true },
       );
@@ -480,14 +450,12 @@ export class ScenarioService {
    */
   async unpublish(
     id: string,
-    workspaceId?: string,
-    userId?: string,
   ): Promise<{
     scenario: Scenario;
     previousStatus: string;
   }> {
     try {
-      const scenario = await this.findOne(id, workspaceId);
+      const scenario = await this.findOne(id);
       const previousStatus = scenario.status;
 
       const updatedScenario = await this.scenarioModel.findByIdAndUpdate(
@@ -495,7 +463,6 @@ export class ScenarioService {
         {
           status: 'paused',
           updatedAt: new Date(),
-          lastModifiedBy: userId,
         },
         { new: true },
       );
@@ -524,7 +491,7 @@ export class ScenarioService {
   /**
    * Get scenario statistics, optionally filtered by workspace.
    */
-  async getScenarioStats(workspaceId?: string): Promise<{
+  async getScenarioStats(): Promise<{
     total: number;
     byType: Array<{ type: string; count: number }>;
     byStatus: Array<{ status: string; count: number }>;
@@ -535,20 +502,10 @@ export class ScenarioService {
     activeRuns: number;
   }> {
     try {
-      const matchStage: any = {};
-      if (workspaceId) {
-        matchStage.workspaceId = new Types.ObjectId(workspaceId);
-      }
-
-      const execMatchStage: any = {};
-      if (workspaceId) {
-        execMatchStage.workspaceId = new Types.ObjectId(workspaceId);
-      }
-
       const [scenarioStats, totalRuns, activeRuns, executionMetrics] =
         await Promise.all([
           this.scenarioModel.aggregate([
-            { $match: matchStage },
+            { $match: {} },
             {
               $facet: {
                 total: [{ $count: 'count' }],
@@ -567,13 +524,12 @@ export class ScenarioService {
               },
             },
           ]),
-          this.scenarioExecutionModel.countDocuments(execMatchStage),
+          this.scenarioExecutionModel.countDocuments({}),
           this.scenarioExecutionModel.countDocuments({
-            ...execMatchStage,
             status: { $in: ['running', 'queued'] },
           }),
           this.scenarioExecutionModel.aggregate([
-            { $match: execMatchStage },
+            { $match: {} },
             {
               $group: {
                 _id: null,
@@ -634,8 +590,7 @@ export class ScenarioService {
    */
   async fromYaml(
     yamlString: string,
-    workspaceId?: string,
-    userId?: string,
+    createdBy?: string,
   ): Promise<Scenario> {
     try {
       const parsed = yaml.load(yamlString) as Record<string, any>;
@@ -663,7 +618,7 @@ export class ScenarioService {
         createdBy: parsed.createdBy,
       };
 
-      return this.create(dto, workspaceId, userId);
+      return this.create(dto, createdBy);
     } catch (error: any) {
       this.logger.error(
         `Failed to import scenario from YAML: ${error.message}`,

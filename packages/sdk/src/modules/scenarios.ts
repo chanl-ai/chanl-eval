@@ -24,7 +24,6 @@ export class ScenariosModule {
    */
   async list(params?: ListScenariosParams): Promise<ListScenariosResponse> {
     const queryParams: Record<string, string | number | boolean> = {};
-    if (params?.workspaceId) queryParams.workspaceId = params.workspaceId;
     if (params?.agentId) queryParams.agentId = params.agentId;
     if (params?.status) queryParams.status = params.status;
     if (params?.category) queryParams.category = params.category;

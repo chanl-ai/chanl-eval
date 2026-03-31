@@ -28,9 +28,6 @@ function virtualIdPlugin(schema: any) {
 export class Scorecard {
   _id?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Workspace' })
-  workspaceId?: Types.ObjectId;
-
   @Prop({ required: true })
   name!: string;
 
@@ -69,5 +66,5 @@ export class Scorecard {
 }
 
 export const ScorecardSchema = SchemaFactory.createForClass(Scorecard);
-ScorecardSchema.index({ workspaceId: 1, status: 1 });
+ScorecardSchema.index({ status: 1 });
 ScorecardSchema.plugin(virtualIdPlugin);

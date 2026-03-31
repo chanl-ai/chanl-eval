@@ -57,21 +57,11 @@ export class ExecutionService {
   async execute(
     scenarioId: string,
     options?: ExecuteOptions,
-    workspaceId?: string,
   ): Promise<string> {
     try {
       // Verify scenario exists and is active
       const scenario = await this.scenarioModel.findById(scenarioId);
       if (!scenario) {
-        throw new NotFoundException(
-          `Scenario with ID ${scenarioId} not found`,
-        );
-      }
-
-      if (
-        workspaceId &&
-        scenario.workspaceId?.toString() !== workspaceId
-      ) {
         throw new NotFoundException(
           `Scenario with ID ${scenarioId} not found`,
         );
@@ -104,16 +94,11 @@ export class ExecutionService {
         },
       };
 
-      if (workspaceId) {
-        executionData.workspaceId = new Types.ObjectId(workspaceId);
-      }
-
       const execution = new this.executionModel(executionData);
       await execution.save();
 
       // Enqueue the BullMQ job
       await this.queueProducer.enqueueExecution(executionId, scenarioId, {
-        workspaceId,
         adapterType: options?.adapterType,
         adapterConfig: options?.adapterConfig,
         personaId:
@@ -142,21 +127,11 @@ export class ExecutionService {
    */
   async getExecution(
     executionId: string,
-    workspaceId?: string,
   ): Promise<ScenarioExecution> {
     try {
       const execution = await this.executionModel.findOne({ executionId });
 
       if (!execution) {
-        throw new NotFoundException(
-          `Execution with ID ${executionId} not found`,
-        );
-      }
-
-      if (
-        workspaceId &&
-        execution.workspaceId?.toString() !== workspaceId
-      ) {
         throw new NotFoundException(
           `Execution with ID ${executionId} not found`,
         );
@@ -181,14 +156,9 @@ export class ExecutionService {
   async listExecutions(
     filters?: ListExecutionsFilters,
     pagination?: ListExecutionsPagination,
-    workspaceId?: string,
   ): Promise<{ executions: ScenarioExecution[]; total: number }> {
     try {
       const query: any = {};
-
-      if (workspaceId) {
-        query.workspaceId = new Types.ObjectId(workspaceId);
-      }
 
       if (filters) {
         if (filters.status) {
@@ -238,21 +208,11 @@ export class ExecutionService {
    */
   async cancelExecution(
     executionId: string,
-    workspaceId?: string,
   ): Promise<void> {
     try {
       const execution = await this.executionModel.findOne({ executionId });
 
       if (!execution) {
-        throw new NotFoundException(
-          `Execution with ID ${executionId} not found`,
-        );
-      }
-
-      if (
-        workspaceId &&
-        execution.workspaceId?.toString() !== workspaceId
-      ) {
         throw new NotFoundException(
           `Execution with ID ${executionId} not found`,
         );
