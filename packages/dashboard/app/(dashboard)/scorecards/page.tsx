@@ -90,18 +90,16 @@ export default function ScorecardsListPage() {
 
                   <Separator className="my-3" />
 
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap gap-1.5">
                     {s.passingThreshold != null && (
-                      <div>
-                        <span className="text-[10px] font-medium uppercase tracking-wider">Pass</span>
-                        <p className="tabular-nums">{s.passingThreshold}%</p>
-                      </div>
+                      <Badge variant="secondary" className="text-[10px] tabular-nums">
+                        Pass: {s.passingThreshold}%
+                      </Badge>
                     )}
                     {s.scoringAlgorithm && (
-                      <div>
-                        <span className="text-[10px] font-medium uppercase tracking-wider">Method</span>
-                        <p className="capitalize">{s.scoringAlgorithm.replace(/_/g, ' ')}</p>
-                      </div>
+                      <Badge variant="outline" className="text-[10px] capitalize">
+                        {s.scoringAlgorithm.replace(/_/g, ' ')}
+                      </Badge>
                     )}
                   </div>
                 </CardContent>

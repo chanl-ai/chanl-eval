@@ -2,8 +2,8 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { Trash2, UserCircle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Plus, Trash2, UserCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -50,6 +50,7 @@ export default function PersonaDetailPage() {
   const [cooperationLevel, setCooperationLevel] = useState('cooperative');
   const [patience, setPatience] = useState('medium');
   const [backstory, setBackstory] = useState('');
+  const [variables, setVariables] = useState<Record<string, string>>({});
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -63,11 +64,17 @@ export default function PersonaDetailPage() {
       setCooperationLevel(q.data.behavior?.cooperationLevel || 'cooperative');
       setPatience(q.data.behavior?.patience || 'medium');
       setBackstory(q.data.backstory ?? '');
+      setVariables(q.data.variables ?? {});
     }
   }, [q.data]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      // Filter out empty-key entries
+      const cleanVars: Record<string, string> = {};
+      for (const [k, v] of Object.entries(variables)) {
+        if (k.trim()) cleanVars[k.trim()] = v;
+      }
       await client.personas.update(id, {
         name,
         description: description || undefined,
@@ -75,6 +82,7 @@ export default function PersonaDetailPage() {
         speechStyle,
         intentClarity,
         backstory: backstory || undefined,
+        variables: Object.keys(cleanVars).length > 0 ? cleanVars : undefined,
         behavior: {
           cooperationLevel,
           patience,
@@ -223,6 +231,89 @@ export default function PersonaDetailPage() {
                 className="min-h-[100px] resize-none"
                 data-testid="persona-backstory"
               />
+            </CardContent>
+          </Card>
+
+          {/* Custom Attributes */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-medium">Custom Attributes</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Key-value pairs injected into scenario prompts as {'{{persona.<key>}}'}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const key = `attribute_${Object.keys(variables).length + 1}`;
+                    setVariables((prev) => ({ ...prev, [key]: '' }));
+                  }}
+                  data-testid="add-attribute"
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Add
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {Object.keys(variables).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No custom attributes. Add product details, order IDs, or other context.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {Object.entries(variables).map(([key, value]) => (
+                    <div key={key} className="flex items-start gap-2">
+                      <div className="flex-1 space-y-1">
+                        <Input
+                          value={key}
+                          onChange={(e) => {
+                            const newKey = e.target.value;
+                            setVariables((prev) => {
+                              const next = { ...prev };
+                              delete next[key];
+                              next[newKey] = value;
+                              return next;
+                            });
+                          }}
+                          placeholder="key (e.g. product_name)"
+                          className="h-8 text-sm font-mono"
+                          data-testid={`attr-key-${key}`}
+                        />
+                      </div>
+                      <div className="flex-[2] space-y-1">
+                        <Input
+                          value={value}
+                          onChange={(e) =>
+                            setVariables((prev) => ({ ...prev, [key]: e.target.value }))
+                          }
+                          placeholder="value (e.g. MacBook Pro 16)"
+                          className="h-8 text-sm"
+                          data-testid={`attr-value-${key}`}
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() =>
+                          setVariables((prev) => {
+                            const next = { ...prev };
+                            delete next[key];
+                            return next;
+                          })
+                        }
+                        data-testid={`attr-delete-${key}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

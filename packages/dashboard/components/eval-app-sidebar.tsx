@@ -5,14 +5,16 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  ArrowUpRight,
   Beaker,
   ClipboardList,
-  ExternalLink,
   FileText,
   Home,
   ScrollText,
   Settings,
+  Sparkles,
   UserCircle,
+  Wrench,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -38,6 +40,7 @@ const dataNav = [
   { title: 'Runs', href: '/executions', icon: ScrollText },
   { title: 'Scenarios', href: '/scenarios', icon: FileText },
   { title: 'Personas', href: '/personas', icon: UserCircle },
+  { title: 'Tool Fixtures', href: '/tool-fixtures', icon: Wrench },
   { title: 'Scorecards', href: '/scorecards', icon: ClipboardList },
 ];
 
@@ -138,21 +141,27 @@ export function EvalAppSidebar({ ...props }: React.ComponentProps<typeof Sidebar
       </SidebarContent>
 
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Chanl Cloud">
-              <a
-                href="https://chanl.ai"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2 text-muted-foreground"
-              >
-                <ExternalLink className="size-4" />
-                <span className="text-xs">Chanl Cloud</span>
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <a
+          href="https://chanl.ai?ref=eval-dashboard"
+          target="_blank"
+          rel="noreferrer"
+          className="group mx-2 mb-2 block rounded-lg border bg-gradient-to-b from-primary/5 to-primary/10 p-3 transition-all hover:border-primary/30 hover:shadow-sm"
+        >
+          <div className="flex items-start gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15">
+              <Sparkles className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-semibold">Upgrade to Cloud</p>
+                <ArrowUpRight className="h-3 w-3 text-muted-foreground group-hover:text-primary transition-colors" />
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                Voice agent testing, real-time monitoring, team collaboration, and production-grade analytics.
+              </p>
+            </div>
+          </div>
+        </a>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

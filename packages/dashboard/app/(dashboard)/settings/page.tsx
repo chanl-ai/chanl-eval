@@ -8,15 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { PageLayout } from '@/components/shared/page-layout';
-import { useEvalConfig, type AdapterType } from '@/lib/eval-config';
+import { LlmConfigCard } from '@/components/settings/llm-config-card';
+import { useEvalConfig } from '@/lib/eval-config';
 import { EvalClient } from '@chanl/eval-sdk';
 
 export default function SettingsPage() {
@@ -25,6 +19,10 @@ export default function SettingsPage() {
     apiKey, setApiKey,
     adapterType, setAdapterType,
     agentApiKey, setAgentApiKey,
+    agentModel, setAgentModel,
+    agentBaseUrl, setAgentBaseUrl,
+    simApiKey, setSimApiKey,
+    simModel, setSimModel,
   } = useEvalConfig();
 
   const [isTesting, setIsTesting] = useState(false);
@@ -52,13 +50,13 @@ export default function SettingsPage() {
     <PageLayout
       icon={Settings}
       title="Settings"
-      description="Configure your eval server connection and agent credentials"
+      description="Configure your eval server connection and LLM credentials"
     >
       <div className="space-y-6 max-w-2xl">
         {/* Server Connection */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-medium">Server Connection</CardTitle>
+            <CardTitle className="text-base font-medium">Eval Server</CardTitle>
             <p className="text-sm text-muted-foreground">
               The chanl-eval server that stores scenarios, personas, and test results.
             </p>
@@ -74,10 +72,13 @@ export default function SettingsPage() {
                 autoComplete="off"
                 data-testid="server-url"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Full API base URL including /api/v1 suffix.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="apiKey">
-                API Key <span className="text-muted-foreground font-normal">(optional)</span>
+                Server API Key <span className="text-muted-foreground font-normal">(optional)</span>
               </Label>
               <Input
                 id="apiKey"
@@ -88,6 +89,9 @@ export default function SettingsPage() {
                 autoComplete="off"
                 data-testid="api-key"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Only needed when CHANL_EVAL_REQUIRE_API_KEY is enabled on the server.
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <Button
@@ -118,44 +122,44 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Agent Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-medium">Agent Under Test</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Provider and API key for the LLM that powers your agent during playground tests.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Adapter</Label>
-              <Select value={adapterType} onValueChange={(v) => setAdapterType(v as AdapterType)}>
-                <SelectTrigger className="w-full max-w-xs" data-testid="adapter-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="anthropic">Anthropic</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="agentKey">Agent API Key</Label>
-              <Input
-                id="agentKey"
-                type="password"
-                value={agentApiKey}
-                onChange={(e) => setAgentApiKey(e.target.value)}
-                placeholder="sk-..."
-                autoComplete="off"
-                data-testid="agent-api-key"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Stays in your browser. Sent directly to the LLM provider, never stored on the eval server.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Agent Under Test */}
+        <LlmConfigCard
+          title="Agent Under Test"
+          description="The LLM being evaluated. This is the model your production agent uses."
+          provider={adapterType}
+          onProviderChange={setAdapterType}
+          showProvider
+          model={agentModel}
+          onModelChange={setAgentModel}
+          modelHint="The exact model your agent runs in production. Select a preset or type any model ID."
+          apiKey={agentApiKey}
+          onApiKeyChange={setAgentApiKey}
+          apiKeyHint="Sent directly to the provider during test runs. Never stored on the eval server."
+          baseUrl={agentBaseUrl}
+          onBaseUrlChange={setAgentBaseUrl}
+          showBaseUrl
+          baseUrlPlaceholder={adapterType === 'http' ? 'https://your-agent.com/chat' : 'Leave empty for default provider URL'}
+          baseUrlHint={adapterType === 'http'
+            ? 'Required — your agent\'s chat endpoint.'
+            : 'Override for OpenAI-compatible endpoints (Ollama, Together, vLLM, Azure, etc.).'}
+        />
+
+        {/* Simulation LLM */}
+        <LlmConfigCard
+          title="Simulation LLM"
+          description="Powers persona dialogue generation and scorecard evaluation (LLM judge). Separate from the agent so you can use a fast, cheap model."
+          showProvider={false}
+          model={simModel}
+          onModelChange={setSimModel}
+          modelPlaceholder="gpt-4o-mini"
+          modelHint="gpt-4o-mini recommended — fast and cheap. Used for persona utterances and scorecard criteria evaluation."
+          apiKey={simApiKey}
+          onApiKeyChange={setSimApiKey}
+          apiKeyPlaceholder={agentApiKey ? 'Leave empty to reuse Agent key' : 'sk-...'}
+          apiKeyHint={agentApiKey
+            ? 'Falls back to the Agent API key if left empty.'
+            : 'OpenAI API key for persona generation and scorecard judge.'}
+        />
 
         {/* API Docs */}
         <Card>

@@ -84,32 +84,21 @@ export default function PersonasListPage() {
                 </CardHeader>
                 <CardContent>
                   <Separator className="mb-3" />
-
-                  {/* Metadata row — matches chanl-admin's label/value pairs */}
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                  <div className="flex flex-wrap gap-1.5">
                     {p.emotion && (
-                      <div>
-                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Emotion</span>
-                        <p className="text-xs capitalize">{p.emotion}</p>
-                      </div>
+                      <Badge variant="secondary" className="text-[10px] capitalize">{p.emotion}</Badge>
                     )}
                     {p.behavior?.cooperationLevel && (
-                      <div>
-                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Cooperation</span>
-                        <p className="text-xs capitalize">{p.behavior.cooperationLevel}</p>
-                      </div>
+                      <Badge variant="outline" className="text-[10px] capitalize">{p.behavior.cooperationLevel}</Badge>
                     )}
                     {p.behavior?.patience && (
-                      <div>
-                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Patience</span>
-                        <p className="text-xs capitalize">{p.behavior.patience}</p>
-                      </div>
+                      <Badge variant="outline" className="text-[10px] capitalize">{p.behavior.patience} patience</Badge>
                     )}
-                    {p.speechStyle && (
-                      <div>
-                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Speech</span>
-                        <p className="text-xs capitalize">{p.speechStyle}</p>
-                      </div>
+                    {p.speechStyle && p.speechStyle !== 'normal' && (
+                      <Badge variant="outline" className="text-[10px] capitalize">{p.speechStyle} speech</Badge>
+                    )}
+                    {p.variables && Object.keys(p.variables).length > 0 && (
+                      <Badge variant="outline" className="text-[10px]">{Object.keys(p.variables).length} attrs</Badge>
                     )}
                   </div>
                 </CardContent>

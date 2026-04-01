@@ -7,8 +7,6 @@ import {
   Beaker,
   BookOpen,
   ClipboardList,
-  Cloud,
-  ExternalLink,
   FileText,
   GitCompare,
   Key,
@@ -277,26 +275,6 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Cloud CTA */}
-      <Card className="bg-primary/5 border-primary/20 mt-2">
-        <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Cloud className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">chanl cloud</p>
-              <p className="text-sm text-muted-foreground">Voice testing, dashboard trends, team workspaces, emotional personas</p>
-            </div>
-          </div>
-          <Button asChild variant="outline" size="sm" className="shrink-0">
-            <a href="https://chanl.ai" target="_blank" rel="noreferrer">
-              Try chanl cloud
-              <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
-            </a>
-          </Button>
-        </CardContent>
-      </Card>
     </PageLayout>
   );
 }
