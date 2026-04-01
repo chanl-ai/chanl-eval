@@ -3,16 +3,22 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Bot, Clock, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Bot, Clock, RotateCcw, ScrollText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScorecardWidget } from '@/components/scorecard/scorecard-widget';
 import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
+import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import type { ScoreMetric } from '@/components/scorecard/types';
 import type { Execution } from '@chanl/eval-sdk';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function formatDuration(ms: number | undefined): string {
   if (ms == null) return '--';
@@ -45,6 +51,21 @@ function buildMetrics(execution: Execution): ScoreMetric[] {
   ];
 }
 
+function formatDate(dateStr: string | undefined): string {
+  if (!dateStr) return '--';
+  return new Date(dateStr).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Transcript step
+// ---------------------------------------------------------------------------
+
 interface TranscriptStep {
   stepId: string;
   status: string;
@@ -60,39 +81,31 @@ function TranscriptView({ steps }: { steps: TranscriptStep[] }) {
       {steps.map((step, i) => {
         const text = step.actualResponse;
         if (!text) return null;
-        const isAgent =
-          typeof step.stepId === 'string' && step.stepId.includes('agent');
+        const isAgent = typeof step.stepId === 'string' && step.stepId.includes('agent');
 
         return (
-          <div
-            key={`${step.stepId}-${i}`}
-            className={`flex gap-3 ${isAgent ? 'flex-row-reverse' : ''}`}
-          >
-            <div className="shrink-0 pt-1">
+          <div key={`${step.stepId}-${i}`} className="flex gap-3">
+            <div className="shrink-0 pt-0.5">
               {isAgent ? (
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                  <Bot className="h-4 w-4 text-primary" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Bot className="h-4 w-4" />
                 </div>
               ) : (
                 <BeautifulAvatar name="Persona" platform="persona" size="sm" />
               )}
             </div>
-            <div className={`max-w-[80%] space-y-1 ${isAgent ? 'items-end text-right' : ''}`}>
+            <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-muted-foreground">
                   {isAgent ? 'Agent' : 'Persona'}
                 </span>
                 {step.duration != null && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
                     {formatDuration(step.duration)}
-                  </Badge>
+                  </span>
                 )}
               </div>
-              <div
-                className={`rounded-lg px-3 py-2 text-sm ${
-                  isAgent ? 'bg-primary/10 text-foreground' : 'bg-muted text-foreground'
-                }`}
-              >
+              <div className={`rounded-lg px-3 py-2 text-sm ${isAgent ? 'bg-primary/5' : 'bg-muted'}`}>
                 <p className="whitespace-pre-wrap">{text}</p>
               </div>
             </div>
@@ -102,6 +115,10 @@ function TranscriptView({ steps }: { steps: TranscriptStep[] }) {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
 
 export default function RunDetailPage() {
   const params = useParams();
@@ -118,11 +135,23 @@ export default function RunDetailPage() {
   const execution = q.data;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+    <PageLayout
+      icon={ScrollText}
+      title={execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail'}
+      description={execution ? formatDate(execution.createdAt) : 'Loading...'}
+      actions={
+        execution ? (
+          <Button variant="outline" size="sm" onClick={() => router.push('/')}>
+            <RotateCcw className="mr-2 h-3.5 w-3.5" />
+            Run Again
+          </Button>
+        ) : undefined
+      }
+    >
       {/* Back link */}
       <Link
         href="/executions"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit -mt-2 mb-2"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         Back to Runs
@@ -141,40 +170,24 @@ export default function RunDetailPage() {
         </Card>
       ) : execution ? (
         <>
-          {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Run {execution.id.slice(-8)}
-              </h1>
-              <Badge variant={getStatusVariant(execution.status)}>
-                {execution.status}
+          {/* Status bar */}
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge variant={getStatusVariant(execution.status)}>{execution.status}</Badge>
+            {execution.overallScore != null && (
+              <Badge variant="outline" className="font-mono tabular-nums">
+                Score: {execution.overallScore}%
               </Badge>
-              {execution.overallScore != null && (
-                <Badge variant="outline" className="font-mono">
-                  Score: {execution.overallScore}%
-                </Badge>
-              )}
-              {execution.duration != null && (
-                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
-                  {formatDuration(execution.duration)}
-                </div>
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push('/')}
-            >
-              <RotateCcw className="mr-2 h-3.5 w-3.5" />
-              Run Again
-            </Button>
+            )}
+            {execution.duration != null && (
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                <span className="tabular-nums">{formatDuration(execution.duration)}</span>
+              </div>
+            )}
           </div>
 
           {/* Content: Transcript + Scorecard */}
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            {/* Transcript */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-medium">Conversation</CardTitle>
@@ -183,14 +196,13 @@ export default function RunDetailPage() {
                 {execution.stepResults && execution.stepResults.length > 0 ? (
                   <TranscriptView steps={execution.stepResults as TranscriptStep[]} />
                 ) : (
-                  <p className="text-muted-foreground text-sm py-4 text-center">
+                  <p className="text-muted-foreground text-sm py-8 text-center">
                     No transcript available.
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            {/* Scorecard */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-medium">Scorecard</CardTitle>
@@ -198,9 +210,7 @@ export default function RunDetailPage() {
               <CardContent>
                 <ScorecardWidget
                   metrics={buildMetrics(execution)}
-                  overallScorePercentage={
-                    execution.overallScore != null ? execution.overallScore : undefined
-                  }
+                  overallScorePercentage={execution.overallScore ?? undefined}
                 />
               </CardContent>
             </Card>
@@ -223,6 +233,6 @@ export default function RunDetailPage() {
           )}
         </>
       ) : null}
-    </div>
+    </PageLayout>
   );
 }

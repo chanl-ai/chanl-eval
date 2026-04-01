@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Play } from 'lucide-react';
+import { ArrowLeft, FileText, Play, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
+import { DeleteDialog } from '@/components/shared/delete-dialog';
+import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import { toast } from 'sonner';
 import type { Persona } from '@chanl/eval-sdk';
@@ -79,6 +81,24 @@ export default function ScenarioDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function handleDelete() {
+    setIsDeleting(true);
+    try {
+      await client.scenarios.remove(id);
+      toast.success('Scenario deleted');
+      void qc.invalidateQueries({ queryKey: ['scenarios'] });
+      router.push('/scenarios');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setIsDeleting(false);
+      setDeleteOpen(false);
+    }
+  }
+
   const personaMap = new Map<string, Persona>();
   if (personasQuery.data?.personas) {
     for (const p of personasQuery.data.personas) {
@@ -91,10 +111,28 @@ export default function ScenarioDetailPage() {
     .filter(Boolean) as Persona[];
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+    <PageLayout
+      icon={FileText}
+      title={q.data?.name ?? 'Scenario'}
+      description={q.data?.description ?? 'Loading...'}
+      actions={
+        q.data ? (
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => router.push(`/playground?scenario=${id}`)}>
+              <Play className="mr-2 h-3.5 w-3.5" />
+              Run in Playground
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setDeleteOpen(true)} data-testid="delete-scenario-button">
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Delete
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
       <Link
         href="/scenarios"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit -mt-2 mb-2"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         Back to Scenarios
@@ -113,35 +151,6 @@ export default function ScenarioDetailPage() {
         </Card>
       ) : q.data ? (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight">{q.data.name}</h1>
-              {q.data.difficulty && (
-                <Badge
-                  variant={
-                    q.data.difficulty === 'hard'
-                      ? 'destructive'
-                      : q.data.difficulty === 'easy'
-                        ? 'secondary'
-                        : 'default'
-                  }
-                >
-                  {q.data.difficulty}
-                </Badge>
-              )}
-              {q.data.category && (
-                <Badge variant="outline">{q.data.category}</Badge>
-              )}
-            </div>
-            <Button
-              size="sm"
-              onClick={() => router.push(`/?scenario=${id}`)}
-            >
-              <Play className="mr-2 h-3.5 w-3.5" />
-              Run in Playground
-            </Button>
-          </div>
-
           {linkedPersonas.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
@@ -255,6 +264,15 @@ export default function ScenarioDetailPage() {
           </Card>
         </>
       ) : null}
-    </div>
+
+      <DeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        entityType="Scenario"
+        entityName={q.data?.name}
+        onConfirm={handleDelete}
+        isLoading={isDeleting}
+      />
+    </PageLayout>
   );
 }

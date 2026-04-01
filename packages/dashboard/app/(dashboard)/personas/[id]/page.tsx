@@ -1,24 +1,39 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, Trash2, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
+import { DeleteDialog } from '@/components/shared/delete-dialog';
+import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import { toast } from 'sonner';
+
+const EMOTIONS = ['friendly', 'polite', 'neutral', 'calm', 'concerned', 'stressed', 'annoyed', 'frustrated', 'irritated', 'curious', 'distracted'];
+const COOPERATION_LEVELS = ['very cooperative', 'cooperative', 'neutral', 'difficult', 'hostile'];
+const PATIENCE_LEVELS = ['high', 'medium', 'low'];
+const SPEECH_STYLES = ['fast', 'slow', 'normal', 'moderate'];
+const INTENT_CLARITY = ['very clear', 'slightly unclear', 'unclear', 'mumbled'];
 
 export default function PersonaDetailPage() {
   const params = useParams();
   const id = typeof params.id === 'string' ? params.id : '';
+  const router = useRouter();
   const qc = useQueryClient();
   const { client } = useEvalConfig();
 
@@ -30,15 +45,25 @@ export default function PersonaDetailPage() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [emotion, setEmotion] = useState('');
-  const [speechStyle, setSpeechStyle] = useState('');
+  const [emotion, setEmotion] = useState('neutral');
+  const [speechStyle, setSpeechStyle] = useState('normal');
+  const [intentClarity, setIntentClarity] = useState('very clear');
+  const [cooperationLevel, setCooperationLevel] = useState('cooperative');
+  const [patience, setPatience] = useState('medium');
+  const [backstory, setBackstory] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (q.data) {
       setName(q.data.name);
       setDescription(q.data.description ?? '');
-      setEmotion(q.data.emotion);
-      setSpeechStyle(q.data.speechStyle);
+      setEmotion(q.data.emotion || 'neutral');
+      setSpeechStyle(q.data.speechStyle || 'normal');
+      setIntentClarity(q.data.intentClarity || 'very clear');
+      setCooperationLevel(q.data.behavior?.cooperationLevel || 'cooperative');
+      setPatience(q.data.behavior?.patience || 'medium');
+      setBackstory(q.data.backstory ?? '');
     }
   }, [q.data]);
 
@@ -49,6 +74,12 @@ export default function PersonaDetailPage() {
         description: description || undefined,
         emotion,
         speechStyle,
+        intentClarity,
+        backstory: backstory || undefined,
+        behavior: {
+          cooperationLevel,
+          patience,
+        },
       });
     },
     onSuccess: () => {
@@ -59,13 +90,40 @@ export default function PersonaDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  async function handleDelete() {
+    setIsDeleting(true);
+    try {
+      await client.personas.remove(id);
+      toast.success('Persona deleted');
+      void qc.invalidateQueries({ queryKey: ['personas'] });
+      router.push('/personas');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setIsDeleting(false);
+      setDeleteOpen(false);
+    }
+  }
+
   const persona = q.data;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+    <PageLayout
+      icon={UserCircle}
+      title={persona?.name ?? 'Persona'}
+      description={persona?.description ?? 'Loading...'}
+      actions={
+        persona ? (
+          <Button size="sm" variant="outline" onClick={() => setDeleteOpen(true)} data-testid="delete-persona-button">
+            <Trash2 className="mr-2 h-3.5 w-3.5" />
+            Delete
+          </Button>
+        ) : undefined
+      }
+    >
       <Link
         href="/personas"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit -mt-2 mb-2"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         Back to Personas
@@ -83,147 +141,117 @@ export default function PersonaDetailPage() {
           </CardContent>
         </Card>
       ) : persona ? (
-        <>
-          {/* Header */}
-          <div className="flex items-center gap-4">
-            <BeautifulAvatar name={persona.name} platform="persona" size="lg" />
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">{persona.name}</h1>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {persona.emotion && (
-                  <Badge variant="secondary">{persona.emotion}</Badge>
-                )}
-                {persona.speechStyle && (
-                  <Badge variant="outline">{persona.speechStyle}</Badge>
-                )}
-                {persona.language && (
-                  <Badge variant="outline">{persona.language}</Badge>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Trait summary */}
-          {(persona.behavior || persona.conversationTraits) && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium">Traits</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {persona.behavior?.cooperationLevel && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Cooperation</p>
-                      <p className="text-sm font-medium">{persona.behavior.cooperationLevel}</p>
-                    </div>
-                  )}
-                  {persona.behavior?.patience && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Patience</p>
-                      <p className="text-sm font-medium">{persona.behavior.patience}</p>
-                    </div>
-                  )}
-                  {persona.behavior?.personality && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Personality</p>
-                      <p className="text-sm font-medium">{persona.behavior.personality}</p>
-                    </div>
-                  )}
-                  {persona.behavior?.communicationStyle && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Communication</p>
-                      <p className="text-sm font-medium">{persona.behavior.communicationStyle}</p>
-                    </div>
-                  )}
-                  {persona.intentClarity && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Intent Clarity</p>
-                      <p className="text-sm font-medium">{persona.intentClarity}</p>
-                    </div>
-                  )}
-                  {persona.gender && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Gender</p>
-                      <p className="text-sm font-medium">{persona.gender}</p>
-                    </div>
-                  )}
-                  {persona.accent && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Accent</p>
-                      <p className="text-sm font-medium">{persona.accent}</p>
-                    </div>
-                  )}
-                  {persona.conversationTraits?.goesOffTopic != null && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Goes Off Topic</p>
-                      <p className="text-sm font-medium">
-                        {persona.conversationTraits.goesOffTopic ? 'Yes' : 'No'}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Edit Form */}
+        <div className="max-w-2xl space-y-6">
+          {/* Identity */}
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-medium">Edit Persona</CardTitle>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">Identity</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="flex items-center gap-4 mb-2">
+                <BeautifulAvatar name={persona.name} platform="persona" size="lg" />
+                <div className="flex-1 space-y-2">
                   <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    data-testid="persona-name"
-                  />
+                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} data-testid="persona-name" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="emotion">Emotion</Label>
-                  <Input
-                    id="emotion"
-                    value={emotion}
-                    onChange={(e) => setEmotion(e.target.value)}
-                    placeholder="e.g. frustrated, neutral, happy"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="speechStyle">Speech Style</Label>
-                <Input
-                  id="speechStyle"
-                  value={speechStyle}
-                  onChange={(e) => setSpeechStyle(e.target.value)}
-                  placeholder="e.g. formal, casual, verbose"
-                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe this persona's background and behavior..."
-                  rows={5}
-                />
-              </div>
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => saveMutation.mutate()}
-                  disabled={saveMutation.isPending}
-                  data-testid="save-persona"
-                >
-                  {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
-                </Button>
+                <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description..." />
               </div>
             </CardContent>
           </Card>
-        </>
+
+          {/* Traits */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">Traits</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Emotion</Label>
+                  <Select value={emotion} onValueChange={setEmotion}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {EMOTIONS.map((e) => <SelectItem key={e} value={e} className="capitalize">{e}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Cooperation</Label>
+                  <Select value={cooperationLevel} onValueChange={setCooperationLevel}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {COOPERATION_LEVELS.map((c) => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Patience</Label>
+                  <Select value={patience} onValueChange={setPatience}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PATIENCE_LEVELS.map((p) => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Speech Style</Label>
+                  <Select value={speechStyle} onValueChange={setSpeechStyle}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SPEECH_STYLES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label>Intent Clarity</Label>
+                  <Select value={intentClarity} onValueChange={setIntentClarity}>
+                    <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {INTENT_CLARITY.map((c) => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Backstory */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">Backstory</CardTitle>
+              <p className="text-sm text-muted-foreground">Additional context about this persona's situation</p>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={backstory}
+                onChange={(e) => setBackstory(e.target.value)}
+                placeholder="e.g. Long-time customer who recently experienced a service outage..."
+                className="min-h-[100px] resize-none"
+                data-testid="persona-backstory"
+              />
+            </CardContent>
+          </Card>
+
+          {/* Save */}
+          <div className="flex justify-end">
+            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="save-persona">
+              {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
       ) : null}
-    </div>
+
+      <DeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        entityType="Persona"
+        entityName={persona?.name}
+        onConfirm={handleDelete}
+        isLoading={isDeleting}
+      />
+    </PageLayout>
   );
 }

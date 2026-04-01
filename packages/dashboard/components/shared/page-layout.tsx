@@ -29,7 +29,9 @@ export function PageLayout({
       >
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {Icon && (
-            <Icon className="h-6 w-6 shrink-0 text-muted-foreground" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+              <Icon className="h-5 w-5 text-muted-foreground" />
+            </div>
           )}
           <div className="min-w-0 flex-1">
             <h1

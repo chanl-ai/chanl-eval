@@ -11,23 +11,25 @@
     "test": "jest --passWithNoTests",
     "test:cov": "jest --coverage --passWithNoTests",
     "test:e2e": "jest --config ./test/jest-e2e.json --passWithNoTests",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "seed": "npx tsx scripts/seed.ts"
   },
   "dependencies": {
     "@chanl/scenarios-core": "workspace:*",
     "@chanl/scorecards-core": "workspace:*",
+    "@nestjs/bull": "^10.0.0",
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
     "@nestjs/mongoose": "^10.0.0",
     "@nestjs/platform-express": "^10.0.0",
-    "@nestjs/bull": "^10.0.0",
     "@nestjs/swagger": "^7.0.0",
-    "mongoose": "^7.0.0",
     "bullmq": "^5.0.0",
-    "class-validator": "^0.14.0",
     "class-transformer": "^0.5.1",
-    "rxjs": "^7.0.0",
+    "class-validator": "^0.14.0",
+    "mongodb": "^7.1.1",
+    "mongoose": "^7.0.0",
     "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.0.0",
     "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {

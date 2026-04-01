@@ -1,14 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { FileText, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageLayout } from '@/components/shared/page-layout';
+import { CreateScenarioDialog } from '@/components/scenarios/create-scenario-dialog';
 import { useEvalConfig } from '@/lib/eval-config';
 import type { Scenario } from '@chanl/eval-sdk';
 
@@ -23,6 +26,7 @@ function getDifficultyVariant(difficulty: string | undefined): 'default' | 'seco
 
 export default function ScenariosListPage() {
   const { client } = useEvalConfig();
+  const [createOpen, setCreateOpen] = useState(false);
 
   const q = useQuery({
     queryKey: ['scenarios'],
@@ -37,14 +41,10 @@ export default function ScenariosListPage() {
       title="Scenarios"
       description="Test scenarios that define how personas interact with your agent"
       actions={
-        scenarios.length > 0 ? (
-          <Button asChild size="sm" variant="outline">
-            <Link href="/scenarios">
-              <Plus className="mr-2 h-3.5 w-3.5" />
-              Create Scenario
-            </Link>
-          </Button>
-        ) : undefined
+        <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="create-scenario-button">
+          <Plus className="mr-2 h-3.5 w-3.5" />
+          Create Scenario
+        </Button>
       }
     >
       {q.isLoading ? (
@@ -65,16 +65,16 @@ export default function ScenariosListPage() {
             <EmptyState
               icon={FileText}
               title="No scenarios yet"
-              description="Create your first test scenario to define how AI personas should interact with your agent."
-              action={{ label: 'Create Scenario', href: '/scenarios' }}
+              description="Import scenarios via CLI or create them through the API."
+              action={{ label: 'Go to Playground', href: '/' }}
             />
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {scenarios.map((s: Scenario) => (
-            <Link key={s.id} href={`/scenarios/${s.id}`}>
-              <Card className="h-full transition-colors hover:bg-muted/30 cursor-pointer">
+            <Link key={s.id} href={`/scenarios/${s.id}`} className="group">
+              <Card className="h-full transition-shadow hover:shadow-md cursor-pointer select-none">
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
                     <CardTitle className="text-base font-medium line-clamp-1">
@@ -96,26 +96,21 @@ export default function ScenariosListPage() {
                 </CardHeader>
                 <CardContent>
                   {s.description ? (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {s.description}
-                    </p>
+                    <p className="text-sm text-muted-foreground line-clamp-2">{s.description}</p>
                   ) : s.prompt ? (
-                    <p className="text-sm text-muted-foreground line-clamp-2 font-mono">
-                      {s.prompt}
-                    </p>
+                    <p className="text-sm text-muted-foreground line-clamp-2 font-mono">{s.prompt}</p>
                   ) : (
                     <p className="text-sm text-muted-foreground italic">No description</p>
                   )}
-                  <div className="flex items-center gap-3 mt-3">
+
+                  <Separator className="my-3" />
+
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     {s.category && (
-                      <Badge variant="secondary" className="text-[10px]">
-                        {s.category}
-                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">{s.category}</Badge>
                     )}
                     {s.personaIds && s.personaIds.length > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {s.personaIds.length} persona{s.personaIds.length !== 1 ? 's' : ''}
-                      </span>
+                      <span>{s.personaIds.length} persona{s.personaIds.length !== 1 ? 's' : ''}</span>
                     )}
                   </div>
                 </CardContent>
@@ -124,6 +119,7 @@ export default function ScenariosListPage() {
           ))}
         </div>
       )}
+      <CreateScenarioDialog open={createOpen} onOpenChange={setCreateOpen} />
     </PageLayout>
   );
 }

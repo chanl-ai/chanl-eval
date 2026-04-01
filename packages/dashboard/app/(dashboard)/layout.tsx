@@ -16,7 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <EvalAppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
-        <div className="flex min-h-svh flex-1 flex-col">{children}</div>
+        <div className="flex flex-1 flex-col min-h-0 overflow-y-auto">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

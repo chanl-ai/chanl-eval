@@ -16,12 +16,12 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 const LABELS: Record<string, string> = {
+  playground: 'Playground',
   executions: 'Runs',
   scenarios: 'Scenarios',
   personas: 'Personas',
   scorecards: 'Scorecards',
   settings: 'Settings',
-  'getting-started': 'Getting Started',
 };
 
 function capitalize(segment: string) {
@@ -33,7 +33,7 @@ function generateBreadcrumbs(pathname: string) {
   const breadcrumbs: { name: string; href: string; isCurrentPage: boolean }[] = [];
 
   if (pathSegments.length === 0) {
-    return [{ name: 'Playground', href: '/', isCurrentPage: true }];
+    return [{ name: 'Home', href: '/', isCurrentPage: true }];
   }
 
   if (pathSegments.length === 1) {

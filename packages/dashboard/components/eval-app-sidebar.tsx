@@ -6,10 +6,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Beaker,
-  BookOpen,
   ClipboardList,
   ExternalLink,
   FileText,
+  Home,
   ScrollText,
   Settings,
   UserCircle,
@@ -30,7 +30,8 @@ import {
 } from '@/components/ui/sidebar';
 
 const primaryNav = [
-  { title: 'Test', href: '/', icon: Beaker },
+  { title: 'Home', href: '/', icon: Home },
+  { title: 'Test', href: '/playground', icon: Beaker },
 ];
 
 const dataNav = [
@@ -41,7 +42,6 @@ const dataNav = [
 ];
 
 const bottomNav = [
-  { title: 'Getting Started', href: '/getting-started', icon: BookOpen },
   { title: 'Settings', href: '/settings', icon: Settings },
 ];
 

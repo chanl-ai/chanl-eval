@@ -89,7 +89,7 @@ export default function RunsListPage() {
           columns={columns}
           data={rows}
           filterColumn="scenarioName"
-          filterPlaceholder="Filter by scenario..."
+          filterPlaceholder="Search runs..."
           toolbarRight={
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger size="sm" className="w-[140px]">
@@ -109,9 +109,8 @@ export default function RunsListPage() {
           emptyState={
             <EmptyState
               icon={ScrollText}
-              title="No test runs yet"
-              description="Run your first scenario test from the playground to see results here."
-              action={{ label: 'Go to Playground', href: '/' }}
+              title="No matching runs"
+              description="Try adjusting your filters."
             />
           }
         />
