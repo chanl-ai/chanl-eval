@@ -57,7 +57,7 @@ export default function ScorecardsListPage() {
               icon={ClipboardList}
               title="No scorecards yet"
               description="Import scorecards via CLI or create them through the API."
-              action={{ label: 'Go to Playground', href: '/' }}
+              action={{ label: 'Go to Playground', href: '/playground' }}
             />
           </CardContent>
         </Card>

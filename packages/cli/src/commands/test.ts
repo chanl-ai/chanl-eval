@@ -6,8 +6,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { get, post, formatError } from '../client';
 import { printError, printWarning, printSuccess } from '../output';
-import { loadConfig } from '../config';
-import { loadAgentYaml, type AgentDefinition } from '../agent-loader';
+import { checkForUpdate } from '../update-check';
 import {
   evaluateAssertions,
   type TestDefinition,
@@ -84,6 +83,7 @@ function parseTestYaml(filePath: string): TestDefinition {
 
   return {
     scenario: parsed.scenario,
+    promptId: parsed.promptId || parsed.prompt_id,
     agent: parsed.agent,
     assertions: parsed.assertions as Assertion[],
   };
@@ -141,105 +141,15 @@ async function resolveScenario(
 }
 
 /* ------------------------------------------------------------------ */
-/* Execution with adapter config                                       */
+/* Execution with promptId                                             */
 /* ------------------------------------------------------------------ */
 
 /**
- * Build the executeDto with adapter config, same logic as scenarios.ts executeAndPoll.
+ * Build the executeDto with promptId only.
+ * The server resolves adapter config from Prompt entity + Settings DB.
  */
-function buildExecuteDto(agentDef?: AgentDefinition): Record<string, any> {
-  const config = loadConfig();
-  const executeDto: Record<string, any> = {};
-
-  if (agentDef) {
-    if (agentDef.provider === 'openai') {
-      if (!config.openaiApiKey) {
-        throw new Error(
-          `Agent "${agentDef.name}" uses OpenAI but no API key is configured. Set it with: chanl config set openaiApiKey sk-...`,
-        );
-      }
-      executeDto.adapterType = 'openai';
-      executeDto.adapterConfig = {
-        apiKey: config.openaiApiKey,
-        model: agentDef.model,
-        systemPrompt: agentDef.systemPrompt,
-        ...(agentDef.temperature !== undefined
-          ? { temperature: agentDef.temperature }
-          : {}),
-        ...(agentDef.maxTokens !== undefined
-          ? { maxTokens: agentDef.maxTokens }
-          : {}),
-      };
-    } else if (agentDef.provider === 'anthropic') {
-      if (!config.anthropicApiKey) {
-        throw new Error(
-          `Agent "${agentDef.name}" uses Anthropic but no API key is configured. Set it with: chanl config set anthropicApiKey sk-ant-...`,
-        );
-      }
-      executeDto.adapterType = 'anthropic';
-      executeDto.adapterConfig = {
-        apiKey: config.anthropicApiKey,
-        model: agentDef.model,
-        systemPrompt: agentDef.systemPrompt,
-        ...(agentDef.temperature !== undefined
-          ? { temperature: agentDef.temperature }
-          : {}),
-        ...(agentDef.maxTokens !== undefined
-          ? { maxTokens: agentDef.maxTokens }
-          : {}),
-      };
-    } else if (agentDef.provider === 'http') {
-      const endpoint = agentDef.httpEndpoint || config.httpEndpoint;
-      if (!endpoint) {
-        throw new Error(
-          `Agent "${agentDef.name}" uses HTTP provider but no endpoint is configured.`,
-        );
-      }
-      executeDto.adapterType = 'http';
-      executeDto.adapterConfig = {
-        endpoint,
-        systemPrompt: agentDef.systemPrompt,
-        ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
-        ...(agentDef.temperature !== undefined
-          ? { temperature: agentDef.temperature }
-          : {}),
-        ...(agentDef.maxTokens !== undefined
-          ? { maxTokens: agentDef.maxTokens }
-          : {}),
-      };
-    }
-  } else {
-    // Resolve from CLI config
-    if (config.provider === 'openai' && config.openaiApiKey) {
-      executeDto.adapterType = 'openai';
-      executeDto.adapterConfig = { apiKey: config.openaiApiKey };
-    } else if (config.provider === 'anthropic' && config.anthropicApiKey) {
-      executeDto.adapterType = 'anthropic';
-      executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
-    } else if (config.provider === 'http' && config.httpEndpoint) {
-      executeDto.adapterType = 'http';
-      executeDto.adapterConfig = {
-        endpoint: config.httpEndpoint,
-        ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
-      };
-    } else if (config.openaiApiKey) {
-      executeDto.adapterType = 'openai';
-      executeDto.adapterConfig = { apiKey: config.openaiApiKey };
-    } else if (config.anthropicApiKey) {
-      executeDto.adapterType = 'anthropic';
-      executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
-    }
-  }
-
-  if (!executeDto.adapterType) {
-    throw new Error(
-      'No provider configured. Set a provider and API key:\n' +
-        '  chanl config set provider openai\n' +
-        '  chanl config set openaiApiKey sk-...',
-    );
-  }
-
-  return executeDto;
+function buildExecuteDto(promptId: string): Record<string, any> {
+  return { promptId };
 }
 
 /* ------------------------------------------------------------------ */
@@ -274,21 +184,22 @@ async function runTestFile(
   filePath: string,
   testDef: TestDefinition,
 ): Promise<TestFileResult> {
-  const config = loadConfig();
   const basename = path.basename(filePath);
 
-  // Resolve agent YAML if specified
-  let agentDef: AgentDefinition | undefined;
-  if (testDef.agent) {
-    const agentPath = path.resolve(path.dirname(filePath), testDef.agent);
-    agentDef = loadAgentYaml(agentPath, config.provider || undefined);
+  // promptId is required — from test YAML or fallback
+  const promptId = testDef.promptId;
+  if (!promptId) {
+    throw new Error(
+      `Test YAML missing "promptId" field in ${basename}. ` +
+      'The Prompt entity defines the agent under test.',
+    );
   }
 
   // Resolve scenario
   const scenario = await resolveScenario(testDef.scenario);
 
-  // Build execution payload
-  const executeDto = buildExecuteDto(agentDef);
+  // Build execution payload — promptId only, server resolves the rest
+  const executeDto = buildExecuteDto(promptId);
 
   // Execute
   const execResult = await post(
@@ -365,6 +276,10 @@ function printHumanResults(
 
   console.log(
     `Results: ${parts.join(', ')} (${summary.total} test${summary.total === 1 ? '' : 's'})`,
+  );
+  console.log('');
+  console.log(
+    chalk.dim('chanl-eval — chanl.ai/eval | linkedin.com/company/chanl-ai'),
   );
 }
 
@@ -573,6 +488,11 @@ export function registerTestCommand(program: Command): void {
               }
               hasRegressions = comparison.hasRegressions;
             }
+          }
+
+          // Non-blocking update check
+          if (!isJson) {
+            await checkForUpdate('0.1.0');
           }
 
           // Exit code: 1 if any test fails, or any assertion regressed

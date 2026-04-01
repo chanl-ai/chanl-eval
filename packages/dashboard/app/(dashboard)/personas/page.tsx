@@ -58,7 +58,7 @@ export default function PersonasListPage() {
               icon={UserCircle}
               title="No personas yet"
               description="Import personas via CLI or create them through the API."
-              action={{ label: 'Go to Playground', href: '/' }}
+              action={{ label: 'Go to Playground', href: '/playground' }}
             />
           </CardContent>
         </Card>

@@ -8,6 +8,8 @@ import type { LucideIcon } from 'lucide-react';
 interface PageLayoutProps {
   icon?: LucideIcon;
   title: string;
+  /** Inline elements rendered next to the title (e.g. badges) */
+  titleExtra?: ReactNode;
   description?: string;
   actions?: ReactNode;
   contentClassName?: string;
@@ -19,6 +21,7 @@ interface PageLayoutProps {
 export function PageLayout({
   icon: Icon,
   title,
+  titleExtra,
   description,
   actions,
   contentClassName,
@@ -47,12 +50,15 @@ export function PageLayout({
             </div>
           ) : null}
           <div className="min-w-0 flex-1">
-            <h1
-              className="text-2xl font-semibold tracking-tight"
-              data-testid="page-title"
-            >
-              {title}
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1
+                className="text-2xl font-semibold tracking-tight"
+                data-testid="page-title"
+              >
+                {title}
+              </h1>
+              {titleExtra}
+            </div>
             {description && (
               <p
                 className="text-sm text-muted-foreground mt-1"

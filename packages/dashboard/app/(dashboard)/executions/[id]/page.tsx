@@ -42,6 +42,8 @@ import { PageLayout } from '@/components/shared/page-layout';
 import { DeleteDialog } from '@/components/shared/delete-dialog';
 import { TranscriptView, type TranscriptMessage } from '@/components/transcript/transcript-view';
 import { ScorecardWidget } from '@/components/scorecard/scorecard-widget';
+import { ShareResults } from '@/components/share-results';
+import { useFirstRunPrompt } from '@/components/first-run-prompt';
 import { useEvalConfig } from '@/lib/eval-config';
 import type { ScoreMetric, ScorecardCriterionDisplay } from '@/components/scorecard/types';
 import type { Execution, Scorecard, ScorecardResult } from '@chanl/eval-sdk';
@@ -337,6 +339,17 @@ export default function RunDetailPage() {
 
   const execution = q.data;
 
+  // Fetch scenario name for share dialog
+  const scenarioQ = useQuery({
+    queryKey: ['scenario', execution?.scenarioId],
+    queryFn: () => client.scenarios.get(execution!.scenarioId!),
+    enabled: !!execution?.scenarioId,
+  });
+  const scenarioName = scenarioQ.data?.name;
+
+  // First-run star/follow prompt
+  useFirstRunPrompt(execution?.status === 'completed');
+
   // Scorecard evaluation state
   const [selectedScorecardId, setSelectedScorecardId] = useState<string>('');
 
@@ -426,9 +439,32 @@ export default function RunDetailPage() {
       backHref="/executions"
       title={execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail'}
       description={execution ? formatDate(execution.createdAt) : 'Loading...'}
+      titleExtra={
+        execution ? (
+          <div className="flex items-center gap-2">
+            <Badge variant={getStatusVariant(execution.status)} className="gap-1">
+              {getStatusIcon(execution.status)}
+              {execution.status}
+            </Badge>
+            {displayScore != null && (
+              <Badge variant="outline" className="font-mono tabular-nums">
+                {displayScore}%
+              </Badge>
+            )}
+          </div>
+        ) : undefined
+      }
       actions={
         execution ? (
           <div className="flex items-center gap-2">
+            <ShareResults
+              metrics={metrics}
+              overallScore={displayScore}
+              scenarioName={scenarioName}
+              executionDate={execution.createdAt}
+              turnCount={messages.length}
+              duration={formatDuration(execution.duration ?? (execution.endTime && execution.startTime ? new Date(execution.endTime).getTime() - new Date(execution.startTime).getTime() : undefined))}
+            />
             <Button variant="outline" size="sm" onClick={() => router.push('/playground')}>
               <RotateCcw className="mr-2 h-3.5 w-3.5" />
               Run Again
@@ -455,19 +491,6 @@ export default function RunDetailPage() {
         </Card>
       ) : execution ? (
         <div className="space-y-6">
-          {/* Status bar */}
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge variant={getStatusVariant(execution.status)} className="gap-1">
-              {getStatusIcon(execution.status)}
-              {execution.status}
-            </Badge>
-            {execution.overallScore != null && (
-              <Badge variant="outline" className="font-mono tabular-nums">
-                Score: {execution.overallScore}%
-              </Badge>
-            )}
-          </div>
-
           {/* Stat cards */}
           <StatCards execution={execution} />
 

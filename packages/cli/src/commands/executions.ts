@@ -271,6 +271,10 @@ export function registerExecutionsCommand(program: Command): void {
         }
 
         printExecutionDetails(execution);
+        console.log('');
+        console.log(
+          chalk.dim('chanl-eval — chanl.ai/eval | linkedin.com/company/chanl-ai'),
+        );
       } catch (err) {
         printError(formatError(err));
         process.exit(1);

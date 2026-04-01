@@ -212,3 +212,8 @@
     background: oklch(0.556 0 0 / 40%);
   }
 }
+
+@keyframes chanl-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.6 0.14 39 / 0.4); }
+  50% { box-shadow: 0 0 0 8px oklch(0.6 0.14 39 / 0); }
+}
