@@ -85,6 +85,14 @@ export function buildTemplateVariables(
     if (b.emotionalState) vars.persona['emotionalState'] = b.emotionalState;
   }
 
+  // Merge persona custom variables (from UI key-value editor)
+  // Available as {{persona.product_name}}, {{persona.order_id}}, etc.
+  if (persona.variables) {
+    for (const [k, v] of Object.entries(persona.variables)) {
+      if (k && v != null) vars.persona[k] = String(v);
+    }
+  }
+
   // Add custom promptVariables as top-level keys
   if (scenarioMeta?.promptVariables) {
     for (const v of scenarioMeta.promptVariables) {

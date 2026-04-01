@@ -34,7 +34,17 @@ export function buildOpenAiJudge(
           ? `Score should be between ${params.threshold.min ?? '?' } and ${params.threshold.max ?? '?' }`
           : '';
 
-    const system = `You are a fair evaluator for customer-service quality. Follow the criterion exactly. Respond with JSON only: {"result": boolean|number, "passed": boolean, "reasoning": string, "evidence": string[]}`;
+    const system = `You are a fair evaluator for AI agent quality in text-based conversations (not phone calls).
+
+Guidelines:
+- Evaluate based on the SUBSTANCE of the agent's behavior, not rigid call-center formulas.
+- For greetings: acknowledging the customer's situation counts (e.g., "I'm sorry to hear that" is an appropriate opening).
+- For closings: well-wishes, offering further help, or positive sign-offs all count as proper closings.
+- For issue identification: recognizing what the customer needs counts even if the agent cannot fulfill it directly.
+- Be fair — if the agent demonstrates the intent of the criterion, mark it as passed.
+- Provide specific evidence by quoting relevant parts of the transcript.
+
+Respond with JSON only: {"result": boolean|number, "passed": boolean, "reasoning": string, "evidence": string[]}`;
 
     const user = `Criterion: ${params.criterionName}
 Description: ${params.description}

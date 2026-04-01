@@ -25,6 +25,8 @@ export interface PersonaTraits {
     repeatsInformation?: boolean;
     goesOffTopic?: boolean;
   };
+  /** Custom key-value attributes from the persona editor */
+  variables?: Record<string, string>;
 }
 
 export interface VoiceConfig {

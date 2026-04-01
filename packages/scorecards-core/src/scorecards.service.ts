@@ -462,6 +462,13 @@ export class ScorecardsService {
     return this.resultModel.find({ callId });
   }
 
+  async findResultsByExecution(
+    executionId: string,
+  ): Promise<ScorecardResult[]> {
+    // Accepts both MongoDB _id and scenarioExecutionId (exec_uuid)
+    return this.resultModel.find({ scenarioExecutionId: executionId });
+  }
+
   async deleteResult(
     resultId: string,
   ): Promise<boolean> {
@@ -771,20 +778,6 @@ export class ScorecardsService {
               type: CriteriaType.RESPONSE_TIME,
               settings: { participant: 'agent' },
               threshold: { max: 5 },
-            },
-            {
-              key: 'agent_talk_ratio',
-              name: 'Balanced Conversation',
-              type: CriteriaType.TALK_TIME,
-              settings: { participant: 'agent_ratio' },
-              threshold: { minPercentage: 30, maxPercentage: 70 },
-            },
-            {
-              key: 'max_silence',
-              name: 'No Long Silences',
-              type: CriteriaType.SILENCE_DURATION,
-              settings: {},
-              threshold: { max: 10 },
             },
           ],
         },

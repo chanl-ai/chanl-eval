@@ -11,13 +11,26 @@ const USER_TURN =
 export function resolvePersonaLlmKey(
   adapterType: string | undefined,
   adapterConfig: Record<string, any> | undefined,
-): { kind: 'openai' | 'anthropic'; apiKey: string } | null {
+): { kind: 'openai' | 'anthropic'; apiKey: string; model?: string } | null {
   const cfg = adapterConfig || {};
+
+  // Priority 1: Dedicated simulation key (separate from agent key)
+  if (typeof cfg.simulationApiKey === 'string' && cfg.simulationApiKey.length > 0) {
+    return {
+      kind: 'openai',
+      apiKey: cfg.simulationApiKey,
+      model: cfg.simulationModel || undefined,
+    };
+  }
+
+  // Priority 2: Legacy explicit persona key fields
   const explicit =
     cfg.personaLlmApiKey || cfg.personaOpenAiKey || cfg.openaiApiKey;
   if (typeof explicit === 'string' && explicit.length > 0) {
     return { kind: 'openai', apiKey: explicit };
   }
+
+  // Priority 3: Fall back to agent's own key
   if (adapterType === 'openai' && cfg.apiKey) {
     return { kind: 'openai', apiKey: cfg.apiKey };
   }
@@ -47,7 +60,7 @@ export async function generatePersonaUtterance(options: {
       const adapter = new OpenAIAdapter();
       await adapter.connect({
         apiKey: resolved.apiKey,
-        model: 'gpt-4o-mini',
+        model: resolved.model || 'gpt-4o-mini',
         temperature: 0.85,
         maxTokens: 256,
         systemPrompt: options.personaSystemPrompt,
@@ -61,7 +74,7 @@ export async function generatePersonaUtterance(options: {
     const adapter = new AnthropicAdapter();
     await adapter.connect({
       apiKey: resolved.apiKey,
-      model: 'claude-3-5-haiku-20241022',
+      model: resolved.model || 'claude-3-5-haiku-20241022',
       temperature: 0.85,
       maxTokens: 256,
       systemPrompt: options.personaSystemPrompt,
@@ -99,7 +112,7 @@ You are starting the conversation as this customer. Say your opening line only â
       const adapter = new OpenAIAdapter();
       await adapter.connect({
         apiKey: resolved.apiKey,
-        model: 'gpt-4o-mini',
+        model: resolved.model || 'gpt-4o-mini',
         temperature: 0.8,
         maxTokens: 200,
         systemPrompt: options.personaSystemPrompt,
@@ -113,7 +126,7 @@ You are starting the conversation as this customer. Say your opening line only â
     const adapter = new AnthropicAdapter();
     await adapter.connect({
       apiKey: resolved.apiKey,
-      model: 'claude-3-5-haiku-20241022',
+      model: resolved.model || 'claude-3-5-haiku-20241022',
       temperature: 0.8,
       maxTokens: 200,
       systemPrompt: options.personaSystemPrompt,

@@ -118,6 +118,15 @@ export class ScorecardsModule {
     return data.result || data;
   }
 
+  /**
+   * Get scorecard results for an execution (by executionId UUID).
+   */
+  async getResultsByExecution(executionId: string): Promise<ScorecardResult[]> {
+    const response = await this.http.get(`/scorecards/results/by-execution/${executionId}`);
+    const data = unwrapResponse<any>(response);
+    return data.results || [];
+  }
+
   // ===========================================================================
   // CATEGORIES
   // ===========================================================================

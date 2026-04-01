@@ -12,6 +12,8 @@ import type {
   ListExecutionsParams,
   ListExecutionsResponse,
   WaitForCompletionOptions,
+  EvaluateExecutionRequest,
+  ScorecardEvaluationResult,
 } from '../types';
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
@@ -69,6 +71,23 @@ export class ExecutionsModule {
     const response = await this.http.post(`/scenarios/executions/${id}/retry`, options || {});
     const data = unwrapResponse<any>(response);
     return data.execution || data;
+  }
+
+  /**
+   * Evaluate a completed execution against a scorecard.
+   *
+   * @param id - Execution ID (MongoDB ObjectId or exec_uuid format)
+   * @param data - Scorecard ID and optional API key for the LLM judge
+   * @returns The evaluation results embedded in the execution
+   */
+  async evaluate(id: string, data: EvaluateExecutionRequest): Promise<{ execution: Execution; scorecardResults: ScorecardEvaluationResult }> {
+    const response = await this.http.post(`/scenarios/executions/${id}/evaluate`, data);
+    const result = unwrapResponse<any>(response);
+    const execution = result.execution || result;
+    return {
+      execution,
+      scorecardResults: execution.scorecardResults,
+    };
   }
 
   /**

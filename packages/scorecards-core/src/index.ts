@@ -28,9 +28,6 @@ export {
   PromptCriteriaSettings,
   KeywordCriteriaSettings,
   ResponseTimeCriteriaSettings,
-  TalkTimeCriteriaSettings,
-  SilenceDurationCriteriaSettings,
-  InterruptionsCriteriaSettings,
   ToolCallCriteriaSettings,
   Threshold,
   BooleanThreshold,
@@ -68,9 +65,6 @@ export {
   KeywordHandler,
   PromptHandler,
   ResponseTimeHandler,
-  TalkTimeHandler,
-  SilenceDurationHandler,
-  InterruptionsHandler,
   ToolCallHandler,
 } from './handlers';
 

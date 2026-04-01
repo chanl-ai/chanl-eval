@@ -272,6 +272,13 @@ export class ScorecardsController {
     return { results, total: results.length };
   }
 
+  @Get('results/by-execution/:executionId')
+  async findResultsByExecution(@Param('executionId') executionId: string) {
+    const results =
+      await this.scorecardsService.findResultsByExecution(executionId);
+    return { results, total: results.length };
+  }
+
   @Get('results/:resultId')
   async findResultById(@Param('resultId') resultId: string) {
     const result =

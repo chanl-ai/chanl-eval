@@ -35,6 +35,12 @@ export interface Prompt {
   content: string;
   status?: string;
   tags?: string[];
+  adapterConfig?: {
+    adapterType?: string;
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+  };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -45,6 +51,12 @@ export interface CreatePromptDto {
   content: string;
   status?: 'active' | 'draft' | 'archived';
   tags?: string[];
+  adapterConfig?: {
+    adapterType?: string;
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+  };
 }
 
 export interface UpdatePromptDto extends Partial<CreatePromptDto> {}
@@ -174,6 +186,8 @@ export interface ListScenariosResponse {
 
 export interface Execution {
   id: string;
+  /** UUID format: exec_<uuid>. Used to link scorecard results. */
+  executionId?: string;
   scenarioId: string;
   agentId?: string;
   personaId?: string;
@@ -189,8 +203,17 @@ export interface Execution {
   stepResults?: Array<{
     stepId: string;
     status: string;
+    role?: 'persona' | 'agent' | 'tool';
+    actualResponse?: string;
+    expectedResponse?: string;
     score?: number;
+    duration?: number;
+    startTime?: string;
+    endTime?: string;
+    errorMessages?: string[];
+    metadata?: Record<string, any>;
   }>;
+  scorecardResults?: ScorecardEvaluationResult;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -201,6 +224,7 @@ export interface ExecuteScenarioDto {
   agentId?: string;
   personaId?: string;
   scorecardId?: string;
+  toolFixtureIds?: string[];
   parameters?: Record<string, any>;
   triggerId?: string;
   environment?: string;
@@ -232,6 +256,32 @@ export interface WaitForCompletionOptions {
   intervalMs?: number;
   /** Maximum time to wait in milliseconds (default: 300000 = 5 min) */
   timeoutMs?: number;
+}
+
+export interface EvaluateExecutionRequest {
+  scorecardId: string;
+  /** Optional OpenAI API key for the LLM judge. Falls back to server-configured key. */
+  apiKey?: string;
+}
+
+export interface ScorecardEvaluationResult {
+  scorecardId: string;
+  resultId: string;
+  overallScore: number;
+  passed: boolean;
+  categoryScores: Record<string, number>;
+  criteriaResults: Array<{
+    criteriaId: string;
+    criteriaKey: string;
+    criteriaName?: string;
+    categoryId: string;
+    categoryName?: string;
+    passed: boolean;
+    result: any;
+    reasoning?: string;
+    evidence?: string[];
+  }>;
+  evaluatedAt: string;
 }
 
 // ============================================================================
@@ -430,24 +480,48 @@ export interface ScorecardCriteria {
   isActive?: boolean;
 }
 
+export interface ScorecardCriteriaResult {
+  criteriaId: string;
+  criteriaKey: string;
+  criteriaName: string;
+  categoryId: string;
+  categoryName: string;
+  result: boolean | number | string;
+  passed: boolean;
+  reasoning: string;
+  evidence: string[];
+  criteriaVersion?: number;
+  categoryVersion?: number;
+}
+
 export interface ScorecardResult {
   id: string;
   scorecardId: string;
+  scenarioExecutionId?: string;
   callId?: string;
   executionId?: string;
   overallScore?: number;
   status?: string;
   categoryScores?: Array<{
     categoryId: string;
+    categoryName?: string;
     score: number;
     passed: boolean;
   }>;
+  criteriaResults?: ScorecardCriteriaResult[];
+  /** @deprecated Use criteriaResults instead */
   criteriaScores?: Array<{
     criteriaId: string;
     score: number;
     passed: boolean;
     feedback?: string;
   }>;
+  analysisMetadata?: {
+    processingTime: number;
+    transcriptLength: number;
+    criteriaCount: number;
+    analysisTimestamp: string;
+  };
   createdAt?: string;
 }
 
@@ -501,6 +575,107 @@ export interface CreateScorecardResultDto {
     score: number;
     passed: boolean;
     feedback?: string;
+  }>;
+}
+
+// ============================================================================
+// TOOL FIXTURES
+// ============================================================================
+
+export interface ToolFixture {
+  id: string;
+  name: string;
+  description: string;
+  parameters?: Record<string, any>;
+  mockResponses?: Array<{
+    when?: Record<string, any>;
+    isDefault?: boolean;
+    return: any;
+    description?: string;
+  }>;
+  tags?: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateToolFixtureDto {
+  name: string;
+  description: string;
+  parameters?: Record<string, any>;
+  mockResponses?: Array<{
+    when?: Record<string, any>;
+    isDefault?: boolean;
+    return: any;
+    description?: string;
+  }>;
+  tags?: string[];
+  isActive?: boolean;
+}
+
+export interface UpdateToolFixtureDto extends Partial<CreateToolFixtureDto> {}
+
+export interface ListToolFixturesParams {
+  isActive?: boolean;
+  tags?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface ListToolFixturesResponse {
+  toolFixtures: ToolFixture[];
+  total: number;
+  pagination?: Pagination;
+}
+
+export interface ToolFixtureStats {
+  total: number;
+  active: number;
+  inactive: number;
+  byTag: Record<string, number>;
+}
+
+// ============================================================================
+// SETTINGS
+// ============================================================================
+
+export interface Settings {
+  id: string;
+  providerKeys: {
+    openai?: string;
+    anthropic?: string;
+    http?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpdateSettingsDto {
+  providerKeys?: Record<string, string>;
+}
+
+// ============================================================================
+// CHAT
+// ============================================================================
+
+export interface ChatSession {
+  sessionId: string;
+  executionId: string;
+}
+
+export interface ChatRequest {
+  promptId: string;
+}
+
+export interface ChatResponse {
+  content: string;
+  latencyMs?: number;
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    arguments: Record<string, any>;
+    result?: any;
   }>;
 }
 

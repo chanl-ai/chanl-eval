@@ -2,9 +2,6 @@ import { CriteriaHandlerRegistry } from './criteria-handler-registry';
 import { KeywordHandler } from './keyword.handler';
 import { PromptHandler } from './prompt.handler';
 import { ResponseTimeHandler } from './response-time.handler';
-import { TalkTimeHandler } from './talk-time.handler';
-import { SilenceDurationHandler } from './silence-duration.handler';
-import { InterruptionsHandler } from './interruptions.handler';
 import { ToolCallHandler } from './tool-call.handler';
 import { checkThreshold, normalizeScore } from './scoring-utils';
 import { EvaluationContext } from './criteria-handler.interface';
@@ -358,150 +355,6 @@ describe('ResponseTimeHandler', () => {
 });
 
 // ==========================================================================
-// TalkTimeHandler
-// ==========================================================================
-describe('TalkTimeHandler', () => {
-  const handler = new TalkTimeHandler();
-
-  it('should return agent talk time in seconds', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.TALK_TIME,
-      settings: { participant: 'agent' },
-      threshold: { min: 10, max: 20 },
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    expect(result.result).toBe(14);
-    expect(result.passed).toBe(true);
-  });
-
-  it('should calculate agent_ratio as percentage', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.TALK_TIME,
-      settings: { participant: 'agent_ratio' },
-      threshold: { minPercentage: 30, maxPercentage: 70 },
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    // 14/26 * 100 = ~53.8%
-    expect(result.result).toBeCloseTo(53.8, 0);
-    expect(result.passed).toBe(true);
-    expect(result.reasoning).toContain('ratio');
-  });
-
-  it('should calculate combined talk time for both', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.TALK_TIME,
-      settings: { participant: 'both' },
-      threshold: { min: 15 },
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    expect(result.result).toBe(21); // 14 + 7
-    expect(result.passed).toBe(true);
-  });
-
-  it('should fail when ratio is out of range', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.TALK_TIME,
-      settings: { participant: 'customer_ratio' },
-      threshold: { minPercentage: 40, maxPercentage: 60 },
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    // 7/26 * 100 = ~26.9%, below 40%
-    expect(result.passed).toBe(false);
-  });
-
-  it('should return failure when no talk time data', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.TALK_TIME,
-      settings: { participant: 'agent' },
-    });
-    const ctx = makeContext({ metrics: undefined });
-    const result = await handler.evaluate(criteria, ctx);
-    expect(result.passed).toBe(false);
-  });
-});
-
-// ==========================================================================
-// SilenceDurationHandler
-// ==========================================================================
-describe('SilenceDurationHandler', () => {
-  const handler = new SilenceDurationHandler();
-
-  it('should return total silence duration', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.SILENCE_DURATION,
-      settings: {},
-      threshold: { max: 10 },
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    expect(result.result).toBe(5);
-    expect(result.passed).toBe(true);
-    expect(result.reasoning).toContain('5.0s');
-  });
-
-  it('should fail when silence exceeds threshold', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.SILENCE_DURATION,
-      settings: {},
-      threshold: { max: 3 },
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    expect(result.passed).toBe(false);
-  });
-
-  it('should include max and average in reasoning', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.SILENCE_DURATION,
-      settings: {},
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    expect(result.reasoning).toContain('max: 2.0s');
-    expect(result.reasoning).toContain('avg: 1.0s');
-  });
-});
-
-// ==========================================================================
-// InterruptionsHandler
-// ==========================================================================
-describe('InterruptionsHandler', () => {
-  const handler = new InterruptionsHandler();
-
-  it('should return agent interruptions', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.INTERRUPTIONS,
-      settings: { participant: 'agent' },
-      threshold: { max: 2 },
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    expect(result.result).toBe(0);
-    expect(result.passed).toBe(true);
-  });
-
-  it('should return customer interruptions', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.INTERRUPTIONS,
-      settings: { participant: 'customer' },
-      threshold: { max: 0 },
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    expect(result.result).toBe(1);
-    expect(result.passed).toBe(false);
-  });
-
-  it('should sum both participant interruptions', async () => {
-    const criteria = makeCriteria({
-      type: CriteriaType.INTERRUPTIONS,
-      settings: { participant: 'both' },
-      threshold: { max: 3 },
-    });
-    const result = await handler.evaluate(criteria, makeContext());
-    expect(result.result).toBe(1); // 0 + 1
-    expect(result.passed).toBe(true);
-    expect(result.reasoning).toContain('agent: 0');
-    expect(result.reasoning).toContain('customer: 1');
-  });
-});
-
-// ==========================================================================
 // ToolCallHandler
 // ==========================================================================
 describe('ToolCallHandler', () => {
@@ -610,8 +463,8 @@ describe('checkThreshold', () => {
 
   it('should check percentage threshold', () => {
     const criteria = makeCriteria({
-      type: CriteriaType.TALK_TIME,
-      settings: { participant: 'agent_ratio' },
+      type: CriteriaType.RESPONSE_TIME,
+      settings: { participant: 'agent' },
       threshold: { minPercentage: 30, maxPercentage: 70 },
     });
     expect(checkThreshold(criteria, 50)).toBe(true);
@@ -649,8 +502,9 @@ describe('normalizeScore', () => {
 
   it('should normalize percentage: 50% → 5', () => {
     const criteria = makeCriteria({
-      type: CriteriaType.TALK_TIME,
-      settings: { participant: 'agent_ratio' },
+      type: CriteriaType.RESPONSE_TIME,
+      settings: { participant: 'agent' },
+      threshold: { minPercentage: 0, maxPercentage: 100 },
     });
     expect(normalizeScore(50, criteria)).toBe(5);
     expect(normalizeScore(100, criteria)).toBe(10);

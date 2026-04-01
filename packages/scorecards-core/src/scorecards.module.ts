@@ -20,9 +20,6 @@ import {
   KeywordHandler,
   PromptHandler,
   ResponseTimeHandler,
-  TalkTimeHandler,
-  SilenceDurationHandler,
-  InterruptionsHandler,
   ToolCallHandler,
 } from './handlers';
 import { EvaluationService } from './evaluation/evaluation.service';
@@ -32,9 +29,6 @@ function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
   registry.register(new KeywordHandler());
   registry.register(new PromptHandler());
   registry.register(new ResponseTimeHandler());
-  registry.register(new TalkTimeHandler());
-  registry.register(new SilenceDurationHandler());
-  registry.register(new InterruptionsHandler());
   registry.register(new ToolCallHandler());
   return registry;
 }

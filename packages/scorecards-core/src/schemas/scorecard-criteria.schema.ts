@@ -8,9 +8,6 @@ export enum CriteriaType {
   PROMPT = 'prompt',
   KEYWORD = 'keyword',
   RESPONSE_TIME = 'response_time',
-  TALK_TIME = 'talk_time',
-  SILENCE_DURATION = 'silence_duration',
-  INTERRUPTIONS = 'interruptions',
   TOOL_CALL = 'tool_call',
 }
 
@@ -31,21 +28,6 @@ export interface ResponseTimeCriteriaSettings {
   participant: 'agent' | 'customer' | 'both';
 }
 
-export interface TalkTimeCriteriaSettings {
-  participant:
-    | 'agent'
-    | 'customer'
-    | 'both'
-    | 'agent_ratio'
-    | 'customer_ratio';
-}
-
-export interface SilenceDurationCriteriaSettings {}
-
-export interface InterruptionsCriteriaSettings {
-  participant: 'agent' | 'customer' | 'both';
-}
-
 export interface ToolCallCriteriaSettings {
   expectedTool: string | string[];
   executionCondition?: string;
@@ -55,9 +37,6 @@ export type CriteriaSettings =
   | PromptCriteriaSettings
   | KeywordCriteriaSettings
   | ResponseTimeCriteriaSettings
-  | TalkTimeCriteriaSettings
-  | SilenceDurationCriteriaSettings
-  | InterruptionsCriteriaSettings
   | ToolCallCriteriaSettings;
 
 // ========== THRESHOLD INTERFACES ==========
@@ -120,15 +99,6 @@ export function getEvaluationType(
     criteria.type === CriteriaType.TOOL_CALL
   ) {
     return 'boolean';
-  }
-  if (criteria.type === CriteriaType.TALK_TIME) {
-    const settings = criteria.settings as TalkTimeCriteriaSettings;
-    if (
-      settings?.participant === 'agent_ratio' ||
-      settings?.participant === 'customer_ratio'
-    ) {
-      return 'percentage';
-    }
   }
   return 'number';
 }

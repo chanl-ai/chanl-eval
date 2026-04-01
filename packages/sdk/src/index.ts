@@ -10,6 +10,9 @@ export { ScenariosModule } from './modules/scenarios';
 export { PersonasModule } from './modules/personas';
 export { ScorecardsModule } from './modules/scorecards';
 export { ExecutionsModule } from './modules/executions';
+export { ToolFixturesModule } from './modules/tool-fixtures';
+export { SettingsModule } from './modules/settings';
+export { ChatModule } from './modules/chat';
 export {
   EvalApiError,
   EvalAuthError,
@@ -40,6 +43,8 @@ export type {
   ListExecutionsParams,
   ListExecutionsResponse,
   WaitForCompletionOptions,
+  EvaluateExecutionRequest,
+  ScorecardEvaluationResult,
   // Personas
   Persona,
   CreatePersonaDto,
@@ -50,6 +55,7 @@ export type {
   Scorecard,
   ScorecardCategory,
   ScorecardCriteria,
+  ScorecardCriteriaResult,
   ScorecardResult,
   CreateScorecardDto,
   UpdateScorecardDto,
@@ -58,4 +64,18 @@ export type {
   ScorecardDefaultResponse,
   EvaluateRequest,
   CreateScorecardResultDto,
+  // Tool Fixtures
+  ToolFixture,
+  CreateToolFixtureDto,
+  UpdateToolFixtureDto,
+  ListToolFixturesParams,
+  ListToolFixturesResponse,
+  ToolFixtureStats,
+  // Settings
+  Settings,
+  UpdateSettingsDto,
+  // Chat
+  ChatSession,
+  ChatRequest,
+  ChatResponse,
 } from './types';

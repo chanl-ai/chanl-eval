@@ -25,9 +25,6 @@ export class CreateScorecardCriteriaDto {
     'prompt',
     'keyword',
     'response_time',
-    'talk_time',
-    'silence_duration',
-    'interruptions',
     'tool_call',
   ])
   type!: string;

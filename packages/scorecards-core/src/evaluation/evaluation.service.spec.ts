@@ -18,9 +18,6 @@ import {
   CriteriaHandlerRegistry,
   KeywordHandler,
   ResponseTimeHandler,
-  TalkTimeHandler,
-  SilenceDurationHandler,
-  InterruptionsHandler,
   ToolCallHandler,
   PromptHandler,
   EvaluationContext,
@@ -137,9 +134,6 @@ describe('EvaluationService', () => {
     registry.register(new KeywordHandler());
     registry.register(new PromptHandler());
     registry.register(new ResponseTimeHandler());
-    registry.register(new TalkTimeHandler());
-    registry.register(new SilenceDurationHandler());
-    registry.register(new InterruptionsHandler());
     registry.register(new ToolCallHandler());
 
     module = await Test.createTestingModule({

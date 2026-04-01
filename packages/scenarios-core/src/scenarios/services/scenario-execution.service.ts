@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -15,8 +16,11 @@ import { Scenario, ScenarioDocument } from '../schemas/scenario.schema';
 import {
   ExecuteScenarioDto,
   RetryExecutionDto,
+  EvaluateExecutionDto,
 } from '../dto/execute-scenario.dto';
 import { QueueProducerService } from '../../execution/queue-producer.service';
+import { EvaluationService } from '@chanl/scorecards-core';
+import { buildOpenAiJudge } from '../../execution/judge-llm';
 
 @Injectable()
 export class ScenarioExecutionService {
@@ -28,6 +32,7 @@ export class ScenarioExecutionService {
     @InjectModel(Scenario.name)
     private scenarioModel: Model<ScenarioDocument>,
     private readonly queueProducer: QueueProducerService,
+    private readonly evaluationService: EvaluationService,
   ) {}
 
   /**
@@ -91,6 +96,7 @@ export class ScenarioExecutionService {
           executeDto.personaId || scenario.personaIds?.[0]?.toString(),
         agentId: executeDto.agentId || scenario.agentIds?.[0]?.toString(),
         parameters: executeDto.parameters,
+        toolFixtureIds: executeDto.toolFixtureIds,
       });
 
       this.logger.log(
@@ -114,7 +120,11 @@ export class ScenarioExecutionService {
     executionId: string,
   ): Promise<ScenarioExecution> {
     try {
-      const execution = await this.executionModel.findOne({ executionId });
+      // Accept both MongoDB _id (24-char hex) and executionId (exec_uuid)
+      const isObjectId = /^[a-f0-9]{24}$/.test(executionId);
+      const execution = isObjectId
+        ? await this.executionModel.findById(executionId)
+        : await this.executionModel.findOne({ executionId });
 
       if (!execution) {
         throw new NotFoundException(
@@ -313,7 +323,10 @@ export class ScenarioExecutionService {
     executionId: string,
   ): Promise<void> {
     try {
-      const execution = await this.executionModel.findOne({ executionId });
+      const isObjectId = /^[a-f0-9]{24}$/.test(executionId);
+      const execution = isObjectId
+        ? await this.executionModel.findById(executionId)
+        : await this.executionModel.findOne({ executionId });
 
       if (!execution) {
         throw new NotFoundException(
@@ -360,9 +373,10 @@ export class ScenarioExecutionService {
     retryDto: RetryExecutionDto,
   ): Promise<ScenarioExecution> {
     try {
-      const originalExecution = await this.executionModel.findOne({
-        executionId,
-      });
+      const isObjectId = /^[a-f0-9]{24}$/.test(executionId);
+      const originalExecution = isObjectId
+        ? await this.executionModel.findById(executionId)
+        : await this.executionModel.findOne({ executionId });
 
       if (!originalExecution) {
         throw new NotFoundException(
@@ -428,6 +442,147 @@ export class ScenarioExecutionService {
         error.stack,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Evaluate a completed execution against a scorecard.
+   * Builds a transcript from stepResults and runs the EvaluationService.
+   */
+  async evaluate(
+    executionId: string,
+    dto: EvaluateExecutionDto,
+  ): Promise<ScenarioExecution> {
+    // 1. Load execution
+    const isObjectId = /^[a-f0-9]{24}$/.test(executionId);
+    const execution = isObjectId
+      ? await this.executionModel.findById(executionId)
+      : await this.executionModel.findOne({ executionId });
+
+    if (!execution) {
+      throw new NotFoundException(
+        `Execution with ID ${executionId} not found`,
+      );
+    }
+
+    if (execution.status !== 'completed') {
+      throw new BadRequestException(
+        `Cannot evaluate execution with status "${execution.status}". Execution must be completed.`,
+      );
+    }
+
+    if (!execution.stepResults || execution.stepResults.length === 0) {
+      throw new BadRequestException(
+        'Execution has no step results to evaluate.',
+      );
+    }
+
+    // 2. Build transcript from stepResults
+    const conversationSteps = execution.stepResults.filter(
+      (s) => s.role === 'persona' || s.role === 'agent',
+    );
+
+    if (conversationSteps.length === 0) {
+      throw new BadRequestException(
+        'Execution has no conversation steps (persona/agent) to evaluate.',
+      );
+    }
+
+    const transcriptText = conversationSteps
+      .map((s) =>
+        s.role === 'agent'
+          ? `Agent: ${s.actualResponse || ''}`
+          : `Customer: ${s.actualResponse || ''}`,
+      )
+      .join('\n');
+
+    const segments = conversationSteps.map((s) => ({
+      speaker: s.role === 'agent' ? 'agent' : 'customer',
+      text: s.actualResponse || '',
+    }));
+
+    // 3. Resolve an API key for the LLM judge
+    //    Priority: dto.apiKey > OPENAI_API_KEY env var
+    const judgeApiKey =
+      dto.apiKey || process.env.OPENAI_API_KEY || undefined;
+
+    const llmEvaluate = buildOpenAiJudge(judgeApiKey);
+
+    // 4. Calculate first-response latency metric
+    const firstAgentStep = conversationSteps.find((s) => s.role === 'agent');
+    const firstResponseLatency = firstAgentStep?.duration
+      ? firstAgentStep.duration / 1000
+      : 0;
+
+    // 5. Run evaluation
+    try {
+      const evalResult = await this.evaluationService.evaluate(
+        dto.scorecardId,
+        {
+          transcriptText,
+          segments,
+          metrics: { firstResponseLatency },
+          llmEvaluate,
+        },
+        { scenarioExecutionId: execution.executionId },
+      );
+
+      // 6. Save results to execution via findOneAndUpdate
+      const scorecardResults = {
+        scorecardId: dto.scorecardId,
+        resultId: evalResult.resultId,
+        overallScore: evalResult.overallScore,
+        passed: evalResult.passed,
+        categoryScores: evalResult.categoryScores,
+        criteriaResults: evalResult.criteriaResults.map((cr) => ({
+          criteriaId: cr.criteriaId,
+          criteriaKey: cr.criteriaKey,
+          criteriaName: cr.criteriaName,
+          categoryId: cr.categoryId,
+          categoryName: cr.categoryName,
+          passed: cr.passed,
+          result: cr.result,
+          reasoning: cr.reasoning,
+          evidence: cr.evidence,
+        })),
+        evaluatedAt: new Date(),
+      };
+
+      const filter = isObjectId
+        ? { _id: executionId }
+        : { executionId };
+
+      const updated = await this.executionModel.findOneAndUpdate(
+        filter,
+        { $set: { scorecardResults } },
+        { new: true },
+      );
+
+      if (!updated) {
+        throw new NotFoundException(
+          `Execution with ID ${executionId} not found after evaluation`,
+        );
+      }
+
+      this.logger.log(
+        `Evaluated execution ${executionId} against scorecard ${dto.scorecardId} — score: ${evalResult.overallScore}, passed: ${evalResult.passed}`,
+      );
+
+      return updated.toJSON();
+    } catch (error: any) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      this.logger.error(
+        `Failed to evaluate execution: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Evaluation failed: ${error.message}`,
+      );
     }
   }
 }

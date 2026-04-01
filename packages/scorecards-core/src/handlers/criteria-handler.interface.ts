@@ -25,13 +25,6 @@ export interface EvaluationContext {
     duration?: number;
     firstResponseLatency?: number;
     avgSegmentLength?: Record<string, number>;
-    talkTime?: Record<string, number>;
-    silence?: {
-      total?: number;
-      max?: number;
-      average?: number;
-    };
-    interruptions?: Record<string, number>;
   };
 
   /** Tool calls made during the interaction */

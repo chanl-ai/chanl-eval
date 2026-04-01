@@ -13,6 +13,9 @@ import { ScenariosModule } from './modules/scenarios';
 import { PersonasModule } from './modules/personas';
 import { ScorecardsModule } from './modules/scorecards';
 import { ExecutionsModule } from './modules/executions';
+import { ToolFixturesModule } from './modules/tool-fixtures';
+import { SettingsModule } from './modules/settings';
+import { ChatModule } from './modules/chat';
 import type { EvalClientConfig } from './types';
 
 /**
@@ -69,6 +72,9 @@ export class EvalClient {
   readonly personas: PersonasModule;
   readonly scorecards: ScorecardsModule;
   readonly executions: ExecutionsModule;
+  readonly toolFixtures: ToolFixturesModule;
+  readonly settings: SettingsModule;
+  readonly chat: ChatModule;
 
   constructor(config: EvalClientConfig) {
     const headers: Record<string, string> = {
@@ -110,13 +116,20 @@ export class EvalClient {
     this.personas = new PersonasModule(this.http);
     this.scorecards = new ScorecardsModule(this.http);
     this.executions = new ExecutionsModule(this.http);
+    this.toolFixtures = new ToolFixturesModule(this.http);
+    this.settings = new SettingsModule(this.http);
+    this.chat = new ChatModule(this.http);
   }
 
   /**
    * Health check - verifies the server is reachable.
+   * Health endpoint is at the server root (/health), not under /api/v1.
    */
   async health(): Promise<{ status: string; timestamp: string; version: string }> {
-    const response = await this.http.get('/health');
+    // Strip /api/v1 suffix from baseURL to reach the root health endpoint
+    const base = this.http.defaults.baseURL || '';
+    const rootUrl = base.replace(/\/api\/v\d+\/?$/, '');
+    const response = await this.http.get(`${rootUrl}/health`);
     return response.data;
   }
 }
