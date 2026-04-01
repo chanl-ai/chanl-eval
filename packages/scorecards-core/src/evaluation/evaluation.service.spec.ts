@@ -120,9 +120,6 @@ describe('EvaluationService', () => {
       metrics: {
         duration: 14,
         firstResponseLatency: 1.5,
-        talkTime: { agent: 8, customer: 5 },
-        silence: { total: 1, max: 1, average: 0.5 },
-        interruptions: { agent: 0, customer: 0 },
       },
       toolCalls: [],
       ...overrides,

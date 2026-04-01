@@ -33,6 +33,9 @@ import {
   AgentMessage,
   AgentResponse,
 } from '../../adapters/agent-adapter.interface';
+import { ToolFixtureService } from '../../tool-fixtures/tool-fixture.service';
+import { MockResolver } from '../../tool-fixtures/mock-resolver.service';
+import { ToolFixture, ToolFixtureSchema } from '../../tool-fixtures/schemas/tool-fixture.schema';
 
 // ──────────────────────────────────────────────────────────────────────
 // Mock adapter for testing the conversation loop
@@ -219,7 +222,7 @@ describe('ExecutionService', () => {
       const doc = await executionModel.findOne({ executionId });
       expect(doc).not.toBeNull();
       expect(doc!.status).toBe('queued');
-      expect(doc!.scenarioId.toString()).toBe(scenarioId);
+      expect(doc!.scenarioId!.toString()).toBe(scenarioId);
       expect(doc!.triggeredBy).toBe('system');
 
       // Verify queue was called
@@ -540,12 +543,15 @@ describe('ExecutionProcessor', () => {
           { name: Scenario.name, schema: ScenarioSchema },
           { name: ScenarioExecution.name, schema: ScenarioExecutionSchema },
           { name: Persona.name, schema: PersonaSchema },
+          { name: ToolFixture.name, schema: ToolFixtureSchema },
         ]),
       ],
       providers: [
         ExecutionProcessor,
         AdapterRegistry,
         PersonaSimulatorService,
+        ToolFixtureService,
+        MockResolver,
         {
           provide: EvaluationService,
           useValue: {

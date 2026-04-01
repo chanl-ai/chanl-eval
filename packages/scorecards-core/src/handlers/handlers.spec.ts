@@ -36,9 +36,6 @@ function makeContext(overrides?: Partial<EvaluationContext>): EvaluationContext 
     metrics: {
       duration: 26,
       firstResponseLatency: 1.5,
-      talkTime: { agent: 14, customer: 7 },
-      silence: { total: 5, max: 2, average: 1 },
-      interruptions: { agent: 0, customer: 1 },
     },
     toolCalls: [],
     ...overrides,
@@ -115,7 +112,7 @@ describe('KeywordHandler', () => {
       settings: { matchType: 'must_not_contain', keyword: ['damn', 'crap'] },
     });
     const result = await handler.evaluate(criteria, makeContext());
-    expect(result.result).toBe(false);
+    expect(result.result).toBe(true);
     expect(result.passed).toBe(true);
   });
 
@@ -125,7 +122,7 @@ describe('KeywordHandler', () => {
       settings: { matchType: 'must_not_contain', keyword: 'refund' },
     });
     const result = await handler.evaluate(criteria, makeContext());
-    expect(result.result).toBe(true);
+    expect(result.result).toBe(false);
     expect(result.passed).toBe(false);
     expect(result.reasoning).toContain('Prohibited');
   });
@@ -332,9 +329,6 @@ describe('ResponseTimeHandler', () => {
       metrics: {
         duration: 26,
         avgSegmentLength: { agent: 2.5 },
-        talkTime: { agent: 14, customer: 7 },
-        silence: { total: 5, max: 2, average: 1 },
-        interruptions: { agent: 0, customer: 1 },
       },
     });
     const result = await handler.evaluate(criteria, ctx);

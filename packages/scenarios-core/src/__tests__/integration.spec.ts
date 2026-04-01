@@ -44,6 +44,9 @@ import { ExecutionProcessor } from '../execution/execution-processor';
 import { ExecutionService } from '../execution/execution.service';
 import { QueueProducerService } from '../execution/queue-producer.service';
 import { QUEUE_NAMES } from '../execution/queues.config';
+import { ToolFixtureService } from '../tool-fixtures/tool-fixture.service';
+import { MockResolver } from '../tool-fixtures/mock-resolver.service';
+import { ToolFixture, ToolFixtureSchema } from '../tool-fixtures/schemas/tool-fixture.schema';
 
 // scorecards-core imports
 import {
@@ -62,9 +65,6 @@ import {
   CriteriaHandlerRegistry,
   KeywordHandler,
   ResponseTimeHandler,
-  TalkTimeHandler,
-  SilenceDurationHandler,
-  InterruptionsHandler,
   ToolCallHandler,
   PromptHandler,
   EvaluationContext,
@@ -184,9 +184,6 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
     handlerRegistry.register(new KeywordHandler());
     handlerRegistry.register(new PromptHandler());
     handlerRegistry.register(new ResponseTimeHandler());
-    handlerRegistry.register(new TalkTimeHandler());
-    handlerRegistry.register(new SilenceDurationHandler());
-    handlerRegistry.register(new InterruptionsHandler());
     handlerRegistry.register(new ToolCallHandler());
 
     // Build adapter registry
@@ -206,6 +203,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
           { name: ScorecardCategory.name, schema: ScorecardCategorySchema },
           { name: ScorecardCriteria.name, schema: ScorecardCriteriaSchema },
           { name: ScorecardResult.name, schema: ScorecardResultSchema },
+          { name: ToolFixture.name, schema: ToolFixtureSchema },
         ]),
       ],
       providers: [
@@ -213,6 +211,8 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
         ExecutionProcessor,
         PersonaSimulatorService,
         EvaluationService,
+        ToolFixtureService,
+        MockResolver,
         { provide: AdapterRegistry, useValue: adapters },
         { provide: CriteriaHandlerRegistry, useValue: handlerRegistry },
         {
@@ -548,9 +548,6 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       metrics: {
         duration: execResult.duration / 1000,
         firstResponseLatency: avgLatency / 1000,
-        talkTime: { agent: 10, customer: 8 },
-        silence: { total: 2, max: 1, average: 0.5 },
-        interruptions: { agent: 0, customer: 0 },
       },
       toolCalls: [],
     };
@@ -855,9 +852,6 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
         metrics: {
           duration: execResult.duration / 1000,
           firstResponseLatency: 0.1,
-          talkTime: { agent: 10, customer: 8 },
-          silence: { total: 2, max: 1, average: 0.5 },
-          interruptions: { agent: 0, customer: 0 },
         },
       },
       { scenarioExecutionId: executionId },

@@ -100,6 +100,9 @@ export function getEvaluationType(
   ) {
     return 'boolean';
   }
+  if (isPercentageThreshold(criteria.threshold)) {
+    return 'percentage';
+  }
   return 'number';
 }
 

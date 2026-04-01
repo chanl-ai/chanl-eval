@@ -655,11 +655,11 @@ describe('ScorecardsService', () => {
       );
       expect(problemCat!.weight).toBe(35);
 
-      // Verify 13 total criteria
+      // Verify 11 total criteria
       const allCriteria = await service.findCriteriaByScorecard(
         scorecardId!.toString(),
       );
-      expect(allCriteria).toHaveLength(13);
+      expect(allCriteria).toHaveLength(11);
 
       // Verify specific criteria
       const criteriaKeys = allCriteria.map((c) => c.key);
@@ -674,8 +674,6 @@ describe('ScorecardsService', () => {
       expect(criteriaKeys).toContain('proper_closing');
       expect(criteriaKeys).toContain('closing_keywords');
       expect(criteriaKeys).toContain('agent_response_time');
-      expect(criteriaKeys).toContain('agent_talk_ratio');
-      expect(criteriaKeys).toContain('max_silence');
 
       // Verify criteria types
       const greetingCriteria = allCriteria.find(
@@ -693,15 +691,6 @@ describe('ScorecardsService', () => {
       );
       expect(responseTimeCriteria!.type).toBe(CriteriaType.RESPONSE_TIME);
 
-      const talkTimeCriteria = allCriteria.find(
-        (c) => c.key === 'agent_talk_ratio',
-      );
-      expect(talkTimeCriteria!.type).toBe(CriteriaType.TALK_TIME);
-
-      const silenceCriteria = allCriteria.find(
-        (c) => c.key === 'max_silence',
-      );
-      expect(silenceCriteria!.type).toBe(CriteriaType.SILENCE_DURATION);
     });
 
     it('should be idempotent - calling twice returns existing scorecard', async () => {
