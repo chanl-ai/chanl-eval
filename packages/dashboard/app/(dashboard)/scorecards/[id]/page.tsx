@@ -1,11 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ArrowLeft,
   ClipboardList,
   Edit,
   FolderOpen,
@@ -466,7 +464,7 @@ export default function ScorecardDetailPage() {
 
   return (
     <PageLayout
-      icon={ClipboardList}
+      backHref="/scorecards"
       title={scorecard?.name ?? 'Scorecard'}
       description={scorecard?.description ?? 'Loading...'}
       actions={scorecard ? (
@@ -480,10 +478,6 @@ export default function ScorecardDetailPage() {
         </div>
       ) : undefined}
     >
-      <Link href="/scorecards" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit -mt-2 mb-2">
-        <ArrowLeft className="h-3.5 w-3.5" />Back to Scorecards
-      </Link>
-
       {q.isLoading ? (
         <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>
       ) : q.isError ? (

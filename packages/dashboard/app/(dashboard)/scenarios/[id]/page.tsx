@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, FileText, Play, Trash2 } from 'lucide-react';
+import { FileText, Play, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -112,7 +112,7 @@ export default function ScenarioDetailPage() {
 
   return (
     <PageLayout
-      icon={FileText}
+      backHref="/scenarios"
       title={q.data?.name ?? 'Scenario'}
       description={q.data?.description ?? 'Loading...'}
       actions={
@@ -130,14 +130,6 @@ export default function ScenarioDetailPage() {
         ) : undefined
       }
     >
-      <Link
-        href="/scenarios"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit -mt-2 mb-2"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to Scenarios
-      </Link>
-
       {q.isLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-12 w-full" />

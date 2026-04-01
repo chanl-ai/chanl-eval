@@ -1,10 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Trash2, UserCircle } from 'lucide-react';
+import { Trash2, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -109,7 +108,7 @@ export default function PersonaDetailPage() {
 
   return (
     <PageLayout
-      icon={UserCircle}
+      backHref="/personas"
       title={persona?.name ?? 'Persona'}
       description={persona?.description ?? 'Loading...'}
       actions={
@@ -121,14 +120,6 @@ export default function PersonaDetailPage() {
         ) : undefined
       }
     >
-      <Link
-        href="/personas"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit -mt-2 mb-2"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to Personas
-      </Link>
-
       {q.isLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-12 w-full" />

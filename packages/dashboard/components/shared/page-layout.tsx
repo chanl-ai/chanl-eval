@@ -1,5 +1,7 @@
 import type React from 'react';
 import type { ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 
@@ -9,6 +11,8 @@ interface PageLayoutProps {
   description?: string;
   actions?: ReactNode;
   contentClassName?: string;
+  /** When set, replaces the icon with a back arrow linking to this path */
+  backHref?: string;
   children: ReactNode;
 }
 
@@ -18,6 +22,7 @@ export function PageLayout({
   description,
   actions,
   contentClassName,
+  backHref,
   children,
 }: PageLayoutProps) {
   return (
@@ -28,11 +33,19 @@ export function PageLayout({
         data-testid="page-header"
       >
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          {Icon && (
+          {backHref ? (
+            <Link
+              href={backHref}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted hover:bg-accent transition-colors"
+              data-testid="back-button"
+            >
+              <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            </Link>
+          ) : Icon ? (
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
               <Icon className="h-5 w-5 text-muted-foreground" />
             </div>
-          )}
+          ) : null}
           <div className="min-w-0 flex-1">
             <h1
               className="text-2xl font-semibold tracking-tight"

@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Bot, Clock, RotateCcw, ScrollText } from 'lucide-react';
+import { Bot, Clock, RotateCcw, ScrollText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -136,7 +135,7 @@ export default function RunDetailPage() {
 
   return (
     <PageLayout
-      icon={ScrollText}
+      backHref="/executions"
       title={execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail'}
       description={execution ? formatDate(execution.createdAt) : 'Loading...'}
       actions={
@@ -148,15 +147,6 @@ export default function RunDetailPage() {
         ) : undefined
       }
     >
-      {/* Back link */}
-      <Link
-        href="/executions"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit -mt-2 mb-2"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to Runs
-      </Link>
-
       {q.isLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-12 w-full" />
