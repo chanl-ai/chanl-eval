@@ -36,13 +36,10 @@ import { useEvalConfig } from '@/lib/eval-config';
 // ---------------------------------------------------------------------------
 
 const CRITERIA_TYPES = [
-  { value: 'keyword', label: 'Keyword', description: 'Check for specific words/phrases' },
-  { value: 'prompt', label: 'Prompt (LLM Judge)', description: 'LLM evaluates against a rubric' },
-  { value: 'response_time', label: 'Response Time', description: 'Check agent latency' },
-  { value: 'tool_call', label: 'Tool Call', description: 'Check if agent called a tool' },
-  { value: 'talk_time', label: 'Talk Time', description: 'Measure talk ratio' },
-  { value: 'silence_duration', label: 'Silence Duration', description: 'Detect dead air' },
-  { value: 'interruptions', label: 'Interruptions', description: 'Count overlapping messages' },
+  { value: 'keyword', label: 'Keyword', description: 'Check for specific words/phrases in responses' },
+  { value: 'prompt', label: 'LLM Judge', description: 'LLM evaluates quality against a rubric' },
+  { value: 'response_time', label: 'Response Time', description: 'Check agent responds within time limit' },
+  { value: 'tool_call', label: 'Tool Call', description: 'Verify agent called a specific tool' },
 ] as const;
 
 interface CriterionDraft {
