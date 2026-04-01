@@ -8,7 +8,7 @@ WORKDIR /app
 # Copy workspace config
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* tsconfig.base.json ./
 
-# Copy all packages (needed for workspace resolution)
+# Copy all package.json files needed for workspace resolution
 COPY packages/scenarios-core/package.json packages/scenarios-core/package.json
 COPY packages/scorecards-core/package.json packages/scorecards-core/package.json
 COPY packages/server/package.json packages/server/package.json
@@ -16,14 +16,14 @@ COPY packages/server/package.json packages/server/package.json
 # Install dependencies
 RUN pnpm install --frozen-lockfile || pnpm install
 
-# Copy source code
-COPY packages/scenarios-core/ packages/scenarios-core/
+# Copy source code for packages the server depends on
 COPY packages/scorecards-core/ packages/scorecards-core/
+COPY packages/scenarios-core/ packages/scenarios-core/
 COPY packages/server/ packages/server/
 
-# Build all packages in order
-RUN pnpm --filter @chanl/scenarios-core build && \
-    pnpm --filter @chanl/scorecards-core build && \
+# Build all packages in dependency order
+RUN pnpm --filter @chanl/scorecards-core build && \
+    pnpm --filter @chanl/scenarios-core build && \
     pnpm --filter @chanl/eval-server build
 
 # ---- Runtime stage ----
@@ -37,11 +37,11 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 
 # Copy built packages
-COPY --from=builder /app/packages/scenarios-core/package.json packages/scenarios-core/package.json
-COPY --from=builder /app/packages/scenarios-core/dist packages/scenarios-core/dist
-
 COPY --from=builder /app/packages/scorecards-core/package.json packages/scorecards-core/package.json
 COPY --from=builder /app/packages/scorecards-core/dist packages/scorecards-core/dist
+
+COPY --from=builder /app/packages/scenarios-core/package.json packages/scenarios-core/package.json
+COPY --from=builder /app/packages/scenarios-core/dist packages/scenarios-core/dist
 
 COPY --from=builder /app/packages/server/package.json packages/server/package.json
 COPY --from=builder /app/packages/server/dist packages/server/dist

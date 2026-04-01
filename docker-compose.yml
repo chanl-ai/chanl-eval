@@ -1,6 +1,3 @@
-# Local dependencies only — run the Nest app on the host (see README).
-# This avoids port 18005 conflicts with `pnpm start:dev` in packages/server.
-
 services:
   mongodb:
     image: mongo:7
@@ -23,6 +20,42 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile
+    ports:
+      - "18005:18005"
+    environment:
+      PORT: "18005"
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongodb:27017/chanl-eval
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:18005/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: packages/dashboard/Dockerfile
+    ports:
+      - "3010:3000"
+    environment:
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      server:
+        condition: service_healthy
 
 volumes:
   mongo-data:

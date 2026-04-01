@@ -5,7 +5,7 @@
   "description": "React dashboard for chanl-eval",
   "license": "MIT",
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --port 3010",
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "echo 'No eslint configured for dashboard'",
