@@ -12,6 +12,7 @@ import { HealthModule } from './health/health.module';
 import { ApiKeyModule } from './auth/api-key.module';
 import { ApiKeyGuard } from './auth/api-key.guard';
 import { BootstrapModule } from './bootstrap/bootstrap.module';
+import { PromptsModule } from './prompts/prompts.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { BootstrapModule } from './bootstrap/bootstrap.module';
     HealthModule,
     ApiKeyModule,
     BootstrapModule,
+    PromptsModule,
   ],
   providers: [
     {
