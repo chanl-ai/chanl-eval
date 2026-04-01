@@ -13,6 +13,7 @@ export interface StepResult {
     | 'failed'
     | 'skipped'
     | 'timeout';
+  role?: 'persona' | 'agent' | 'tool';
   actualResponse?: string;
   expectedResponse?: string;
   score?: number;
@@ -21,6 +22,11 @@ export interface StepResult {
   endTime?: Date;
   errorMessages?: string[];
   metadata?: Record<string, any>;
+  toolCalls?: Array<{
+    name: string;
+    arguments: Record<string, any>;
+    result: any;
+  }>;
 }
 
 // Call details interface
@@ -72,8 +78,8 @@ function virtualIdPlugin(schema: any) {
   timestamps: true,
 })
 export class ScenarioExecution {
-  @Prop({ required: true, type: Types.ObjectId, ref: 'Scenario' })
-  scenarioId!: Types.ObjectId;
+  @Prop({ required: false, type: Types.ObjectId, ref: 'Scenario' })
+  scenarioId?: Types.ObjectId;
 
   @Prop({ required: false, type: Types.ObjectId, ref: 'Agent' })
   agentId?: Types.ObjectId;
@@ -83,6 +89,12 @@ export class ScenarioExecution {
 
   @Prop({ required: false, type: Types.ObjectId, ref: 'Scorecard' })
   scorecardId?: Types.ObjectId;
+
+  @Prop({ required: false, type: Types.ObjectId, ref: 'Prompt' })
+  promptId?: Types.ObjectId;
+
+  @Prop({ type: String, enum: ['text', 'phone', 'manual'], default: 'text' })
+  mode?: string;
 
   @Prop({ required: true, unique: true })
   executionId!: string;
@@ -121,6 +133,10 @@ export class ScenarioExecution {
             'timeout',
           ],
         },
+        role: {
+          type: String,
+          enum: ['persona', 'agent', 'tool'],
+        },
         actualResponse: String,
         expectedResponse: String,
         score: Number,
@@ -129,6 +145,11 @@ export class ScenarioExecution {
         endTime: Date,
         errorMessages: [String],
         metadata: Object,
+        toolCalls: [{
+          name: String,
+          arguments: Object,
+          result: Object,
+        }],
       },
     ],
     default: [],
@@ -255,6 +276,27 @@ export class ScenarioExecution {
     retryCount: number;
     originalExecutionId: string;
     retryReason: string;
+  };
+
+  @Prop({ type: Object })
+  scorecardResults?: {
+    scorecardId: string;
+    resultId: string;
+    overallScore: number;
+    passed: boolean;
+    categoryScores: Record<string, number>;
+    criteriaResults: Array<{
+      criteriaId: string;
+      criteriaKey: string;
+      criteriaName?: string;
+      categoryId: string;
+      categoryName?: string;
+      passed: boolean;
+      result: any;
+      reasoning?: string;
+      evidence?: string[];
+    }>;
+    evaluatedAt: Date;
   };
 
   @Prop({ type: Date })

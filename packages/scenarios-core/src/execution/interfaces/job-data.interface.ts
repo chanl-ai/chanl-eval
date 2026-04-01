@@ -10,6 +10,7 @@ export interface ScenarioExecutionJobData {
   agentId?: string;
   maxTurns?: number;
   parameters?: Record<string, any>;
+  toolFixtureIds?: string[];
 }
 
 /**
@@ -28,8 +29,13 @@ export interface ScenarioExecutionResult {
  * Single entry in a conversation transcript.
  */
 export interface TranscriptEntry {
-  role: 'persona' | 'agent';
+  role: 'persona' | 'agent' | 'tool';
   content: string;
   timestamp: Date;
   latencyMs?: number;
+  toolCalls?: Array<{
+    name: string;
+    arguments: Record<string, any>;
+    result: any;
+  }>;
 }

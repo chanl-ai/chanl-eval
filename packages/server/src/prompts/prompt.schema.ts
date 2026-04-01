@@ -17,6 +17,14 @@ export class Prompt {
 
   @Prop({ type: [String], default: [] })
   tags!: string[];
+
+  @Prop({ type: Object })
+  adapterConfig?: {
+    adapterType?: string;
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+  };
 }
 
 export type PromptDocument = Prompt & Document;

@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScorecardsModule } from '@chanl/scorecards-core';
 import { Scenario, ScenarioSchema } from './schemas/scenario.schema';
 import {
   ScenarioExecution,
@@ -20,6 +21,7 @@ import { ExecutionModule } from '../execution/execution.module';
     ]),
     forwardRef(() => PersonaModule),
     ExecutionModule,
+    ScorecardsModule,
   ],
   // IMPORTANT: ExecutionController MUST come first for route ordering
   // /scenarios/executions must be matched before /scenarios/:id

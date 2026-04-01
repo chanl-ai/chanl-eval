@@ -10,6 +10,7 @@ import { registerAnalyticsCommand } from './commands/analytics';
 import { registerTestCommand } from './commands/test';
 import { registerCompareCommand } from './commands/compare';
 import { registerExecutionsCommand } from './commands/executions';
+import { registerToolFixturesCommand } from './commands/tool-fixtures';
 import { initAnalytics, track } from './analytics';
 
 const VERSION = '0.1.0';
@@ -48,6 +49,7 @@ export function createProgram(): Command {
   registerTestCommand(program);
   registerCompareCommand(program);
   registerExecutionsCommand(program);
+  registerToolFixturesCommand(program);
 
   // Top-level `run` shortcut → delegates to scenarios run
   program
@@ -57,6 +59,7 @@ export function createProgram(): Command {
     .option('--agent-id <agentId>', 'Override agent ID')
     .option('--persona-id <personaId>', 'Override persona ID')
     .option('--scorecard-id <scorecardId>', 'Override scorecard ID')
+    .option('--tools <ids>', 'Comma-separated tool fixture IDs to attach')
     .option('--mode <mode>', 'Execution mode: text or phone', 'text')
     .option('--dry-run', 'Dry run without actually executing')
     .option('--no-wait', 'Do not wait for completion')
@@ -86,7 +89,7 @@ if (require.main === module) {
 }
 
 export { loadConfig, saveConfig, getConfig, setConfig } from './config';
-export { createClient, get, post, put, del, formatError } from './client';
+export { createClient, get, post, put, patch, del, formatError } from './client';
 export { printTable, printJson, printOutput } from './output';
 export { initAnalytics, track } from './analytics';
 export { ensureServerRunning } from './commands/server';

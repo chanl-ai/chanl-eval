@@ -72,6 +72,25 @@ class MockAdapter implements AgentAdapter {
     };
   }
 
+  formatToolResult(toolCallId: string, _toolName: string, result: any): AgentMessage {
+    return {
+      role: 'user',
+      content: typeof result === 'string' ? result : JSON.stringify(result),
+      providerData: { tool_call_id: toolCallId, role: 'tool' },
+    };
+  }
+
+  buildToolCallHistory(
+    response: AgentResponse,
+    resolvedResults: Array<{ id: string; name: string; result: any }>,
+  ): AgentMessage[] {
+    const messages: AgentMessage[] = [{ role: 'assistant', content: response.content || '' }];
+    for (const r of resolvedResults) {
+      messages.push(this.formatToolResult(r.id, r.name, r.result));
+    }
+    return messages;
+  }
+
   async disconnect(): Promise<void> {
     this.connected = false;
   }

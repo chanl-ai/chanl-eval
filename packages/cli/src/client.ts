@@ -65,6 +65,15 @@ export async function put<T = any>(path: string, data?: any): Promise<T> {
 }
 
 /**
+ * PATCH request to the server.
+ */
+export async function patch<T = any>(path: string, data?: any): Promise<T> {
+  const client = createClient();
+  const response = await client.patch<T>(path, data);
+  return response.data;
+}
+
+/**
  * DELETE request to the server.
  */
 export async function del<T = any>(path: string): Promise<T> {

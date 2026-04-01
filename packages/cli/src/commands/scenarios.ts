@@ -23,6 +23,7 @@ export async function runScenarioAction(
     dryRun?: boolean;
     wait?: boolean;
     all?: boolean;
+    tools?: string;
   },
   format?: string,
 ): Promise<void> {
@@ -109,6 +110,7 @@ async function executeAndPoll(
     mode?: string;
     dryRun?: boolean;
     wait?: boolean;
+    tools?: string;
   },
   format?: string,
 ): Promise<void> {
@@ -118,6 +120,12 @@ async function executeAndPoll(
   if (options.scorecardId) executeDto.scorecardId = options.scorecardId;
   if (options.mode) executeDto.mode = options.mode;
   if (options.dryRun) executeDto.dryRun = true;
+  if (options.tools) {
+    executeDto.toolFixtureIds = options.tools
+      .split(',')
+      .map((id: string) => id.trim())
+      .filter(Boolean);
+  }
 
   const config = loadConfig();
 
@@ -328,6 +336,7 @@ export function registerScenariosCommand(program: Command): void {
     .option('--agent-id <agentId>', 'Override agent ID')
     .option('--persona-id <personaId>', 'Override persona ID')
     .option('--scorecard-id <scorecardId>', 'Override scorecard ID')
+    .option('--tools <ids>', 'Comma-separated tool fixture IDs to attach')
     .option('--mode <mode>', 'Execution mode: text or phone', 'text')
     .option('--dry-run', 'Dry run without actually executing')
     .option('--no-wait', 'Do not wait for completion')

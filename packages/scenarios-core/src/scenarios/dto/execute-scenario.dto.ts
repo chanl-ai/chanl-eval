@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsBoolean,
   IsEnum,
+  IsArray,
 } from 'class-validator';
 
 export class ExecuteScenarioDto {
@@ -55,6 +56,11 @@ export class ExecuteScenarioDto {
   @IsOptional()
   @IsObject()
   adapterConfig?: Record<string, any>;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  toolFixtureIds?: string[];
 }
 
 export class RetryExecutionDto {
@@ -107,4 +113,13 @@ export class ExecutionFiltersDto {
   @IsOptional()
   @IsNumber()
   maxScore?: number;
+}
+
+export class EvaluateExecutionDto {
+  @IsString()
+  scorecardId!: string;
+
+  @IsOptional()
+  @IsString()
+  apiKey?: string;
 }

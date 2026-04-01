@@ -4,7 +4,7 @@ import { BullModule } from '@nestjs/bull';
 import { APP_GUARD } from '@nestjs/core';
 
 // Core packages
-import { PersonaModule, ScenarioModule } from '@chanl/scenarios-core';
+import { PersonaModule, ScenarioModule, ToolFixtureModule } from '@chanl/scenarios-core';
 import { ScorecardsModule } from '@chanl/scorecards-core';
 
 // Local modules
@@ -13,6 +13,8 @@ import { ApiKeyModule } from './auth/api-key.module';
 import { ApiKeyGuard } from './auth/api-key.guard';
 import { BootstrapModule } from './bootstrap/bootstrap.module';
 import { PromptsModule } from './prompts/prompts.module';
+import { SettingsModule } from './settings/settings.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -29,6 +31,7 @@ import { PromptsModule } from './prompts/prompts.module';
     // Core packages
     PersonaModule,
     ScenarioModule,
+    ToolFixtureModule,
     ScorecardsModule,
 
     // Server modules
@@ -36,6 +39,8 @@ import { PromptsModule } from './prompts/prompts.module';
     ApiKeyModule,
     BootstrapModule,
     PromptsModule,
+    SettingsModule,
+    ChatModule,
   ],
   providers: [
     {

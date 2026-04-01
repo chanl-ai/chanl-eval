@@ -34,10 +34,15 @@ export class AnthropicAdapter implements AgentAdapter {
       throw new Error('Anthropic adapter not connected. Call connect() first.');
     }
 
-    const messages: Array<{ role: string; content: string }> = [];
+    const messages: Array<Record<string, any>> = [];
 
     for (const msg of history) {
-      if (msg.role !== 'system') {
+      if (msg.role === 'system') continue;
+      if (msg.providerData) {
+        // Pass through provider-specific message structure (e.g. assistant
+        // messages with content blocks, or user messages with tool_result blocks)
+        messages.push({ role: msg.role, content: msg.content, ...msg.providerData });
+      } else {
         messages.push({ role: msg.role, content: msg.content });
       }
     }
@@ -64,6 +69,14 @@ export class AnthropicAdapter implements AgentAdapter {
       body.system = this.config.systemPrompt;
     }
 
+    if (this.config.tools?.length) {
+      body.tools = this.config.tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.parameters,
+      }));
+    }
+
     const response = await fetch(this.config.endpoint!, {
       method: 'POST',
       headers,
@@ -84,12 +97,12 @@ export class AnthropicAdapter implements AgentAdapter {
         .map((c: any) => c.text)
         .join('') || '';
 
-    const toolCalls = data.content
-      ?.filter((c: any) => c.type === 'tool_use')
-      .map((c: any) => ({
-        name: c.name,
-        arguments: c.input || {},
-      }));
+    const rawToolUseBlocks = data.content?.filter((c: any) => c.type === 'tool_use');
+    const toolCalls = rawToolUseBlocks?.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      arguments: c.input || {},
+    }));
 
     return {
       content,
@@ -99,8 +112,58 @@ export class AnthropicAdapter implements AgentAdapter {
         model: data.model,
         usage: data.usage,
         stopReason: data.stop_reason,
+        // Preserve raw content blocks so the caller can rebuild history
+        // with providerData for multi-turn tool use
+        ...(rawToolUseBlocks?.length ? { rawContentBlocks: data.content } : {}),
       },
     };
+  }
+
+  formatToolResult(toolCallId: string, _toolName: string, result: any): AgentMessage {
+    const resultContent = typeof result === 'string' ? result : JSON.stringify(result);
+    return {
+      role: 'user',
+      content: resultContent,
+      providerData: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: toolCallId,
+            content: resultContent,
+          },
+        ],
+      },
+    };
+  }
+
+  buildToolCallHistory(
+    response: AgentResponse,
+    resolvedResults: Array<{ id: string; name: string; result: any }>,
+  ): AgentMessage[] {
+    const messages: AgentMessage[] = [];
+
+    // 1. Assistant message with raw content blocks from Anthropic's response
+    messages.push({
+      role: 'assistant',
+      content: response.content || '',
+      providerData: response.metadata?.rawContentBlocks
+        ? { content: response.metadata.rawContentBlocks }
+        : undefined,
+    });
+
+    // 2. Anthropic expects all tool results in a single user message
+    const toolResults = resolvedResults.map((r) => ({
+      type: 'tool_result',
+      tool_use_id: r.id,
+      content: typeof r.result === 'string' ? r.result : JSON.stringify(r.result),
+    }));
+    messages.push({
+      role: 'user',
+      content: '',
+      providerData: { content: toolResults },
+    });
+
+    return messages;
   }
 
   async disconnect(): Promise<void> {

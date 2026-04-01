@@ -14,6 +14,7 @@ import {
   Persona,
   PersonaSchema,
 } from '../personas/schemas/persona.schema';
+import { ToolFixtureModule } from '../tool-fixtures/tool-fixture.module';
 import { AdapterRegistry } from '../adapters/adapter-registry';
 import { PersonaSimulatorService } from '../simulator/persona-simulator.service';
 import { QueueProducerService } from './queue-producer.service';
@@ -24,6 +25,7 @@ import { QUEUE_NAMES, defaultJobOptions } from './queues.config';
 @Module({
   imports: [
     ScorecardsModule,
+    ToolFixtureModule,
     MongooseModule.forFeature([
       { name: Scenario.name, schema: ScenarioSchema },
       { name: ScenarioExecution.name, schema: ScenarioExecutionSchema },

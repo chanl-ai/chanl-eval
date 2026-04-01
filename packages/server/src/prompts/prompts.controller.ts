@@ -27,6 +27,12 @@ export class PromptsController {
       content: string;
       status?: string;
       tags?: string[];
+      adapterConfig?: {
+        adapterType?: string;
+        model?: string;
+        temperature?: number;
+        maxTokens?: number;
+      };
     },
   ) {
     const prompt = await this.promptsService.create(dto);
@@ -63,6 +69,12 @@ export class PromptsController {
       content?: string;
       status?: string;
       tags?: string[];
+      adapterConfig?: {
+        adapterType?: string;
+        model?: string;
+        temperature?: number;
+        maxTokens?: number;
+      };
     },
   ) {
     const prompt = await this.promptsService.update(id, dto);

@@ -14,6 +14,7 @@ import { ScenarioExecutionService } from '../services/scenario-execution.service
 import {
   ExecuteScenarioDto,
   RetryExecutionDto,
+  EvaluateExecutionDto,
 } from '../dto/execute-scenario.dto';
 
 /**
@@ -183,6 +184,40 @@ export class ScenarioExecutionController {
           success: false,
           message: error.message,
           error: 'Failed to retrieve execution',
+        },
+        status,
+      );
+    }
+  }
+
+  @Post('executions/:executionId/evaluate')
+  async evaluateExecution(
+    @Param('executionId') executionId: string,
+    @Body() evaluateDto: EvaluateExecutionDto,
+  ) {
+    try {
+      const execution = await this.executionService.evaluate(
+        executionId,
+        evaluateDto,
+      );
+      return { execution };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to evaluate execution: ${error.message}`,
+        error.stack,
+      );
+      const status = error.message?.includes('not found')
+        ? HttpStatus.NOT_FOUND
+        : error.message?.includes('must be completed') ||
+            error.message?.includes('no step results') ||
+            error.message?.includes('no conversation steps')
+          ? HttpStatus.BAD_REQUEST
+          : HttpStatus.INTERNAL_SERVER_ERROR;
+      throw new HttpException(
+        {
+          success: false,
+          message: error.message,
+          error: 'Evaluation failed',
         },
         status,
       );
