@@ -5,6 +5,7 @@
  */
 
 export { EvalClient, unwrapResponse } from './client';
+export { PromptsModule } from './modules/prompts';
 export { ScenariosModule } from './modules/scenarios';
 export { PersonasModule } from './modules/personas';
 export { ScorecardsModule } from './modules/scorecards';
@@ -21,6 +22,12 @@ export type {
   // Pagination
   Pagination,
   PaginatedResponse,
+  // Prompts
+  Prompt,
+  CreatePromptDto,
+  UpdatePromptDto,
+  ListPromptsParams,
+  ListPromptsResponse,
   // Scenarios
   Scenario,
   CreateScenarioDto,

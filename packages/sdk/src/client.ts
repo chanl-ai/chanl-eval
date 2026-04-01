@@ -8,6 +8,7 @@
 
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { EvalApiError, EvalAuthError, EvalNotFoundError } from './errors';
+import { PromptsModule } from './modules/prompts';
 import { ScenariosModule } from './modules/scenarios';
 import { PersonasModule } from './modules/personas';
 import { ScorecardsModule } from './modules/scorecards';
@@ -63,6 +64,7 @@ export function unwrapResponse<T>(response: AxiosResponse): T {
 export class EvalClient {
   private readonly http: AxiosInstance;
 
+  readonly prompts: PromptsModule;
   readonly scenarios: ScenariosModule;
   readonly personas: PersonasModule;
   readonly scorecards: ScorecardsModule;
@@ -103,6 +105,7 @@ export class EvalClient {
     );
 
     // Register modules
+    this.prompts = new PromptsModule(this.http);
     this.scenarios = new ScenariosModule(this.http);
     this.personas = new PersonasModule(this.http);
     this.scorecards = new ScorecardsModule(this.http);

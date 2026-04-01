@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,7 +11,7 @@ import {
   Lock,
   Play,
   RotateCcw,
-  User,
+  Save,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,7 +37,7 @@ import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
 import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig, type AdapterType } from '@/lib/eval-config';
 import type { ScoreMetric } from '@/components/scorecard/types';
-import type { Execution, Scenario, Persona } from '@chanl/eval-sdk';
+import type { Execution, Scenario, Persona, Prompt } from '@chanl/eval-sdk';
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -102,12 +102,11 @@ const MODEL_OPTIONS: Record<AdapterType, { value: string; label: string }[]> = {
 };
 
 // ---------------------------------------------------------------------------
-// Message bubble — matches chanl-admin transcript style
+// Message bubble
 // ---------------------------------------------------------------------------
 
 function MessageBubble({ message }: { message: TranscriptMessage }) {
   const isAgent = message.role === 'agent';
-
   return (
     <div className="flex gap-3" data-testid={`message-${message.role}`}>
       <div className="shrink-0 pt-0.5">
@@ -121,13 +120,9 @@ function MessageBubble({ message }: { message: TranscriptMessage }) {
       </div>
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">
-            {isAgent ? 'Agent' : 'Persona'}
-          </span>
+          <span className="text-xs font-medium text-muted-foreground">{isAgent ? 'Agent' : 'Persona'}</span>
           {message.latencyMs != null && (
-            <span className="text-[10px] tabular-nums text-muted-foreground">
-              {formatDuration(message.latencyMs)}
-            </span>
+            <span className="text-[10px] tabular-nums text-muted-foreground">{formatDuration(message.latencyMs)}</span>
           )}
         </div>
         <div className={`rounded-lg px-3 py-2 text-sm ${isAgent ? 'bg-primary/5' : 'bg-muted'}`}>
@@ -146,15 +141,72 @@ export default function PlaygroundPage() {
   const { client, adapterType, setAdapterType, agentApiKey, setAgentApiKey } = useEvalConfig();
   const queryClient = useQueryClient();
 
+  const DEFAULT_PROMPT = 'You are a helpful customer support agent. Be friendly, concise, and professional.';
+
   // Form state
-  const [systemPrompt, setSystemPrompt] = useState(
-    'You are a helpful customer support agent. Be friendly, concise, and professional.',
-  );
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_PROMPT);
+  const [promptDirty, setPromptDirty] = useState(false);
+  const [savedPromptId, setSavedPromptId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [model, setModel] = useState('gpt-4o-mini');
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(256);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
+
+  // Load prompts from API
+  const promptsQuery = useQuery({
+    queryKey: ['prompts'],
+    queryFn: () => client.prompts.list({ limit: 50 }),
+  });
+  const savedPrompts = promptsQuery.data?.prompts ?? [];
+
+  // Load first saved prompt on mount
+  useEffect(() => {
+    if (savedPrompts.length > 0 && !savedPromptId) {
+      const first = savedPrompts[0];
+      setSavedPromptId(first.id);
+      setSystemPrompt(first.content);
+      setPromptDirty(false);
+    }
+  }, [savedPrompts, savedPromptId]);
+
+  function handlePromptChange(value: string) {
+    setSystemPrompt(value);
+    setPromptDirty(true);
+  }
+
+  function handleSelectPrompt(promptId: string) {
+    const p = savedPrompts.find((sp) => sp.id === promptId);
+    if (p) {
+      setSavedPromptId(p.id);
+      setSystemPrompt(p.content);
+      setPromptDirty(false);
+    }
+  }
+
+  async function handleSavePrompt() {
+    setIsSaving(true);
+    try {
+      if (savedPromptId) {
+        await client.prompts.update(savedPromptId, { content: systemPrompt });
+        toast.success('Prompt saved');
+      } else {
+        const created = await client.prompts.create({
+          name: 'My Prompt',
+          content: systemPrompt,
+        });
+        setSavedPromptId(created.id);
+        toast.success('Prompt created');
+      }
+      setPromptDirty(false);
+      void queryClient.invalidateQueries({ queryKey: ['prompts'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save prompt');
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   // Banner
   const [showBanner, setShowBanner] = useState(false);
@@ -174,95 +226,50 @@ export default function PlaygroundPage() {
   const transcriptEndRef = useRef<HTMLDivElement>(null);
 
   // Data queries
-  const scenariosQuery = useQuery({
-    queryKey: ['scenarios'],
-    queryFn: () => client.scenarios.list({ limit: 100 }),
-  });
-  const personasQuery = useQuery({
-    queryKey: ['personas'],
-    queryFn: () => client.personas.list({ limit: 100 }),
-  });
-
+  const scenariosQuery = useQuery({ queryKey: ['scenarios'], queryFn: () => client.scenarios.list({ limit: 100 }) });
+  const personasQuery = useQuery({ queryKey: ['personas'], queryFn: () => client.personas.list({ limit: 100 }) });
   const scenarios = scenariosQuery.data?.scenarios ?? [];
   const personas = personasQuery.data?.personas ?? [];
 
   // Auto-select first scenario/persona
-  useEffect(() => {
-    if (scenarios.length > 0 && !selectedScenarioId) setSelectedScenarioId(scenarios[0].id);
-  }, [scenarios, selectedScenarioId]);
-  useEffect(() => {
-    if (personas.length > 0 && !selectedPersonaId) setSelectedPersonaId(personas[0].id);
-  }, [personas, selectedPersonaId]);
+  useEffect(() => { if (scenarios.length > 0 && !selectedScenarioId) setSelectedScenarioId(scenarios[0].id); }, [scenarios, selectedScenarioId]);
+  useEffect(() => { if (personas.length > 0 && !selectedPersonaId) setSelectedPersonaId(personas[0].id); }, [personas, selectedPersonaId]);
 
   // Auto-scroll transcript
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcript]);
+  useEffect(() => { transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [transcript]);
 
   // Reset model when provider changes
-  useEffect(() => {
-    const models = MODEL_OPTIONS[adapterType];
-    if (models.length > 0) setModel(models[0].value);
-  }, [adapterType]);
+  useEffect(() => { const models = MODEL_OPTIONS[adapterType]; if (models.length > 0) setModel(models[0].value); }, [adapterType]);
 
-  const handleReset = useCallback(() => {
-    setTranscript([]);
-    setCompletedExecution(null);
-  }, []);
+  const handleReset = useCallback(() => { setTranscript([]); setCompletedExecution(null); }, []);
 
   const handleRun = useCallback(async () => {
-    if (!agentApiKey) {
-      toast.error('Enter your API key to run tests');
-      return;
-    }
-    if (!selectedScenarioId) {
-      toast.error('Select a scenario to run');
-      return;
-    }
+    if (!agentApiKey) { toast.error('Enter your API key to run tests'); return; }
+    if (!selectedScenarioId) { toast.error('Select a scenario to run'); return; }
 
-    setIsRunning(true);
-    setTranscript([]);
-    setCompletedExecution(null);
+    setIsRunning(true); setTranscript([]); setCompletedExecution(null);
 
     try {
       const execution = await client.scenarios.execute(selectedScenarioId, {
-        mode: 'text',
-        personaId: selectedPersonaId || undefined,
-        adapterType,
-        adapterConfig: {
-          apiKey: agentApiKey,
-          model,
-          systemPrompt,
-          temperature,
-          maxTokens,
-        },
+        mode: 'text', personaId: selectedPersonaId || undefined, adapterType,
+        adapterConfig: { apiKey: agentApiKey, model, systemPrompt, temperature, maxTokens },
       } as never);
 
       const execAny = execution as unknown as { executionId?: string; id: string };
       const execRef = execAny.executionId || execAny.id;
       if (!execRef) throw new Error('No execution ID returned');
-
       toast.success('Test started...');
 
-      const completed = await client.executions.waitForCompletion(execRef, {
-        intervalMs: 1500,
-        timeoutMs: 120000,
-      });
-
+      const completed = await client.executions.waitForCompletion(execRef, { intervalMs: 1500, timeoutMs: 120000 });
       setTranscript(extractTranscript(completed));
       setCompletedExecution(completed);
       void queryClient.invalidateQueries({ queryKey: ['executions'] });
 
       if (completed.status === 'completed') {
         toast.success(`Test completed${completed.overallScore != null ? ` — Score: ${completed.overallScore}%` : ''}`);
-      } else {
-        toast.error(`Test ${completed.status}`);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Execution failed');
-    } finally {
-      setIsRunning(false);
-    }
+      } else { toast.error(`Test ${completed.status}`); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Execution failed'); }
+    finally { setIsRunning(false); }
   }, [agentApiKey, selectedScenarioId, selectedPersonaId, adapterType, model, systemPrompt, temperature, maxTokens, client, queryClient]);
 
   const hasResults = transcript.length > 0 || completedExecution != null;
@@ -271,30 +278,19 @@ export default function PlaygroundPage() {
     <PageLayout
       icon={Beaker}
       title="Playground"
-      description="Configure your agent and run simulated conversations"
+      description="Configure your agent prompt and run simulated conversations"
       actions={
         <div className="flex items-center gap-2">
-          <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
-            <SelectTrigger className="w-[200px]" data-testid="scenario-preset-select">
-              <SelectValue placeholder="Load a scenario..." />
-            </SelectTrigger>
-            <SelectContent>
-              {scenariosQuery.isLoading ? (
-                <div className="px-2 py-1.5"><Skeleton className="h-4 w-full" /></div>
-              ) : (
-                scenarios.map((s: Scenario) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="flex items-center gap-2">
-                      {s.name}
-                      {s.difficulty && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{s.difficulty}</Badge>
-                      )}
-                    </span>
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSavePrompt}
+            disabled={!promptDirty || isSaving}
+            data-testid="save-prompt-button"
+          >
+            {isSaving ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-2 h-3.5 w-3.5" />}
+            {promptDirty ? 'Save Prompt' : 'Saved'}
+          </Button>
           <Button
             onClick={handleRun}
             disabled={isRunning || !agentApiKey || !selectedScenarioId}
@@ -316,45 +312,102 @@ export default function PlaygroundPage() {
             <BookOpen className="h-4 w-4 text-primary shrink-0" />
             <p className="text-sm">
               New here?{' '}
-              <Link href="/getting-started" className="font-medium text-primary underline-offset-4 hover:underline">
-                Getting Started guide
-              </Link>
+              <Link href="/" className="font-medium text-primary underline-offset-4 hover:underline">Getting Started guide</Link>
             </p>
           </div>
-          <button
-            onClick={() => {
-              setShowBanner(false);
-              try { localStorage.setItem('chanl-eval-onboarding-dismissed', 'true'); } catch { /* ignore */ }
-            }}
-            className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Dismiss"
-          >
+          <button onClick={() => { setShowBanner(false); try { localStorage.setItem('chanl-eval-onboarding-dismissed', 'true'); } catch { /* ignore */ } }} className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors" aria-label="Dismiss">
             <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      {/* Two-column layout: System prompt + Settings panel */}
+      {/* Test config row — scenario + persona + prompt selectors */}
+      <div className="flex flex-wrap items-end gap-6 -mt-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-muted-foreground">Scenario</Label>
+          {scenariosQuery.isLoading ? (
+            <Skeleton className="h-9 w-[200px]" />
+          ) : (
+            <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
+              <SelectTrigger className="w-[200px]" data-testid="scenario-select">
+                <SelectValue placeholder="Select scenario..." />
+              </SelectTrigger>
+              <SelectContent>
+                {scenarios.map((s: Scenario) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="flex items-center gap-2">
+                      {s.name}
+                      {s.difficulty && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{s.difficulty}</Badge>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-muted-foreground">Persona</Label>
+          {personasQuery.isLoading ? (
+            <Skeleton className="h-9 w-[200px]" />
+          ) : (
+            <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
+              <SelectTrigger className="w-[200px]" data-testid="persona-select">
+                <SelectValue placeholder="Select persona..." />
+              </SelectTrigger>
+              <SelectContent>
+                {personas.map((p: Persona) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      {p.name}
+                      <span className="text-xs text-muted-foreground">{p.emotion}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {savedPrompts.length > 1 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Saved Prompt</Label>
+            <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
+              <SelectTrigger className="w-[200px]" data-testid="prompt-select">
+                <SelectValue placeholder="Select prompt..." />
+              </SelectTrigger>
+              <SelectContent>
+                {savedPrompts.map((p: Prompt) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      <Separator className="my-2" />
+
+      {/* Two-column layout: System prompt + Model settings */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
         {/* Left: System prompt */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
+          <Label className="text-sm font-medium">System Prompt</Label>
           <Textarea
             value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
+            onChange={(e) => handlePromptChange(e.target.value)}
             placeholder="You are a helpful customer support agent..."
             className="min-h-[400px] resize-none font-mono text-sm lg:min-h-[500px]"
             data-testid="system-prompt"
           />
-
           {hasResults && (
             <Button variant="outline" size="sm" onClick={handleReset} className="w-fit" data-testid="reset-button">
-              <RotateCcw className="mr-2 h-3.5 w-3.5" />
-              Clear Results
+              <RotateCcw className="mr-2 h-3.5 w-3.5" />Clear Results
             </Button>
           )}
         </div>
 
-        {/* Right: Settings panel */}
+        {/* Right: Model + API Key only */}
         <div className="space-y-5">
           <Card>
             <CardHeader className="pb-3">
@@ -382,9 +435,7 @@ export default function PlaygroundPage() {
                   </SelectContent>
                 </Select>
               </div>
-
               <Separator />
-
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs text-muted-foreground">Temperature</Label>
@@ -392,7 +443,6 @@ export default function PlaygroundPage() {
                 </div>
                 <Slider value={[temperature]} onValueChange={([v]) => setTemperature(v)} min={0} max={2} step={0.01} data-testid="temperature-slider" />
               </div>
-
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs text-muted-foreground">Max Tokens</Label>
@@ -409,72 +459,16 @@ export default function PlaygroundPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="relative">
-                <Input
-                  type="password"
-                  value={agentApiKey}
-                  onChange={(e) => setAgentApiKey(e.target.value)}
-                  placeholder="sk-..."
-                  autoComplete="off"
-                  className="pr-8"
-                  data-testid="api-key-input"
-                />
+                <Input type="password" value={agentApiKey} onChange={(e) => setAgentApiKey(e.target.value)} placeholder="sk-..." autoComplete="off" className="pr-8" data-testid="api-key-input" />
                 <Lock className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               </div>
               <p className="text-[11px] text-muted-foreground">Stays on your machine. Never sent to Chanl.</p>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Test Config</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Scenario</Label>
-                {scenariosQuery.isLoading ? (
-                  <Skeleton className="h-9 w-full" />
-                ) : (
-                  <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
-                    <SelectTrigger data-testid="scenario-select"><SelectValue placeholder="Select..." /></SelectTrigger>
-                    <SelectContent>
-                      {scenarios.map((s: Scenario) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          <span className="flex items-center gap-2">
-                            {s.name}
-                            {s.difficulty && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{s.difficulty}</Badge>}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Persona</Label>
-                {personasQuery.isLoading ? (
-                  <Skeleton className="h-9 w-full" />
-                ) : (
-                  <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
-                    <SelectTrigger data-testid="persona-select"><SelectValue placeholder="Select..." /></SelectTrigger>
-                    <SelectContent>
-                      {personas.map((p: Persona) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          <span className="flex items-center gap-2">
-                            {p.name}
-                            <span className="text-xs text-muted-foreground">{p.emotion}</span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
 
-      {/* Results area (full width below) */}
+      {/* Results area */}
       {isRunning && transcript.length === 0 && (
         <Card className="mt-6">
           <CardContent className="flex items-center justify-center gap-3 py-12">
@@ -491,9 +485,7 @@ export default function PlaygroundPage() {
               <CardTitle className="text-base font-medium">Conversation</CardTitle>
               {completedExecution && (
                 <div className="flex items-center gap-2">
-                  <Badge variant={completedExecution.status === 'completed' ? 'default' : 'destructive'}>
-                    {completedExecution.status}
-                  </Badge>
+                  <Badge variant={completedExecution.status === 'completed' ? 'default' : 'destructive'}>{completedExecution.status}</Badge>
                   {completedExecution.duration != null && (
                     <span className="text-xs tabular-nums text-muted-foreground">{formatDuration(completedExecution.duration)}</span>
                   )}

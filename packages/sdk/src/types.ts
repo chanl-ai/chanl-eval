@@ -25,6 +25,42 @@ export interface PaginatedResponse<T> {
 }
 
 // ============================================================================
+// PROMPTS
+// ============================================================================
+
+export interface Prompt {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
+  status?: string;
+  tags?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreatePromptDto {
+  name: string;
+  description?: string;
+  content: string;
+  status?: 'active' | 'draft' | 'archived';
+  tags?: string[];
+}
+
+export interface UpdatePromptDto extends Partial<CreatePromptDto> {}
+
+export interface ListPromptsParams {
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface ListPromptsResponse {
+  prompts: Prompt[];
+  total: number;
+}
+
+// ============================================================================
 // SCENARIOS
 // ============================================================================
 
