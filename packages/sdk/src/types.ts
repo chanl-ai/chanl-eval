@@ -389,6 +389,9 @@ export interface ScorecardCriteria {
   type?: string;
   weight?: number;
   passingThreshold?: number;
+  settings?: Record<string, unknown>;
+  threshold?: Record<string, unknown>;
+  isActive?: boolean;
 }
 
 export interface ScorecardResult {

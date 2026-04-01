@@ -8,6 +8,8 @@ import type { AxiosInstance } from 'axios';
 import { unwrapResponse } from '../client';
 import type {
   Scorecard,
+  ScorecardCategory,
+  ScorecardCriteria,
   CreateScorecardDto,
   UpdateScorecardDto,
   ListScorecardsParams,
@@ -114,5 +116,70 @@ export class ScorecardsModule {
     const response = await this.http.get(`/scorecards/results/${resultId}`);
     const data = unwrapResponse<any>(response);
     return data.result || data;
+  }
+
+  // ===========================================================================
+  // CATEGORIES
+  // ===========================================================================
+
+  async listCategories(scorecardId: string): Promise<ScorecardCategory[]> {
+    const response = await this.http.get(`/scorecards/${scorecardId}/categories`);
+    const data = unwrapResponse<any>(response);
+    return data.categories || [];
+  }
+
+  async createCategory(scorecardId: string, dto: { name: string; description?: string; weight?: number }): Promise<ScorecardCategory> {
+    const response = await this.http.post(`/scorecards/${scorecardId}/categories`, dto);
+    const data = unwrapResponse<any>(response);
+    return data.category || data;
+  }
+
+  async updateCategory(scorecardId: string, categoryId: string, dto: { name?: string; description?: string; weight?: number }): Promise<ScorecardCategory> {
+    const response = await this.http.put(`/scorecards/${scorecardId}/categories/${categoryId}`, dto);
+    const data = unwrapResponse<any>(response);
+    return data.category || data;
+  }
+
+  async removeCategory(scorecardId: string, categoryId: string): Promise<void> {
+    await this.http.delete(`/scorecards/${scorecardId}/categories/${categoryId}`);
+  }
+
+  // ===========================================================================
+  // CRITERIA
+  // ===========================================================================
+
+  async listCriteria(scorecardId: string): Promise<ScorecardCriteria[]> {
+    const response = await this.http.get(`/scorecards/${scorecardId}/criteria`);
+    const data = unwrapResponse<any>(response);
+    return data.criteria || [];
+  }
+
+  async createCriterion(scorecardId: string, dto: {
+    categoryId: string;
+    name: string;
+    description?: string;
+    type: string;
+    settings: Record<string, unknown>;
+    threshold?: Record<string, unknown>;
+  }): Promise<ScorecardCriteria> {
+    const response = await this.http.post(`/scorecards/${scorecardId}/criteria`, dto);
+    const data = unwrapResponse<any>(response);
+    return data.criterion || data;
+  }
+
+  async updateCriterion(scorecardId: string, criterionId: string, dto: {
+    name?: string;
+    description?: string;
+    type?: string;
+    settings?: Record<string, unknown>;
+    threshold?: Record<string, unknown>;
+  }): Promise<ScorecardCriteria> {
+    const response = await this.http.put(`/scorecards/${scorecardId}/criteria/${criterionId}`, dto);
+    const data = unwrapResponse<any>(response);
+    return data.criterion || data;
+  }
+
+  async removeCriterion(scorecardId: string, criterionId: string): Promise<void> {
+    await this.http.delete(`/scorecards/${scorecardId}/criteria/${criterionId}`);
   }
 }
