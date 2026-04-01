@@ -2,160 +2,219 @@
 
 # chanl-eval
 
-**Test AI agents locally** with scripted scenarios, simulated users (**personas**), full **transcripts**, and **scorecards**—including **LLM-as-judge** criteria (rubric-based scoring over the conversation). Bring your own API keys (BYOK) for the model under test and for providers used by simulators and judges.
+Open-source testing engine for AI agents. Simulate multi-turn conversations with configurable personas, evaluate responses with scorecards, and catch regressions before they reach production.
 
-Think of it as a structured harness for regression-style checks on agents: same scenario, repeatable runs, measurable outcomes. Criteria can cover latency, keywords, tool usage, and **prompt**-style evaluation where a model grades the agent against your rubric. If your stack uses **RAG**, you can judge whether answers stay grounded (e.g. via rubric text and transcript context in scorecard prompts)—see [docs/architecture/scorecards.md](docs/architecture/scorecards.md) for how criteria work.
+## Table of Contents
 
-## Quick start (local)
+- [Quick Start](#quick-start)
+- [Why chanl-eval](#why-chanl-eval)
+- [Use Cases](#use-cases)
+- [Features](#features)
+- [How It Works](#how-it-works)
+- [Configuration](#configuration)
+- [Development Setup](#development-setup)
+- [Customization](#customization)
+- [How chanl-eval Compares](#how-chanl-eval-compares)
+- [Roadmap](#roadmap)
+- [Chanl Cloud](#chanl-cloud)
+- [Contributing](#contributing)
 
-### 1. Dependencies and build
+---
+
+## Quick Start
 
 ```bash
 git clone https://github.com/chanl-ai/chanl-eval.git
 cd chanl-eval
+docker compose up
+```
+
+Open **[http://localhost:3010](http://localhost:3010)**. Sample scenarios, personas, and a scorecard are seeded on first run.
+
+> Docker builds everything (MongoDB, Redis, API server, dashboard). First build takes a few minutes. For development with hot reload, see [Development Setup](#development-setup).
+
+---
+
+## Why chanl-eval
+
+We build tools for shipping customer-facing AI agents at [Chanl](https://chanl.ai).
+
+Existing eval tools score individual prompts. We needed something that drives full conversations against our agent with different customer personalities, scores each interaction against a rubric, and runs the same tests after every change.
+
+chanl-eval is that tool.
+
+---
+
+## Use Cases
+
+**Regression testing** — Run the same scenario after every prompt or model change. Catch score drops before deploying.
+
+**Persona stress testing** — Test how your agent handles a hostile caller, a confused elderly customer, or an impatient executive. Same scenario, different personality.
+
+**Tool call verification** — Mock your agent's tools (refund processing, order lookup, knowledge search) and verify it calls the right tool with the right arguments.
+
+**Scorecard evaluation** — Grade conversations on empathy, de-escalation, protocol compliance, keyword usage, and response time. Per-criteria pass/fail with reasoning.
+
+**Model comparison** — Run the same scenarios against GPT-4o vs Claude vs your fine-tune. Compare scorecard results side by side.
+
+**Manual testing** — Chat with your agent through the playground. Save prompts, adjust parameters, review transcripts.
+
+---
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| **Persona simulation** | Configurable traits: emotion, cooperation, patience, speech style, intent clarity. Each combination produces meaningfully different conversation behavior. |
+| **Scorecard evaluation** | Criteria grouped by category. Types: keyword matching, LLM judge, response time, tool call verification. Per-criteria pass/fail with reasoning and evidence. |
+| **Tool fixture mocking** | Define mock tools with configurable responses. Verify tool call arguments and result handling without connecting to real APIs. |
+| **Playground** | Manual chat with your agent. Save system prompts, select scenarios and personas, adjust model parameters. |
+| **Transcript + results** | Full conversation with search. Expandable scorecard criteria showing reasoning and transcript evidence. |
+| **Multi-provider** | OpenAI, Anthropic, or any OpenAI-compatible endpoint (Ollama, Together, vLLM, Azure). Separate config for agent vs simulation LLM. |
+| **Custom attributes** | Key-value pairs on personas (product name, order ID, account number) injected into simulation prompts. |
+
+---
+
+## How It Works
+
+| Step | What happens | Example |
+|------|-------------|---------|
+| **1. Define** | Create a scenario (situation), persona (personality traits), and scorecard (evaluation criteria) | Scenario: "Angry refund request" / Persona: hostile, low patience / Scorecard: empathy, greeting, tool calls |
+| **2. Simulate** | Persona engine builds a behavioral prompt from traits. Conversation runs turn-by-turn against your agent via OpenAI, Anthropic, or custom HTTP | Persona: "I want a refund NOW" / Agent: "Let me check your order..." (10 turns) |
+| **3. Evaluate** | Scorecard evaluates the completed transcript. Each criterion gets pass/fail with reasoning and evidence | ✓ Empathy demonstrated / ✗ No greeting / ✓ Offered resolution / ✗ Didn't verify order / Overall: 60% |
+
+---
+
+## Configuration
+
+### Settings Page
+
+Three sections:
+
+- **Eval Server** — API connection (defaults to localhost)
+- **Agent Under Test** — the LLM being evaluated (provider, model, API key, base URL)
+- **Simulation LLM** — powers persona generation and scorecard judge (can be a different, cheaper model)
+
+All credentials stay in the browser. Never stored on the server.
+
+### Persona Traits
+
+| Trait | Range | Effect |
+|-------|-------|--------|
+| Emotion | friendly → hostile | Tone and escalation behavior |
+| Cooperation | very cooperative → hostile | Accepts solutions vs demands manager |
+| Patience | high → very impatient | Reactions to delays and scripts |
+| Speech Style | slow → fast | Response length |
+| Intent Clarity | very clear → mumbled | How directly needs are stated |
+| Custom Attributes | key-value pairs | Injected into prompt context |
+
+### Scenario Configuration
+
+Each scenario links to a persona and an optional scorecard. The scenario's situation prompt defines what the customer is calling about. The persona's traits define how they behave. The scorecard defines how the result is graded.
+
+---
+
+## Development Setup
+
+For active development with hot reload:
+
+```bash
 pnpm install
-
-# MongoDB + Redis only (defaults: 27217 / 6479)
-docker compose up -d
-
-pnpm build
+docker compose up -d mongodb redis    # Databases only
+pnpm build                            # Build workspace packages
+pnpm dev:server                       # http://localhost:18005 (auto-restart)
+pnpm dev:dashboard                    # http://localhost:3010 (HMR)
 ```
 
-### 2. Run the API server
+| | Docker Quick Start | Development Setup |
+|---|---|---|
+| Code changes | `docker compose up --build` | Instant hot reload |
+| Setup | Docker only | Node.js + pnpm |
+| Best for | Trying it out | Active development |
 
-```bash
-cd packages/server && pnpm start:dev
-```
-
-Server listens on **http://localhost:18005**. By default, **`X-API-Key` is not required** (good for local use). Set **`CHANL_EVAL_REQUIRE_API_KEY=true`** when running the server to enforce API keys; on first boot with an empty database the log can still print a **bootstrap key** for that mode.
-
-### 3. CLI from this repo (development)
-
-```bash
-cd packages/cli && pnpm link --global
-chanl config set server http://localhost:18005
-# Optional if the server has CHANL_EVAL_REQUIRE_API_KEY=true:
-chanl login   # paste the bootstrap API key when prompted
-chanl config set provider openai
-chanl config set openaiApiKey sk-...   # key for the *agent under test*
-```
-
-### 4. Run a scenario
-
-Seeded scenarios exist after first boot. Run by **slug** (no YAML required):
-
-```bash
-chanl scenarios run angry-customer-refund
-```
-
-Or import [examples/angry-customer.yaml](examples/angry-customer.yaml): set `personaIds` to a real id from `chanl personas list`, then:
-
-```bash
-chanl scenarios run examples/angry-customer.yaml
-```
-
-**API docs:** [http://localhost:18005/api/docs](http://localhost:18005/api/docs)
-
-### Optional: Web dashboard (local)
-
-Minimal UI using the same `@chanl/eval-sdk` as programmatic clients (no `platform-sdk`). Defaults to port **3000**; use another port if that is taken (`pnpm exec next dev --port 3010` in `packages/dashboard`).
-
-**Optional:** copy [`packages/dashboard/.env.example`](packages/dashboard/.env.example) to `packages/dashboard/.env.local` if you use `CHANL_EVAL_REQUIRE_API_KEY=true` (set `NEXT_PUBLIC_CHANL_EVAL_API_KEY`) or for **Run scenario** (`NEXT_PUBLIC_CHANL_EVAL_AGENT_API_KEY`).
-
-```bash
-# From repo root, after pnpm build
-pnpm --filter @chanl/eval-dashboard dev
-```
-
-Open the printed local URL, then browse executions, scenarios, personas, and scorecards.
-
-**Shortcuts:** `pnpm dev:server` and `pnpm dev:dashboard` (from repo root) start the API and the UI.
-
-**If the dashboard shows “set API key” but you added `.env.local`:** restart `next dev` after editing env files, then hard-refresh the browser. If you ever cleared the key in Settings, an empty value was saved in `localStorage` and could override env until you paste a key again or clear site data for `localhost` (or use the fix in the latest `eval-config`).
-
-**If the server fails with `EADDRINUSE` on port 18005:** another process is using that port — stop it or set `PORT=18006` (and point the dashboard at that URL).
-
-**CLI via `.env`:** optional repo-root [`.env.example`](.env.example) — copy to `.env` and set `CHANL_API_KEY` / `CHANL_OPENAI_API_KEY` (loaded automatically when you run `chanl`; `~/.chanl/config.json` still overrides when set).
-
-### API example (create resources)
-
-Use valid 24-character hex ids for `personaIds` / `agentIds` (see `chanl personas list`). Omit `X-API-Key` unless the server has `CHANL_EVAL_REQUIRE_API_KEY=true`.
-
-```bash
-curl -s -X POST http://localhost:18005/personas \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Frustrated Karen",
-    "gender": "female",
-    "emotion": "frustrated",
-    "language": "english",
-    "accent": "american",
-    "intentClarity": "slightly unclear",
-    "speechStyle": "fast",
-    "backgroundNoise": false,
-    "allowInterruptions": false,
-    "createdBy": "dev"
-  }'
-
-curl -s -X POST http://localhost:18005/scenarios \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Billing Dispute",
-    "prompt": "Customer was double-charged and wants a refund",
-    "category": "support",
-    "difficulty": "hard",
-    "personaIds": ["<persona-id-from-list>"],
-    "agentIds": ["507f1f77bcf86cd799439011"],
-    "createdBy": "dev"
-  }'
-```
-
-## What you get
-
-| Piece | Role |
-|-------|------|
-| **Scenarios** | Situation + opening line; ties to personas and optional scorecard. |
-| **Personas** | Traits (emotion, pace, cooperation) used to drive simulated user turns. |
-| **Scorecards** | Categories and **criteria** (keyword, response time, **prompt** / LLM judge, tool calls, etc.). |
-| **Adapters** | Connect the **agent under test** (OpenAI, Anthropic, HTTP, or custom). |
-
-Details: [docs/architecture/overview.md](docs/architecture/overview.md), [adapters.md](docs/architecture/adapters.md), [scorecards.md](docs/architecture/scorecards.md), [criteria-types.md](docs/architecture/criteria-types.md).
-
-## Layout
+### Project Structure
 
 ```
-chanl-eval/
-├── packages/
-│   ├── scenarios-core/   # Scenarios, personas, execution, adapters
-│   ├── scorecards-core/  # Scorecards and criteria handlers
-│   ├── server/            # NestJS API (port 18005)
-│   ├── cli/               # `chanl` CLI (link locally)
-│   ├── sdk/               # TypeScript client for this API
-│   └── dashboard/         # Next.js UI (local dev, `@chanl/eval-sdk` only)
-├── examples/              # Sample scenario YAML
-└── docs/
+packages/
+├── scenarios-core/    # Personas, execution engine, LLM adapters
+├── scorecards-core/   # Criteria handlers and evaluation
+├── server/            # NestJS API (port 18005)
+├── sdk/               # TypeScript client
+├── cli/               # CLI tool
+└── dashboard/         # Next.js UI (port 3010)
 ```
 
-## Commands (CLI)
+---
 
-```bash
-chanl scenarios list
-chanl scenarios run <id-or-slug>
-chanl scenarios run <file.yaml>
-chanl personas list
-chanl scorecards list
-```
+## Customization
+
+| What | File |
+|------|------|
+| Persona prompt generation | `scenarios-core/src/simulator/persona-simulator.service.ts` |
+| LLM judge prompt | `scenarios-core/src/execution/judge-llm.ts` |
+| Scorecard criteria handlers | `scorecards-core/src/handlers/` |
+| Agent provider adapters | `scenarios-core/src/adapters/` |
+
+---
+
+## How chanl-eval Compares
+
+Tools like [promptfoo](https://github.com/promptfoo/promptfoo), [DeepEval](https://github.com/confident-ai/deepeval), and [RAGAS](https://github.com/explodinggradients/ragas) evaluate prompts and RAG pipelines. chanl-eval evaluates **conversations** — multi-turn interactions where an AI persona drives the dialogue as a simulated customer.
+
+| Capability | chanl-eval | promptfoo | DeepEval | RAGAS |
+|-----------|-----------|-----------|----------|-------|
+| Multi-turn conversation simulation | Yes | No | Partial | No |
+| Configurable persona personalities | Yes | No | No | No |
+| Per-criteria scorecard with evidence | Yes | Partial | Yes | Yes |
+| Tool call mocking + verification | Yes | No | Yes | No |
+| Dashboard UI | Yes | Yes | Via platform | No |
+| RAG metrics (faithfulness, recall) | No | Yes | Yes | Yes |
+| Red teaming / security scanning | No | Yes | No | No |
+| CI/CD pytest integration | Planned | Yes | Yes | Yes |
+| Synthetic test data generation | No | No | Yes | Yes |
+| Hallucination detection | Planned | Yes | Yes | Yes |
+
+**Our focus:** If your agent has multi-turn conversations with customers, chanl-eval tests the full interaction — not just individual prompts.
+
+---
+
+## Roadmap
+
+Planned features (contributions welcome):
+
+- [ ] **CI/CD integration** — Run scenarios from GitHub Actions, assert on scorecard pass rates
+- [ ] **Batch execution** — Run all scenarios in parallel with one command
+- [ ] **A/B model comparison** — Side-by-side results for two models on the same scenario
+- [ ] **Hallucination detection** — Flag agent responses not grounded in provided context
+- [ ] **RAG evaluation criteria** — Faithfulness, context relevance, answer completeness
+- [ ] **Prompt template editor** — Liquid template UI for persona prompt customization
+- [ ] **Regression alerts** — Flag score drops compared to previous runs
+- [ ] **Export results** — CSV/JSON export of scorecard results for external analysis
+- [ ] **Webhook triggers** — Evaluate production conversations via webhook
+- [ ] **Python SDK** — Run evaluations from Python test suites
+
+---
+
+## Chanl Cloud
+
+chanl-eval is the open-source version of [Chanl](https://chanl.ai).
+
+Cloud adds: voice agent testing, real-time production monitoring, team workspaces, emotional persona arcs, webhook-triggered evaluation, and regression detection dashboards.
+
+[Upgrade to Chanl Cloud →](https://chanl.ai?ref=eval-readme)
+
+---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
 ```bash
 pnpm install
-docker compose up -d
+docker compose up -d mongodb redis
 pnpm build
 pnpm test
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
