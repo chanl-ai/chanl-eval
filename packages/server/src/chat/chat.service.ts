@@ -5,6 +5,8 @@ import { randomUUID } from 'crypto';
 import {
   ScenarioExecution,
   ScenarioExecutionDocument,
+  ToolFixtureService,
+  MockResolver,
 } from '@chanl/scenarios-core';
 import {
   AgentAdapter,
@@ -14,8 +16,11 @@ import {
   AnthropicAdapter,
   HttpAdapter,
 } from '@chanl/scenarios-core';
+import { resolveLlmConfig } from '@chanl/scenarios-core';
 import { PromptsService } from '../prompts/prompts.service';
 import { SettingsService } from '../settings/settings.service';
+
+const MAX_TOOL_CALLS_PER_TURN = 5;
 
 @Injectable()
 export class ChatService {
@@ -26,9 +31,14 @@ export class ChatService {
     private readonly executionModel: Model<ScenarioExecutionDocument>,
     private readonly promptsService: PromptsService,
     private readonly settingsService: SettingsService,
+    private readonly toolFixtureService: ToolFixtureService,
+    private readonly mockResolver: MockResolver,
   ) {}
 
-  async createSession(dto: { promptId: string }): Promise<{
+  async createSession(dto: {
+    promptId: string;
+    toolFixtureIds?: string[];
+  }): Promise<{
     sessionId: string;
     executionId: string;
   }> {
@@ -38,11 +48,26 @@ export class ChatService {
     const adapterConfig = promptAny.adapterConfig || {};
     const adapterType = adapterConfig.adapterType || 'openai';
 
-    const apiKey = await this.settingsService.getApiKey(adapterType);
-    if (!apiKey) {
+    // Resolve API key via central 4-tier chain (config → legacy → env → settings DB)
+    const settingsLookup = async (provider: string) => this.settingsService.getApiKey(provider);
+    const resolvedConfig = await resolveLlmConfig(adapterType, adapterConfig, settingsLookup);
+    if (!resolvedConfig) {
       throw new BadRequestException(
-        `No API key configured for provider "${adapterType}". Set it in Settings.`,
+        `No API key configured for provider "${adapterType}". Set it in Settings or CHANL_OPENAI_API_KEY env var.`,
       );
+    }
+    const apiKey = resolvedConfig.apiKey;
+
+    // Load tool fixtures if provided
+    const toolFixtureIds = dto.toolFixtureIds || [];
+    let toolDefs: any[] = [];
+    if (toolFixtureIds.length > 0) {
+      const fixtures = await this.toolFixtureService.findByIds(toolFixtureIds);
+      toolDefs = fixtures.map((tf: any) => ({
+        name: tf.name,
+        description: tf.description,
+        parameters: tf.parameters || { type: 'object', properties: {} },
+      }));
     }
 
     // Verify adapter connects (fail fast)
@@ -53,6 +78,7 @@ export class ChatService {
       temperature: adapterConfig.temperature,
       maxTokens: adapterConfig.maxTokens,
       systemPrompt: promptAny.content,
+      ...(toolDefs.length > 0 ? { tools: toolDefs } : {}),
     });
     await adapter.disconnect();
 
@@ -65,11 +91,12 @@ export class ChatService {
       promptId: new Types.ObjectId(dto.promptId),
       status: 'running',
       startTime: new Date(),
-      triggeredBy: 'playground',
+      triggeredBy: `Manual Chat: ${promptAny.name || 'Untitled'}`,
       stepResults: [],
       parameters: {
         adapterType,
         model: adapterConfig.model,
+        toolFixtureIds,
       },
     });
 
@@ -109,9 +136,25 @@ export class ChatService {
     const adapterConfig = promptAny.adapterConfig || {};
     const adapterType = adapterConfig.adapterType || 'openai';
 
-    const apiKey = await this.settingsService.getApiKey(adapterType);
-    if (!apiKey) {
-      throw new BadRequestException(`No API key for "${adapterType}"`);
+    // Resolve API key via central 4-tier chain
+    const settingsLookup = async (provider: string) => this.settingsService.getApiKey(provider);
+    const resolvedCfg = await resolveLlmConfig(adapterType, adapterConfig, settingsLookup);
+    if (!resolvedCfg) {
+      throw new BadRequestException(`No API key for "${adapterType}". Set it in Settings or CHANL_OPENAI_API_KEY env var.`);
+    }
+    const apiKey = resolvedCfg.apiKey;
+
+    // Load tool fixtures if session has them
+    const toolFixtureIds = (execution.parameters as any)?.toolFixtureIds || [];
+    let toolFixtures: any[] = [];
+    let toolDefs: any[] = [];
+    if (toolFixtureIds.length > 0) {
+      toolFixtures = await this.toolFixtureService.findByIds(toolFixtureIds);
+      toolDefs = toolFixtures.map((tf: any) => ({
+        name: tf.name,
+        description: tf.description,
+        parameters: tf.parameters || { type: 'object', properties: {} },
+      }));
     }
 
     // Create adapter, connect, rebuild history from stepResults
@@ -122,6 +165,7 @@ export class ChatService {
       temperature: adapterConfig.temperature,
       maxTokens: adapterConfig.maxTokens,
       systemPrompt: promptAny.content,
+      ...(toolDefs.length > 0 ? { tools: toolDefs } : {}),
     });
 
     const history: AgentMessage[] = [];
@@ -134,34 +178,67 @@ export class ChatService {
     }
 
     const now = new Date();
+    const newSteps: any[] = [];
 
     try {
       // Send message with full history
-      const response = await adapter.sendMessage(trimmed, history);
+      let response = await adapter.sendMessage(trimmed, history);
+
+      // Handle tool calls if fixtures are configured
+      if (response.toolCalls?.length && toolFixtures.length > 0) {
+        history.push({ role: 'user', content: trimmed });
+
+        let iteration = 0;
+        while (response.toolCalls?.length && iteration < MAX_TOOL_CALLS_PER_TURN) {
+          iteration++;
+          const resolvedCalls = this.mockResolver.resolveAll(response.toolCalls, toolFixtures);
+
+          // Record tool calls in steps
+          for (const call of resolvedCalls) {
+            newSteps.push({
+              stepId: `tool-${randomUUID().slice(0, 8)}`,
+              status: 'completed',
+              role: 'tool',
+              actualResponse: JSON.stringify({ name: call.name, arguments: call.arguments, result: call.result }),
+              duration: 0,
+              startTime: now,
+              endTime: now,
+              toolCalls: [{ name: call.name, arguments: call.arguments, result: call.result }],
+            });
+          }
+
+          const historyMessages = adapter.buildToolCallHistory(response, resolvedCalls);
+          history.push(...historyMessages);
+          response = await adapter.sendMessage('', history);
+        }
+
+        history.push({ role: 'assistant', content: response.content });
+      } else {
+        history.push({ role: 'user', content: trimmed });
+        history.push({ role: 'assistant', content: response.content });
+      }
 
       // Build step results for this turn
-      const turnIndex = Math.floor((history.length + 2) / 2) - 1;
-      const newSteps = [
-        {
-          stepId: `turn-${turnIndex}-persona`,
-          status: 'completed' as const,
-          role: 'persona' as const,
-          actualResponse: trimmed,
-          duration: 0,
-          startTime: now,
-          endTime: now,
-        },
-        {
-          stepId: `turn-${turnIndex}-agent`,
-          status: 'completed' as const,
-          role: 'agent' as const,
-          actualResponse: response.content,
-          duration: response.latencyMs || 0,
-          startTime: now,
-          endTime: new Date(),
-          ...(response.toolCalls?.length ? { toolCalls: response.toolCalls } : {}),
-        },
-      ];
+      const turnIndex = Math.floor(history.length / 2) - 1;
+      newSteps.unshift({
+        stepId: `turn-${turnIndex}-persona`,
+        status: 'completed',
+        role: 'persona',
+        actualResponse: trimmed,
+        duration: 0,
+        startTime: now,
+        endTime: now,
+      });
+      newSteps.push({
+        stepId: `turn-${turnIndex}-agent`,
+        status: 'completed',
+        role: 'agent',
+        actualResponse: response.content,
+        duration: response.latencyMs || 0,
+        startTime: now,
+        endTime: new Date(),
+        ...(response.toolCalls?.length ? { toolCalls: response.toolCalls } : {}),
+      });
 
       // Append to execution stepResults
       await this.executionModel.findOneAndUpdate(
@@ -195,14 +272,12 @@ export class ChatService {
   }
 
   async getActiveSession(): Promise<{ sessionId: string; execution: any } | null> {
-    // Find the last manual execution that's still running
     const execution = await this.executionModel.findOne(
       { mode: 'manual', status: 'running' },
       null,
       { sort: { createdAt: -1 } },
     );
     if (!execution) return null;
-
     return { sessionId: execution.executionId, execution };
   }
 

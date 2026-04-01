@@ -20,7 +20,8 @@ import {
 } from '../dto/execute-scenario.dto';
 import { QueueProducerService } from '../../execution/queue-producer.service';
 import { EvaluationService } from '@chanl/scorecards-core';
-import { buildOpenAiJudge } from '../../execution/judge-llm';
+import { buildLlmJudge } from '../../execution/judge-llm';
+import { resolveLlmConfigSync } from '../../execution/llm-config-resolver';
 
 @Injectable()
 export class ScenarioExecutionService {
@@ -501,12 +502,12 @@ export class ScenarioExecutionService {
       text: s.actualResponse || '',
     }));
 
-    // 3. Resolve an API key for the LLM judge
-    //    Priority: dto.apiKey > OPENAI_API_KEY env var
-    const judgeApiKey =
-      dto.apiKey || process.env.OPENAI_API_KEY || undefined;
-
-    const llmEvaluate = buildOpenAiJudge(judgeApiKey);
+    // 3. Resolve an API key for the LLM judge via central resolver
+    const judgeConfig = resolveLlmConfigSync(
+      undefined,
+      dto.apiKey ? { apiKey: dto.apiKey } : undefined,
+    );
+    const llmEvaluate = buildLlmJudge(judgeConfig || undefined);
 
     // 4. Calculate first-response latency metric
     const firstAgentStep = conversationSteps.find((s) => s.role === 'agent');
