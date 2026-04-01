@@ -517,23 +517,31 @@ export default function ScorecardDetailPage() {
                     <button
                       onClick={() => setSelectedCategoryId(cat.id)}
                       className={cn(
-                        'flex items-center justify-between w-full rounded-md px-3 py-2 text-sm transition-colors text-left select-none',
-                        isSelected ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        'flex flex-col w-full rounded-lg border px-3 py-3 text-left select-none transition-all',
+                        isSelected ? 'border-primary/30 bg-primary/5 shadow-sm' : 'border-transparent hover:border-border hover:bg-muted/50'
                       )}
                       data-testid={`category-${cat.id}`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Layers className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{cat.name}</span>
+                      <div className="flex items-center gap-2">
+                        <Layers className={cn('h-4 w-4 shrink-0', isSelected ? 'text-primary' : 'text-muted-foreground')} />
+                        <span className={cn('text-sm truncate', isSelected ? 'font-medium text-primary' : 'text-foreground')}>{cat.name}</span>
                       </div>
-                      <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">{count}</Badge>
+                      <div className="flex items-center gap-2 mt-1.5 ml-6">
+                        <Badge variant="secondary" className="text-[10px]">{count} criteria</Badge>
+                        {cat.weight != null && cat.weight !== 1 && (
+                          <span className="text-[10px] text-muted-foreground">Weight: {cat.weight}</span>
+                        )}
+                      </div>
+                      {cat.description && (
+                        <p className="text-[11px] text-muted-foreground mt-1 ml-6 truncate">{cat.description}</p>
+                      )}
                     </button>
                     {/* Hover actions */}
-                    <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5 bg-background rounded-md shadow-sm border px-0.5">
-                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); setEditingCategory(cat); setCategoryDialogOpen(true); }}>
+                    <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-0.5 bg-background rounded-md shadow-sm border px-0.5">
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); setEditingCategory(cat); setCategoryDialogOpen(true); }}>
                         <Edit className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeletingCategoryId(cat.id); setDeleteCategoryOpen(true); }}>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeletingCategoryId(cat.id); setDeleteCategoryOpen(true); }}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
