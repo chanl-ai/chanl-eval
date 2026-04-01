@@ -225,6 +225,86 @@ function CriterionDialog({
 }
 
 // ---------------------------------------------------------------------------
+// Category Dialog — create/edit categories
+// ---------------------------------------------------------------------------
+
+function CategoryDialog({
+  open, onOpenChange, scorecardId, editingCategory, onSaved,
+}: {
+  open: boolean; onOpenChange: (open: boolean) => void;
+  scorecardId: string; editingCategory?: ScorecardCategory | null; onSaved: () => void;
+}) {
+  const { client } = useEvalConfig();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [catName, setCatName] = useState('');
+  const [catDesc, setCatDesc] = useState('');
+  const [catWeight, setCatWeight] = useState('1');
+
+  useEffect(() => {
+    if (editingCategory) {
+      setCatName(editingCategory.name);
+      setCatDesc(editingCategory.description ?? '');
+      setCatWeight(String(editingCategory.weight ?? 1));
+    } else {
+      setCatName(''); setCatDesc(''); setCatWeight('1');
+    }
+  }, [editingCategory, open]);
+
+  async function handleSubmit() {
+    if (!catName.trim()) { toast.error('Name is required'); return; }
+    setIsSubmitting(true);
+    try {
+      if (editingCategory) {
+        await client.scorecards.updateCategory(scorecardId, editingCategory.id, {
+          name: catName, description: catDesc || undefined, weight: parseInt(catWeight) || 1,
+        });
+        toast.success(`Category "${catName}" updated`);
+      } else {
+        await client.scorecards.createCategory(scorecardId, {
+          name: catName, description: catDesc || undefined, weight: parseInt(catWeight) || 1,
+        });
+        toast.success(`Category "${catName}" created`);
+      }
+      onOpenChange(false);
+      onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save category');
+    } finally { setIsSubmitting(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[400px]" data-testid="category-dialog">
+        <DialogHeader>
+          <DialogTitle>{editingCategory ? 'Edit Category' : 'Add Category'}</DialogTitle>
+          <DialogDescription>Categories group related evaluation criteria.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Name</Label>
+            <Input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="e.g. Communication Quality" data-testid="category-name" />
+          </div>
+          <div className="space-y-2">
+            <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input value={catDesc} onChange={(e) => setCatDesc(e.target.value)} placeholder="What does this category measure?" />
+          </div>
+          <div className="space-y-2">
+            <Label>Weight</Label>
+            <Input type="number" min={1} max={10} value={catWeight} onChange={(e) => setCatWeight(e.target.value)} className="w-20" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting} data-testid="category-submit">
+            {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : editingCategory ? 'Save' : <><Plus className="mr-2 h-4 w-4" />Add Category</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Criterion Card
 // ---------------------------------------------------------------------------
 
@@ -318,6 +398,11 @@ export default function ScorecardDetailPage() {
   const [editingCriterion, setEditingCriterion] = useState<ScorecardCriteria | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<ScorecardCategory | null>(null);
+  const [deleteCategoryOpen, setDeleteCategoryOpen] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState('');
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false);
 
   useEffect(() => {
     if (q.data) {
@@ -360,6 +445,19 @@ export default function ScorecardDetailPage() {
     void qc.invalidateQueries({ queryKey: ['scorecard-categories', id] });
   }, [qc, id]);
 
+  async function handleDeleteCategory() {
+    if (!deletingCategoryId) return;
+    setIsDeletingCategory(true);
+    try {
+      await client.scorecards.removeCategory(id, deletingCategoryId);
+      toast.success('Category deleted');
+      if (selectedCategoryId === deletingCategoryId) setSelectedCategoryId(null);
+      setDeleteCategoryOpen(false);
+      refresh();
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Delete failed'); }
+    finally { setIsDeletingCategory(false); }
+  }
+
   const scorecard = q.data;
   const categories = categoriesQ.data ?? [];
   const criteria = criteriaQ.data ?? [];
@@ -397,32 +495,49 @@ export default function ScorecardDetailPage() {
           <div className="space-y-1">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Categories</span>
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingCategory(null); setCategoryDialogOpen(true); }} data-testid="add-category-button">
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
             </div>
             {categoriesQ.isLoading ? (
               <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
             ) : categories.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4">No categories</p>
+              <div className="text-center py-4">
+                <p className="text-xs text-muted-foreground mb-2">No categories yet</p>
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => { setEditingCategory(null); setCategoryDialogOpen(true); }}>
+                  <Plus className="mr-1 h-3 w-3" />Add Category
+                </Button>
+              </div>
             ) : (
               categories.map((cat) => {
                 const count = criteria.filter((c) => c.categoryId === cat.id).length;
+                const isSelected = selectedCategoryId === cat.id;
                 return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategoryId(cat.id)}
-                    className={cn(
-                      'flex items-center justify-between w-full rounded-md px-3 py-2 text-sm transition-colors text-left select-none',
-                      selectedCategoryId === cat.id
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                    data-testid={`category-${cat.id}`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Layers className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{cat.name}</span>
+                  <div key={cat.id} className="group relative">
+                    <button
+                      onClick={() => setSelectedCategoryId(cat.id)}
+                      className={cn(
+                        'flex items-center justify-between w-full rounded-md px-3 py-2 text-sm transition-colors text-left select-none',
+                        isSelected ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )}
+                      data-testid={`category-${cat.id}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Layers className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{cat.name}</span>
+                      </div>
+                      <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">{count}</Badge>
+                    </button>
+                    {/* Hover actions */}
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5 bg-background rounded-md shadow-sm border px-0.5">
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); setEditingCategory(cat); setCategoryDialogOpen(true); }}>
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeletingCategoryId(cat.id); setDeleteCategoryOpen(true); }}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
-                    <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">{count}</Badge>
-                  </button>
+                  </div>
                 );
               })
             )}
@@ -530,6 +645,8 @@ export default function ScorecardDetailPage() {
       ) : null}
 
       <DeleteDialog open={deleteOpen} onOpenChange={setDeleteOpen} entityType="Scorecard" entityName={scorecard?.name} onConfirm={handleDelete} isLoading={isDeleting} />
+      <DeleteDialog open={deleteCategoryOpen} onOpenChange={setDeleteCategoryOpen} entityType="Category" entityName={categories.find((c) => c.id === deletingCategoryId)?.name} onConfirm={handleDeleteCategory} isLoading={isDeletingCategory} testIdPrefix="category" />
+      <CategoryDialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen} scorecardId={id} editingCategory={editingCategory} onSaved={refresh} />
       <CriterionDialog
         open={criterionDialogOpen} onOpenChange={setCriterionDialogOpen}
         scorecardId={id} categoryId={activeCategoryId || categories[0]?.id || ''}
