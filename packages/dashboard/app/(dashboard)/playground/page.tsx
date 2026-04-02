@@ -18,6 +18,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Trash2,
   User,
   Wrench,
   X,
@@ -250,6 +251,7 @@ export default function PlaygroundPage() {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [endChatOpen, setEndChatOpen] = useState(false);
+  const [deletePromptOpen, setDeletePromptOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -620,42 +622,64 @@ export default function PlaygroundPage() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium">System Prompt</CardTitle>
-              <div className="flex items-center gap-1.5">
-                {hasResults && (
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={handleReset} data-testid="reset-button">
-                    <RotateCcw className="mr-1 h-3 w-3" />Clear
+              <div className="flex items-center gap-2">
+                {/* Prompt actions: save + clear */}
+                <div className="flex items-center gap-1">
+                  {hasResults && (
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground" onClick={handleReset} data-testid="reset-button">
+                      <RotateCcw className="mr-1 h-3.5 w-3.5" />Clear
+                    </Button>
+                  )}
+                  <Button
+                    variant={promptDirty ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    onClick={handleSavePrompt}
+                    disabled={!promptDirty || isSaving}
+                    data-testid="save-prompt-button"
+                  >
+                    {isSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                    {promptDirty ? 'Save' : 'Saved'}
                   </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={handleSavePrompt}
-                  disabled={!promptDirty || isSaving}
-                  data-testid="save-prompt-button"
-                >
-                  {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
-                  {promptDirty ? 'Save' : 'Saved'}
-                </Button>
-                <Separator orientation="vertical" className="h-5 mx-0.5" />
-                {promptsQuery.isLoading ? (
-                  <Skeleton className="h-7 w-[140px]" />
-                ) : (
-                  <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
-                    <SelectTrigger className="w-[140px] h-7 text-xs" data-testid="prompt-select">
-                      <FileText className="h-3 w-3 mr-1 shrink-0 text-muted-foreground" />
-                      <SelectValue placeholder="Prompt..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {savedPrompts.map((p: Prompt) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCreatePrompt} data-testid="new-prompt-button" title="New prompt">
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
+                </div>
+
+                <div className="w-px h-6 bg-border" />
+
+                {/* Prompt selector + new + delete */}
+                <div className="flex items-center gap-1">
+                  {promptsQuery.isLoading ? (
+                    <Skeleton className="h-8 w-[140px]" />
+                  ) : (
+                    <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
+                      <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="prompt-select">
+                        <SelectValue placeholder="Prompt..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {savedPrompts.map((p: Prompt) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={handleCreatePrompt} data-testid="new-prompt-button" title="New prompt">
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                  {savedPromptId && savedPrompts.length > 1 && (
+                    <>
+                      <div className="w-px h-4 bg-border" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeletePromptOpen(true)}
+                        data-testid="delete-prompt-button"
+                        title="Delete prompt"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -1016,6 +1040,39 @@ export default function PlaygroundPage() {
               }}
             >
               End &amp; Restart
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deletePromptOpen} onOpenChange={setDeletePromptOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this prompt?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete &ldquo;{savedPrompts.find((p) => p.id === savedPromptId)?.name}&rdquo;. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!savedPromptId) return;
+                try {
+                  await client.prompts.remove(savedPromptId);
+                  toast.success('Prompt deleted');
+                  setSavedPromptId(null);
+                  setSystemPrompt(DEFAULT_PROMPT);
+                  setPromptDirty(false);
+                  void queryClient.invalidateQueries({ queryKey: ['prompts'] });
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Failed to delete prompt');
+                }
+                setDeletePromptOpen(false);
+              }}
+            >
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
