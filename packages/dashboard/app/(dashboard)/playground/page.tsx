@@ -15,15 +15,25 @@ import {
   Plus,
   MessageSquare,
   Play,
+  RefreshCw,
   RotateCcw,
   Save,
-  Square,
   User,
   Wrench,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -243,6 +253,7 @@ export default function PlaygroundPage() {
   const [chatMessages, setChatMessages] = useState<TranscriptMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [endChatOpen, setEndChatOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -299,6 +310,7 @@ export default function PlaygroundPage() {
       setChatMessages((prev) => prev.slice(0, -1));
     } finally {
       setIsChatLoading(false);
+      chatInputRef.current?.focus();
     }
   }, [chatInput, isChatLoading, chatSessionId, savedPromptId, systemPrompt, adapterType, model, temperature, maxTokens, client]);
 
@@ -806,14 +818,16 @@ export default function PlaygroundPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Chat</CardTitle>
                   <div className="flex items-center gap-1">
-                    {chatSessionId && chatMessages.length > 0 && (
-                      <Button variant="outline" size="sm" onClick={handleEndChat} className="h-7 px-2 text-xs text-destructive hover:text-destructive" data-testid="chat-end">
-                        <Square className="mr-1 h-3 w-3" />End Chat
-                      </Button>
-                    )}
-                    {chatMessages.length > 0 && !chatSessionId && (
-                      <Button variant="ghost" size="sm" onClick={handleChatReset} className="h-7 px-2 text-xs" data-testid="chat-new">
-                        <Plus className="mr-1 h-3 w-3" />New Chat
+                    {chatMessages.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => setEndChatOpen(true)}
+                        data-testid="chat-restart"
+                        title="Restart chat"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
                       </Button>
                     )}
                   </div>
@@ -996,6 +1010,31 @@ export default function PlaygroundPage() {
           </CardContent>
         </Card>
       )}
+      <AlertDialog open={endChatOpen} onOpenChange={setEndChatOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End chat and restart?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will end the current conversation and save the transcript. You can start a new chat after.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (chatSessionId) {
+                  handleEndChat();
+                } else {
+                  handleChatReset();
+                }
+                setEndChatOpen(false);
+              }}
+            >
+              End &amp; Restart
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageLayout>
   );
 }
