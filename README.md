@@ -14,7 +14,9 @@ Open-source testing engine for AI agents. Simulate multi-turn conversations with
 - [Why chanl-eval](#why-chanl-eval)
 - [Use Cases](#use-cases)
 - [Features](#features)
+- [Screenshots](docs/screenshots.md)
 - [How It Works](#how-it-works)
+- [CLI](#cli)
 - [Configuration](#configuration)
 - [Development Setup](#development-setup)
 - [Customization](#customization)
@@ -77,57 +79,7 @@ chanl-eval is that tool.
 | **Multi-provider** | OpenAI, Anthropic, or any OpenAI-compatible endpoint (Ollama, Together, vLLM, Azure). Separate config for agent vs simulation LLM. |
 | **Custom attributes** | Key-value pairs on personas (product name, order ID, account number) injected into simulation prompts. |
 
----
-
-## Screenshots
-
-<details>
-<summary><strong>Getting Started</strong> — guided onboarding with quick actions</summary>
-
-![Getting Started](docs/screenshots/01-getting-started.png)
-</details>
-
-<details>
-<summary><strong>Playground</strong> — configure prompts, select scenarios, run tests</summary>
-
-![Playground](docs/screenshots/02-playground.png)
-</details>
-
-<details open>
-<summary><strong>Execution Detail</strong> — conversation transcript + scorecard results with LLM reasoning</summary>
-
-![Execution Detail](docs/screenshots/09-execution-detail.png)
-</details>
-
-<details>
-<summary><strong>Scenarios</strong> — test cases with difficulty, personas, and scorecards</summary>
-
-![Scenarios](docs/screenshots/03-scenarios.png)
-</details>
-
-<details>
-<summary><strong>Personas</strong> — configurable customer personalities</summary>
-
-![Personas](docs/screenshots/04-personas.png)
-</details>
-
-<details>
-<summary><strong>Scorecards</strong> — evaluation criteria with dedicated handler types</summary>
-
-![Scorecards](docs/screenshots/06-scorecards.png)
-</details>
-
-<details>
-<summary><strong>Tool Fixtures</strong> — mock API tools with visual parameter builder</summary>
-
-![Tool Fixtures](docs/screenshots/10-tool-fixture-detail.png)
-</details>
-
-<details>
-<summary><strong>Runs</strong> — execution history with scores and status</summary>
-
-![Runs](docs/screenshots/05-runs.png)
-</details>
+📸 **[Screenshots →](docs/screenshots.md)** — full visual tour of the dashboard.
 
 ---
 
@@ -138,6 +90,25 @@ chanl-eval is that tool.
 | **1. Define** | Create a scenario (situation), persona (personality traits), and scorecard (evaluation criteria) | Scenario: "Angry refund request" / Persona: hostile, low patience / Scorecard: empathy, greeting, tool calls |
 | **2. Simulate** | Persona engine builds a behavioral prompt from traits. Conversation runs turn-by-turn against your agent via OpenAI, Anthropic, or custom HTTP | Persona: "I want a refund NOW" / Agent: "Let me check your order..." (10 turns) |
 | **3. Evaluate** | Scorecard evaluates the completed transcript. Each criterion gets pass/fail with reasoning and evidence | ✓ Empathy demonstrated / ✗ No greeting / ✓ Offered resolution / ✗ Didn't verify order / Overall: 60% |
+
+---
+
+## CLI
+
+Everything you can do in the dashboard, you can do from the terminal.
+
+```bash
+chanl scenarios list                    # List scenarios
+chanl personas list                     # List personas
+chanl run "Angry Customer" --prompt-id <id>  # Run a scenario
+chanl test tests/                       # CI/CD assertions (like jest)
+chanl compare --scenario "Refund" --prompt-a <id> --prompt-b <id>  # A/B compare
+chanl executions show <executionId>     # Transcript + scorecard
+```
+
+Full CRUD on all entities: `chanl <entity> list|get|create|update|delete`.
+
+**[Full CLI Reference →](docs/cli.md)** — all commands, options, test assertions, environment variables.
 
 ---
 

@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { get, post, formatError } from '../client';
+import { get, post, del, formatError } from '../client';
 import { printOutput, printSuccess, printError, truncate } from '../output';
 
 export function registerScorecardsCommand(program: Command): void {
@@ -129,6 +129,37 @@ export function registerScorecardsCommand(program: Command): void {
             console.log(`Tags:       ${sc.tags.join(', ')}`);
           }
         }
+      } catch (err) {
+        printError(formatError(err));
+        process.exit(1);
+      }
+    });
+
+  // --- delete ---
+  scorecards
+    .command('delete <id>')
+    .description('Delete a scorecard')
+    .option('--force', 'Skip confirmation prompt')
+    .action(async (id: string, options) => {
+      try {
+        if (!options.force) {
+          const inquirer = await import('inquirer');
+          const answers = await inquirer.default.prompt([
+            {
+              type: 'confirm',
+              name: 'confirm',
+              message: `Delete scorecard ${id}?`,
+              default: false,
+            },
+          ]);
+          if (!answers.confirm) {
+            console.log('Cancelled.');
+            return;
+          }
+        }
+
+        await del(`/scorecards/${id}`);
+        printSuccess(`Deleted scorecard: ${id}`);
       } catch (err) {
         printError(formatError(err));
         process.exit(1);

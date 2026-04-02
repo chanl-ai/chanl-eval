@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { get, post, formatError } from '../client';
+import { get, post, patch, del, formatError } from '../client';
 import { printOutput, printSuccess, printError, truncate } from '../output';
 
 export function registerPersonasCommand(program: Command): void {
@@ -146,6 +146,82 @@ export function registerPersonasCommand(program: Command): void {
             console.log(`Tags:         ${persona.tags.join(', ')}`);
           }
         }
+      } catch (err) {
+        printError(formatError(err));
+        process.exit(1);
+      }
+    });
+
+  // --- update ---
+  personas
+    .command('update <id>')
+    .description('Update a persona')
+    .option('--name <name>', 'New name')
+    .option('--emotion <emotion>', 'New emotion')
+    .option('--gender <gender>', 'New gender')
+    .option('--language <language>', 'New language')
+    .option('--accent <accent>', 'New accent')
+    .option('--speech-style <speechStyle>', 'New speech style')
+    .option('--description <description>', 'New description')
+    .option('--backstory <backstory>', 'New backstory')
+    .option('--tags <tags>', 'Comma-separated tags')
+    .action(async (id: string, options) => {
+      try {
+        const dto: Record<string, any> = {};
+        if (options.name) dto.name = options.name;
+        if (options.emotion) dto.emotion = options.emotion;
+        if (options.gender) dto.gender = options.gender;
+        if (options.language) dto.language = options.language;
+        if (options.accent) dto.accent = options.accent;
+        if (options.speechStyle) dto.speechStyle = options.speechStyle;
+        if (options.description) dto.description = options.description;
+        if (options.backstory) dto.backstory = options.backstory;
+        if (options.tags) {
+          dto.tags = options.tags.split(',').map((t: string) => t.trim());
+        }
+
+        const result = await patch(`/personas/${id}`, dto);
+        const persona = result.persona || result;
+        const format = program.opts().format;
+
+        if (format === 'json') {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          printSuccess(
+            `Updated persona: ${persona.name} (${persona.id || persona._id})`,
+          );
+        }
+      } catch (err) {
+        printError(formatError(err));
+        process.exit(1);
+      }
+    });
+
+  // --- delete ---
+  personas
+    .command('delete <id>')
+    .description('Delete a persona')
+    .option('--force', 'Skip confirmation prompt')
+    .action(async (id: string, options) => {
+      try {
+        if (!options.force) {
+          const inquirer = await import('inquirer');
+          const answers = await inquirer.default.prompt([
+            {
+              type: 'confirm',
+              name: 'confirm',
+              message: `Delete persona ${id}?`,
+              default: false,
+            },
+          ]);
+          if (!answers.confirm) {
+            console.log('Cancelled.');
+            return;
+          }
+        }
+
+        await del(`/personas/${id}`);
+        printSuccess(`Deleted persona: ${id}`);
       } catch (err) {
         printError(formatError(err));
         process.exit(1);

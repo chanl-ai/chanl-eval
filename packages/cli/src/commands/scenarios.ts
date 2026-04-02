@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import ora from 'ora';
-import { get, post, formatError } from '../client';
+import { get, post, patch, del, formatError } from '../client';
 import { printOutput, printSuccess, printError, truncate } from '../output';
 
 /**
@@ -283,6 +283,119 @@ export function registerScenariosCommand(program: Command): void {
             `Created scenario: ${scenario.name} (${scenario.id || scenario._id})`,
           );
         }
+      } catch (err) {
+        printError(formatError(err));
+        process.exit(1);
+      }
+    });
+
+  // --- get ---
+  scenarios
+    .command('get <id>')
+    .description('Get scenario details')
+    .action(async (id: string) => {
+      try {
+        const result = await get(`/scenarios/${id}`);
+        const format = program.opts().format;
+
+        if (format === 'json') {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          const s = result.scenario;
+          console.log(`Name:        ${s.name}`);
+          console.log(`ID:          ${s.id || s._id}`);
+          console.log(`Category:    ${s.category || '-'}`);
+          console.log(`Difficulty:  ${s.difficulty || '-'}`);
+          console.log(`Status:      ${s.status || '-'}`);
+          console.log(`Personas:    ${(s.personaIds || []).length}`);
+          if (s.description) {
+            console.log(`Description: ${s.description}`);
+          }
+          if (s.prompt) {
+            console.log(`Prompt:      ${truncate(s.prompt, 80)}`);
+          }
+          if (s.tags && s.tags.length > 0) {
+            console.log(`Tags:        ${s.tags.join(', ')}`);
+          }
+        }
+      } catch (err) {
+        printError(formatError(err));
+        process.exit(1);
+      }
+    });
+
+  // --- update ---
+  scenarios
+    .command('update <id>')
+    .description('Update a scenario')
+    .option('--name <name>', 'New name')
+    .option('--description <description>', 'New description')
+    .option('--prompt <prompt>', 'New opening prompt')
+    .option('--category <category>', 'New category')
+    .option('--difficulty <difficulty>', 'New difficulty')
+    .option('--status <status>', 'New status (draft, active)')
+    .option('--persona-ids <ids>', 'Comma-separated persona IDs')
+    .option('--scorecard-id <id>', 'New scorecard ID')
+    .option('--tags <tags>', 'Comma-separated tags')
+    .action(async (id: string, options) => {
+      try {
+        const dto: Record<string, any> = {};
+        if (options.name) dto.name = options.name;
+        if (options.description) dto.description = options.description;
+        if (options.prompt) dto.prompt = options.prompt;
+        if (options.category) dto.category = options.category;
+        if (options.difficulty) dto.difficulty = options.difficulty;
+        if (options.status) dto.status = options.status;
+        if (options.scorecardId) dto.scorecardId = options.scorecardId;
+        if (options.personaIds) {
+          dto.personaIds = options.personaIds.split(',').map((s: string) => s.trim());
+        }
+        if (options.tags) {
+          dto.tags = options.tags.split(',').map((t: string) => t.trim());
+        }
+
+        const result = await patch(`/scenarios/${id}`, dto);
+        const scenario = result.scenario || result;
+        const format = program.opts().format;
+
+        if (format === 'json') {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          printSuccess(
+            `Updated scenario: ${scenario.name} (${scenario.id || scenario._id})`,
+          );
+        }
+      } catch (err) {
+        printError(formatError(err));
+        process.exit(1);
+      }
+    });
+
+  // --- delete ---
+  scenarios
+    .command('delete <id>')
+    .description('Delete a scenario')
+    .option('--force', 'Skip confirmation prompt')
+    .action(async (id: string, options) => {
+      try {
+        if (!options.force) {
+          const inquirer = await import('inquirer');
+          const answers = await inquirer.default.prompt([
+            {
+              type: 'confirm',
+              name: 'confirm',
+              message: `Delete scenario ${id}?`,
+              default: false,
+            },
+          ]);
+          if (!answers.confirm) {
+            console.log('Cancelled.');
+            return;
+          }
+        }
+
+        await del(`/scenarios/${id}`);
+        printSuccess(`Deleted scenario: ${id}`);
       } catch (err) {
         printError(formatError(err));
         process.exit(1);
