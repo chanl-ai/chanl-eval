@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+
+echo "🔍 Pre-push: typecheck + build + test"
+echo "   (skip with --no-verify ONLY if you know what you're doing)"
+
+# Strict typecheck — block new 'as any', @ts-ignore, @ts-nocheck
+# Only checks STAGED/CHANGED files, not the whole codebase
+echo ""
+echo "Checking for TypeScript escape hatches in changed files..."
+CHANGED=$(git diff --name-only origin/main...HEAD -- 'packages/*/src/*.ts' 'packages/*/src/*.tsx' 2>/dev/null | grep -v ".spec." | grep -v ".test." || true)
+
+if [ -n "$CHANGED" ]; then
+  VIOLATIONS=$(echo "$CHANGED" | xargs grep -Hn -e "as any" -e "@ts-ignore" -e "@ts-nocheck" -e "@ts-expect-error" 2>/dev/null || true)
+  if [ -n "$VIOLATIONS" ]; then
+    COUNT=$(echo "$VIOLATIONS" | wc -l | tr -d ' ')
+    echo "⚠️  $COUNT TypeScript escape hatches in changed files:"
+    echo "$VIOLATIONS"
+    echo ""
+    echo "Use proper types instead of 'as any'. Fix before pushing."
+    echo "Tests/specs are excluded from this check."
+    exit 1
+  fi
+  echo "  ✓ No escape hatches in changed files"
+else
+  echo "  ✓ No changed source files to check"
+fi
+
+# Build all packages
+echo ""
+echo "Building..."
+pnpm build || { echo "❌ Build failed"; exit 1; }
+echo "  ✓ Build passed"
+
+# Run all tests
+echo ""
+echo "Testing..."
+pnpm test || { echo "❌ Tests failed"; exit 1; }
+echo "  ✓ Tests passed"
+
+echo ""
+echo "✅ All pre-push checks passed"
