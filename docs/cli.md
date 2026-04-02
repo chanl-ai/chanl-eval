@@ -1,6 +1,6 @@
 # CLI Reference
 
-The `chanl` CLI manages scenarios, personas, scorecards, tool fixtures, and executions from the terminal. It connects to the chanl-eval server API.
+The `chanl` CLI manages scenarios, personas, scorecards, tool fixtures, executions, and datasets from the terminal. It connects to the chanl-eval server API.
 
 ## Installation
 
@@ -121,6 +121,43 @@ chanl executions show <executionId>           # Full details: transcript + score
 ```
 
 The `show` command displays the conversation transcript, scorecard criteria results with pass/fail, latency stats, and score bar.
+
+## Datasets
+
+Generate training data from conversation executions and export in fine-tuning formats.
+
+```bash
+# Generate a dataset (batch of conversations)
+chanl dataset generate --scenario "Angry Refund" --prompt-id <id> --count 50
+chanl dataset generate --scenario <id> --prompt-id <id> --personas <id1,id2> --count 10
+
+# Check batch progress
+chanl dataset status <batchId>
+
+# Export as training data
+chanl dataset export --format openai --output training-data.jsonl
+chanl dataset export --format openai-tools --min-score 70 --output tools.jsonl
+chanl dataset export --format sharegpt --output sharegpt.json
+chanl dataset export --format dpo --output preferences.jsonl
+
+# Preview before downloading
+chanl dataset preview --format openai --min-score 70
+
+# Full pipeline: generate + wait + export in one command
+chanl dataset generate --scenario "Angry Refund" --prompt-id <id> --count 50 \
+  --wait --export openai --min-score 70 --output data.jsonl
+```
+
+Export formats:
+
+| Format | Extension | Compatible with |
+|--------|-----------|----------------|
+| `openai` | `.jsonl` | OpenAI, Together AI, Fireworks, Axolotl, Unsloth |
+| `openai-tools` | `.jsonl` | Same, with tool call training data |
+| `sharegpt` | `.json` | LLaMA Factory, legacy open-source |
+| `dpo` | `.jsonl` | OpenAI DPO, Together preference, TRL DPOTrainer |
+
+Filter options: `--scenario <ids>`, `--persona <ids>`, `--min-score <n>`, `--batch <id>`, `--system-prompt <prompt>`.
 
 ## Testing (CI/CD)
 

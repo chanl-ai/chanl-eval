@@ -63,6 +63,8 @@ chanl-eval is that tool.
 
 **Model comparison** — Run the same scenarios against GPT-4o vs Claude vs your fine-tune. Compare scorecard results side by side.
 
+**Training data generation** — Export conversations as fine-tuning datasets. OpenAI JSONL, ShareGPT, or DPO preference pairs. Generate 100 diverse conversations in one command, filter by score, download as training data.
+
 **Manual testing** — Chat with your agent through the playground. Save prompts, adjust parameters, review transcripts.
 
 ---
@@ -72,7 +74,8 @@ chanl-eval is that tool.
 | Feature | Description |
 |---------|-------------|
 | **Persona simulation** | Configurable traits: emotion, cooperation, patience, speech style, intent clarity. Each combination produces meaningfully different conversation behavior. |
-| **Scorecard evaluation** | Criteria grouped by category. Types: keyword matching, LLM judge, response time, tool call verification. Per-criteria pass/fail with reasoning and evidence. |
+| **Scorecard evaluation** | Criteria grouped by category. Types: keyword matching, LLM judge, response time, tool call verification, hallucination detection, RAG faithfulness. Per-criteria pass/fail with reasoning and evidence. |
+| **Dataset generation** | Run scenarios at scale with multiple personas. Export as OpenAI JSONL, ShareGPT, or DPO preference pairs for fine-tuning. Filter by score, preview before downloading. |
 | **Tool fixture mocking** | Define mock tools with configurable responses. Verify tool call arguments and result handling without connecting to real APIs. |
 | **Playground** | Manual chat with your agent. Save system prompts, select scenarios and personas, adjust model parameters. |
 | **Transcript + results** | Full conversation with search. Expandable scorecard criteria showing reasoning and transcript evidence. |
@@ -109,6 +112,37 @@ chanl executions show <executionId>     # Transcript + scorecard
 Full CRUD on all entities: `chanl <entity> list|get|create|update|delete`.
 
 **[Full CLI Reference →](docs/cli.md)** — all commands, options, test assertions, environment variables.
+
+---
+
+## Dataset Generation
+
+Generate training data from your evaluation runs. Run a scenario with multiple personas, then export the conversations in fine-tuning formats.
+
+```bash
+# Generate 50 conversations
+chanl dataset generate --scenario "Angry Refund" --prompt-id <id> --count 50
+
+# Export as OpenAI fine-tuning JSONL (filter by score)
+chanl dataset export --format openai --min-score 70 --output training-data.jsonl
+
+# Or do it all in one command
+chanl dataset generate --scenario "Angry Refund" --prompt-id <id> --count 50 \
+  --wait --export openai --output data.jsonl
+```
+
+Four export formats:
+
+| Format | Works with |
+|--------|-----------|
+| `openai` | OpenAI, Together AI, Fireworks, Axolotl, Unsloth, LLaMA Factory |
+| `openai-tools` | Same providers, includes tool call training data |
+| `sharegpt` | LLaMA Factory, older open-source tools |
+| `dpo` | OpenAI DPO, Together preference tuning, TRL DPOTrainer |
+
+The dashboard has a Datasets page where you can generate, browse conversations, and export with a format picker and live preview.
+
+**[Architecture →](docs/architecture/datasets.md)** — format specs, conversion pipeline, API endpoints.
 
 ---
 
@@ -181,6 +215,7 @@ packages/
 | LLM judge prompt | `scenarios-core/src/execution/judge-llm.ts` |
 | Scorecard criteria handlers | `scorecards-core/src/handlers/` |
 | Agent provider adapters | `scenarios-core/src/adapters/` |
+| Dataset export formats | `scenarios-core/src/dataset/formats/` |
 
 ---
 
@@ -200,8 +235,9 @@ Tools like [promptfoo](https://github.com/promptfoo/promptfoo), [DeepEval](https
 | Hallucination detection | **Yes** | Yes | Yes | Yes |
 | Multi-turn metrics (retention, completeness, role adherence) | **Yes** | No | Yes | No |
 | Pluggable persona engine with internal tools | **Yes** | No | No | No |
+| Training data generation (SFT, DPO) | **Yes** | No | No | No |
 | CI/CD pytest integration | Planned | Yes | Yes | Yes |
-| Synthetic test data generation | No | No | Yes | Yes |
+| Synthetic test data generation | Partial | No | Yes | Yes |
 
 **Our focus:** If your agent has multi-turn conversations with customers, chanl-eval tests the full interaction — not just individual prompts.
 
@@ -249,13 +285,18 @@ For adaptive red-team testing, set `personaStrategyType: 'reactive'` on the scen
 Planned features (contributions welcome):
 
 - [ ] **CI/CD integration** — Run scenarios from GitHub Actions, assert on scorecard pass rates
-- [ ] **Batch execution** — Run all scenarios in parallel with one command
 - [ ] **A/B model comparison** — Side-by-side results for two models on the same scenario
-- [ ] **Prompt template editor** — Liquid template UI for persona prompt customization
 - [ ] **Regression alerts** — Flag score drops compared to previous runs
-- [ ] **Export results** — CSV/JSON export of scorecard results for external analysis
+- [ ] **Bias / toxicity detection** — Specialized criteria for checking agent responses
 - [ ] **Webhook triggers** — Evaluate production conversations via webhook
 - [ ] **Python SDK** — Run evaluations from Python test suites
+
+Recently shipped:
+- [x] **Dataset generation** — Batch conversation generation + export as OpenAI/ShareGPT/DPO training data
+- [x] **Batch execution** — Run scenarios with multiple personas in one command
+- [x] **Persona strategy engine** — Pluggable persona reasoning (default + reactive with internal tools)
+- [x] **Red-team presets** — 5 adversarial persona presets (jailbreak, PII extraction, BOLA, prompt injection, social engineering)
+- [x] **Advanced criteria** — Hallucination detection, RAG faithfulness, knowledge retention, role adherence, conversation completeness
 
 ---
 
