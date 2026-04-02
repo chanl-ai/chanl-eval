@@ -115,9 +115,17 @@ export default function ScenarioDetailPage() {
       actions={
         q.data ? (
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => router.push(`/playground?scenario=${id}`)}>
+            <Button
+              size="sm"
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              data-testid="save-scenario"
+            >
+              {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => router.push(`/playground?scenario=${id}`)}>
               <Play className="mr-2 h-3.5 w-3.5" />
-              Run in Playground
+              Run
             </Button>
             <Button size="sm" variant="outline" onClick={() => setDeleteOpen(true)} data-testid="delete-scenario-button">
               <Trash2 className="mr-2 h-3.5 w-3.5" />
@@ -140,6 +148,94 @@ export default function ScenarioDetailPage() {
         </Card>
       ) : q.data ? (
         <div className="max-w-2xl space-y-6">
+          {/* Edit Scenario */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">Scenario Details</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Define the test scenario and the situation the persona will role-play.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Angry Customer Refund"
+                  data-testid="scenario-name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="prompt">Situation Prompt <span className="text-destructive">*</span></Label>
+                <Textarea
+                  id="prompt"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="font-mono text-sm min-h-[200px]"
+                  placeholder="e.g. I was charged twice for my subscription — $49.99 on March 20 and again on March 21. I already called about this last week and was told it would be reversed, but nothing happened..."
+                  rows={8}
+                  data-testid="scenario-prompt"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  The customer&apos;s situation — written in first person. This becomes the persona&apos;s motivation
+                  during the simulated conversation.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe what this scenario tests and what a good outcome looks like..."
+                  rows={2}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Shown on the scenario card and in run results for context.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Input
+                    id="category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    placeholder="e.g. support"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="paused">Paused</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Difficulty</Label>
+                  <Select value={difficulty} onValueChange={setDifficulty}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="easy">Easy</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="hard">Hard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
+
           {/* Linked Entities — Scorecard + Personas */}
           <Card>
             <CardHeader>
@@ -156,7 +252,7 @@ export default function ScenarioDetailPage() {
                   <SelectTrigger><SelectValue placeholder="No scorecard linked" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">No scorecard (skip evaluation)</SelectItem>
-                    {(scorecardsQuery.data?.scorecards ?? []).map((s: Scorecard) => (
+                    {(scorecardsQuery.data?.scorecards ?? []).filter((s: Scorecard) => s.status !== 'archived').map((s: Scorecard) => (
                       <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -173,7 +269,7 @@ export default function ScenarioDetailPage() {
                   <SelectTrigger><SelectValue placeholder="Select a persona..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">No persona (use scenario prompt only)</SelectItem>
-                    {(personasQuery.data?.personas ?? []).map((p: Persona) => (
+                    {(personasQuery.data?.personas ?? []).filter((p: Persona) => (p as any).status !== 'archived').map((p: Persona) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name} — {p.emotion}
                       </SelectItem>
@@ -183,118 +279,6 @@ export default function ScenarioDetailPage() {
                 <p className="text-[11px] text-muted-foreground">
                   The persona defines the simulated customer&apos;s personality, behavior, and communication style.
                 </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Edit Scenario */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium">Scenario Details</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Define the test scenario and the situation the persona will role-play.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Angry Customer Refund"
-                    data-testid="scenario-name"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    A short, descriptive name for this test scenario.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Input
-                    id="category"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    placeholder="e.g. billing, support, onboarding"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Group related scenarios for filtering and reporting.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="paused">Paused</SelectItem>
-                      <SelectItem value="archived">Archived</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Only active scenarios can be executed.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Difficulty</Label>
-                  <Select value={difficulty} onValueChange={setDifficulty}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="easy">Easy</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="hard">Hard</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Affects persona aggressiveness and conversation complexity.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe what this scenario tests and what a good outcome looks like..."
-                  rows={3}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Shown on the scenario card and in run results for context.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="prompt">Situation Prompt</Label>
-                <Textarea
-                  id="prompt"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  className="font-mono text-sm min-h-[120px]"
-                  placeholder="e.g. I bought a laptop 2 weeks ago and it's already broken. I want a full refund NOW."
-                  rows={6}
-                  data-testid="scenario-prompt"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  The customer situation the persona will role-play. This gets embedded into a larger
-                  generated prompt that includes persona traits, behavioral instructions, and conversation flow.
-                </p>
-              </div>
-
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => saveMutation.mutate()}
-                  disabled={saveMutation.isPending}
-                  data-testid="save-scenario"
-                >
-                  {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
-                </Button>
               </div>
             </CardContent>
           </Card>

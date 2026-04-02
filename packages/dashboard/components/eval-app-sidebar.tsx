@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Beaker,
   ClipboardList,
+  Database,
   FileText,
   Home,
   ScrollText,
@@ -42,6 +43,7 @@ const dataNav = [
   { title: 'Personas', href: '/personas', icon: UserCircle },
   { title: 'Tool Fixtures', href: '/tool-fixtures', icon: Wrench },
   { title: 'Scorecards', href: '/scorecards', icon: ClipboardList },
+  { title: 'Datasets', href: '/datasets', icon: Database },
 ];
 
 const bottomNav = [

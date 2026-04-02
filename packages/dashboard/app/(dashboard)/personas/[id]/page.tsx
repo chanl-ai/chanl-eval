@@ -121,10 +121,15 @@ export default function PersonaDetailPage() {
       description={persona?.description ?? 'Loading...'}
       actions={
         persona ? (
-          <Button size="sm" variant="outline" onClick={() => setDeleteOpen(true)} data-testid="delete-persona-button">
-            <Trash2 className="mr-2 h-3.5 w-3.5" />
-            Delete
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="save-persona">
+              {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setDeleteOpen(true)} data-testid="delete-persona-button">
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Delete
+            </Button>
+          </div>
         ) : undefined
       }
     >
@@ -158,6 +163,28 @@ export default function PersonaDetailPage() {
                 <Label htmlFor="description">Description</Label>
                 <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description..." />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Backstory */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">Backstory</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Who is this person? Write in second person: &quot;You are...&quot;
+              </p>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={backstory}
+                onChange={(e) => setBackstory(e.target.value)}
+                placeholder='e.g. You are a longtime customer who has had multiple frustrating support experiences. You have a low tolerance for scripted responses and will escalate quickly if you feel you&apos;re not being taken seriously...'
+                className="min-h-[200px] resize-none font-mono text-sm"
+                data-testid="persona-backstory"
+              />
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Defines the persona&apos;s character and behavior patterns. Combined with traits and the scenario&apos;s situation prompt during simulation.
+              </p>
             </CardContent>
           </Card>
 
@@ -214,23 +241,6 @@ export default function PersonaDetailPage() {
                   </Select>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Backstory */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium">Backstory</CardTitle>
-              <p className="text-sm text-muted-foreground">Additional context about this persona's situation</p>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={backstory}
-                onChange={(e) => setBackstory(e.target.value)}
-                placeholder="e.g. Long-time customer who recently experienced a service outage..."
-                className="min-h-[100px] resize-none"
-                data-testid="persona-backstory"
-              />
             </CardContent>
           </Card>
 
@@ -317,12 +327,6 @@ export default function PersonaDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Save */}
-          <div className="flex justify-end">
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="save-persona">
-              {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
         </div>
       ) : null}
 

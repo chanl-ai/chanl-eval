@@ -13,6 +13,17 @@ export { ExecutionsModule } from './modules/executions';
 export { ToolFixturesModule } from './modules/tool-fixtures';
 export { SettingsModule } from './modules/settings';
 export { ChatModule } from './modules/chat';
+export { DatasetsModule } from './modules/datasets';
+export type {
+  GenerateDatasetOptions,
+  GenerateDatasetResponse,
+  BatchStatusResponse,
+  ExportDatasetOptions,
+  ExportPreviewResponse,
+  DatasetBatch,
+  BatchConversation,
+  BatchConversationsResponse,
+} from './modules/datasets';
 export {
   EvalApiError,
   EvalAuthError,
