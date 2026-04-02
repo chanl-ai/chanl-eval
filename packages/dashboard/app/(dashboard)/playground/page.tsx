@@ -53,6 +53,7 @@ import {
 } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
@@ -774,37 +775,56 @@ export default function PlaygroundPage() {
 
           {/* Config Tab */}
           {sidebarTab === 'config' && <div className="space-y-4 mt-3">
-            {/* Agent config — stored on Prompt, keys resolved server-side */}
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Agent Config</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Model</CardTitle>
                   <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
-                    <Link href="/settings">Settings</Link>
+                    <Link href="/settings">API Keys</Link>
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Provider</span>
-                  <Badge variant="outline" className="font-mono text-xs">{adapterType}</Badge>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Provider</Label>
+                  <Select value={adapterType} onValueChange={(v) => { setAdapterType(v as AdapterType); setPromptDirty(true); }}>
+                    <SelectTrigger data-testid="adapter-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="openai">OpenAI</SelectItem>
+                      <SelectItem value="anthropic">Anthropic</SelectItem>
+                      <SelectItem value="http">Custom HTTP</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Model</span>
-                  <Badge variant="outline" className="font-mono text-xs">{model}</Badge>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Model</Label>
+                  <Select value={model} onValueChange={(v) => { setModel(v); setPromptDirty(true); }}>
+                    <SelectTrigger data-testid="model-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MODEL_OPTIONS[adapterType]?.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          <span>{m.label}</span>
+                          {m.description && <span className="ml-2 text-muted-foreground text-xs">{m.description}</span>}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Separator />
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Temperature</span>
-                  <span className="text-xs tabular-nums">{temperature.toFixed(2)}</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">Temperature</Label>
+                    <span className="text-xs tabular-nums text-muted-foreground">{temperature.toFixed(2)}</span>
+                  </div>
+                  <Slider value={[temperature]} onValueChange={([v]) => { setTemperature(v); setPromptDirty(true); }} min={0} max={2} step={0.01} data-testid="temperature-slider" />
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Max Tokens</span>
-                  <span className="text-xs tabular-nums">{maxTokens}</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">Max Tokens</Label>
+                    <span className="text-xs tabular-nums text-muted-foreground">{maxTokens}</span>
+                  </div>
+                  <Slider value={[maxTokens]} onValueChange={([v]) => { setMaxTokens(v); setPromptDirty(true); }} min={1} max={4096} step={1} data-testid="max-tokens-slider" />
                 </div>
-                <p className="text-[10px] text-muted-foreground pt-1">
-                  Model config is stored on the prompt. API keys are resolved server-side.
-                </p>
               </CardContent>
             </Card>
 
