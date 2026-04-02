@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+
+echo "🔍 Pre-commit: build + test"
+
+# Build all packages
+pnpm build || { echo "❌ Build failed"; exit 1; }
+
+# Run all tests
+pnpm test || { echo "❌ Tests failed"; exit 1; }
+
+echo "✅ All checks passed"
