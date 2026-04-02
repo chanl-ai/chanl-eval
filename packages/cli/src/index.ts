@@ -11,6 +11,7 @@ import { registerTestCommand } from './commands/test';
 import { registerCompareCommand } from './commands/compare';
 import { registerExecutionsCommand } from './commands/executions';
 import { registerToolFixturesCommand } from './commands/tool-fixtures';
+import { registerDatasetCommand } from './commands/dataset';
 import { initAnalytics, track } from './analytics';
 
 const VERSION = '0.1.0';
@@ -50,11 +51,13 @@ export function createProgram(): Command {
   registerCompareCommand(program);
   registerExecutionsCommand(program);
   registerToolFixturesCommand(program);
+  registerDatasetCommand(program);
 
   // Top-level `run` shortcut → delegates to scenarios run
   program
     .command('run [scenario]')
     .description('Run a scenario (shortcut for "chanl scenarios run")')
+    .option('--prompt-id <promptId>', 'Prompt entity ID (defines the agent under test)')
     .option('--agent <path>', 'Path to agent YAML file (test prompts without deploying)')
     .option('--agent-id <agentId>', 'Override agent ID')
     .option('--persona-id <personaId>', 'Override persona ID')

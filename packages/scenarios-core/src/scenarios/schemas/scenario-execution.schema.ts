@@ -96,6 +96,10 @@ export class ScenarioExecution {
   @Prop({ type: String, enum: ['text', 'phone', 'manual'], default: 'text' })
   mode?: string;
 
+  /** Groups executions from a single dataset generation batch */
+  @Prop({ type: String, index: true })
+  batchId?: string;
+
   @Prop({ required: true, unique: true })
   executionId!: string;
 
@@ -326,6 +330,7 @@ ScenarioExecutionSchema.index({ triggeredBy: 1 });
 ScenarioExecutionSchema.index({ 'callDetails.providerCallId': 1 });
 ScenarioExecutionSchema.index({ status: 1, startTime: 1 });
 ScenarioExecutionSchema.index({ scheduledExecutionId: 1 });
+ScenarioExecutionSchema.index({ batchId: 1, status: 1 });
 
 // Apply virtual ID plugin to transform _id -> id in responses
 ScenarioExecutionSchema.plugin(virtualIdPlugin);

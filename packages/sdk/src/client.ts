@@ -16,6 +16,7 @@ import { ExecutionsModule } from './modules/executions';
 import { ToolFixturesModule } from './modules/tool-fixtures';
 import { SettingsModule } from './modules/settings';
 import { ChatModule } from './modules/chat';
+import { DatasetsModule } from './modules/datasets';
 import type { EvalClientConfig } from './types';
 
 /**
@@ -75,6 +76,7 @@ export class EvalClient {
   readonly toolFixtures: ToolFixturesModule;
   readonly settings: SettingsModule;
   readonly chat: ChatModule;
+  readonly datasets: DatasetsModule;
 
   constructor(config: EvalClientConfig) {
     const headers: Record<string, string> = {
@@ -121,6 +123,7 @@ export class EvalClient {
     this.toolFixtures = new ToolFixturesModule(this.http);
     this.settings = new SettingsModule(this.http);
     this.chat = new ChatModule(this.http);
+    this.datasets = new DatasetsModule(this.http);
   }
 
   /**

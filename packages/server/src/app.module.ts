@@ -15,6 +15,7 @@ import { BootstrapModule } from './bootstrap/bootstrap.module';
 import { PromptsModule } from './prompts/prompts.module';
 import { SettingsModule } from './settings/settings.module';
 import { ChatModule } from './chat/chat.module';
+import { DatasetModule } from './dataset/dataset.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ChatModule } from './chat/chat.module';
     PromptsModule,
     SettingsModule,
     ChatModule,
+    DatasetModule,
   ],
   providers: [
     {
