@@ -335,7 +335,7 @@ function ExportDialog({
           )}
         </DialogTrigger>
       )}
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Export as Training Data</DialogTitle>
           <DialogDescription>Convert completed runs into fine-tuning datasets.</DialogDescription>
@@ -375,7 +375,7 @@ function ExportDialog({
                 <Badge variant="secondary">{FORMAT_INFO.find((f) => f.value === format)?.ext}</Badge>
               </div>
               {preview.sampleLine && (
-                <pre className="mt-2 max-h-24 overflow-auto rounded bg-card p-2 text-[10px] text-muted-foreground font-mono">
+                <pre className="mt-2 max-h-24 overflow-auto rounded bg-card p-2 text-[10px] text-muted-foreground font-mono whitespace-pre-wrap break-all">
                   {JSON.stringify(JSON.parse(preview.sampleLine), null, 2).slice(0, 300)}
                   {preview.sampleLine.length > 300 ? '...' : ''}
                 </pre>
