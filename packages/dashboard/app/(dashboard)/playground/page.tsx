@@ -538,7 +538,45 @@ export default function PlaygroundPage() {
       title="Playground"
       description="Configure your agent prompt and run simulated conversations"
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {scenariosQuery.isLoading ? (
+            <Skeleton className="h-9 w-[180px]" />
+          ) : (
+            <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
+              <SelectTrigger className="w-[180px] h-9" data-testid="scenario-select">
+                <SelectValue placeholder="Scenario..." />
+              </SelectTrigger>
+              <SelectContent>
+                {scenarios.map((s: Scenario) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="flex items-center gap-2">
+                      {s.name}
+                      {s.difficulty && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{s.difficulty}</Badge>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {personasQuery.isLoading ? (
+            <Skeleton className="h-9 w-[160px]" />
+          ) : (
+            <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
+              <SelectTrigger className="w-[160px] h-9" data-testid="persona-select">
+                <SelectValue placeholder="Persona..." />
+              </SelectTrigger>
+              <SelectContent>
+                {personas.map((p: Persona) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      {p.name}
+                      <span className="text-xs text-muted-foreground">{p.emotion}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button
             onClick={handleRun}
             disabled={isRunning || !selectedScenarioId}
@@ -569,81 +607,13 @@ export default function PlaygroundPage() {
         </div>
       )}
 
-      {/* Scenario row */}
-      <div className="flex flex-wrap items-end gap-4 -mt-2">
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Scenario</Label>
-          {scenariosQuery.isLoading ? (
-            <Skeleton className="h-9 w-[200px]" />
-          ) : (
-            <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
-              <SelectTrigger className="w-[200px]" data-testid="scenario-select">
-                <SelectValue placeholder="Select scenario..." />
-              </SelectTrigger>
-              <SelectContent>
-                {scenarios.map((s: Scenario) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="flex items-center gap-2">
-                      {s.name}
-                      {s.difficulty && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{s.difficulty}</Badge>}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Persona</Label>
-          {personasQuery.isLoading ? (
-            <Skeleton className="h-9 w-[200px]" />
-          ) : (
-            <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
-              <SelectTrigger className="w-[200px]" data-testid="persona-select">
-                <SelectValue placeholder="Select persona..." />
-              </SelectTrigger>
-              <SelectContent>
-                {personas.map((p: Persona) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <span className="flex items-center gap-2">
-                      {p.name}
-                      <span className="text-xs text-muted-foreground">{p.emotion}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      </div>
-
-      {/* Two-column layout: System prompt + Model settings */}
+      {/* Two-column layout: System prompt + Config/Chat */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
         {/* Left: System prompt */}
         <Card className="flex flex-col">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {promptsQuery.isLoading ? (
-                  <Skeleton className="h-7 w-[160px]" />
-                ) : (
-                  <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
-                    <SelectTrigger className="w-[160px] h-7 text-xs" data-testid="prompt-select">
-                      <FileText className="h-3 w-3 mr-1 shrink-0 text-muted-foreground" />
-                      <SelectValue placeholder="Select prompt..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {savedPrompts.map((p: Prompt) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCreatePrompt} data-testid="new-prompt-button" title="New prompt">
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              <CardTitle className="text-sm font-medium">System Prompt</CardTitle>
               <div className="flex items-center gap-1.5">
                 {hasResults && (
                   <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={handleReset} data-testid="reset-button">
@@ -662,6 +632,27 @@ export default function PlaygroundPage() {
                   {promptDirty ? 'Save' : 'Saved'}
                 </Button>
               </div>
+            </div>
+            {/* Prompt selector */}
+            <div className="flex items-center gap-2 pt-1">
+              {promptsQuery.isLoading ? (
+                <Skeleton className="h-8 w-[180px]" />
+              ) : (
+                <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
+                  <SelectTrigger className="w-[180px] h-8 text-sm" data-testid="prompt-select">
+                    <FileText className="h-3.5 w-3.5 mr-1.5 shrink-0 text-muted-foreground" />
+                    <SelectValue placeholder="Select prompt..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedPrompts.map((p: Prompt) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Button variant="outline" size="sm" className="h-8" onClick={handleCreatePrompt} data-testid="new-prompt-button" title="New prompt">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />New
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="flex-1">
