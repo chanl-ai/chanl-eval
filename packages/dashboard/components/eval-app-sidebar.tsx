@@ -33,7 +33,7 @@ import {
 
 const primaryNav = [
   { title: 'Home', href: '/', icon: Home },
-  { title: 'Test', href: '/playground', icon: Beaker },
+  { title: 'Playground', href: '/playground', icon: Beaker },
 ];
 
 const dataNav = [
