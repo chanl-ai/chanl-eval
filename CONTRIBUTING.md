@@ -153,6 +153,135 @@ Criteria handlers evaluate specific aspects of a conversation. See [docs/archite
    - Recommended threshold configurations
    - Usage example
 
+## How to Contribute Persona Strategies
+
+Persona strategies control how the simulated persona reasons and generates utterances during a conversation. The default strategy wraps the existing persona LLM behavior. The reactive strategy adds internal tools that let the persona reason about the agent's responses before replying.
+
+See [docs/architecture/persona-strategies.md](docs/architecture/persona-strategies.md) for the full architecture.
+
+### The PersonaStrategy Interface
+
+```typescript
+import { PersonaStrategy, PersonaStrategyContext, PersonaToolDefinition } from '@chanl/scenarios-core';
+
+export interface PersonaStrategy {
+  readonly type: string;
+
+  generateOpening(ctx: PersonaStrategyContext): Promise<string | null>;
+  generateUtterance(ctx: PersonaStrategyContext): Promise<string | null>;
+  updateSystemPrompt?(ctx: PersonaStrategyContext): Promise<string | null>;
+  getInternalTools?(): PersonaToolDefinition[];
+}
+```
+
+- `type` — unique identifier for the strategy (used in `personaStrategyType` on scenarios)
+- `generateOpening` — produce the persona's first message. Return null to fall back to heuristic opening.
+- `generateUtterance` — produce the persona's next message given the conversation history. Return null to fall back to heuristic generation.
+- `updateSystemPrompt` — (optional) mutate the persona's system prompt mid-conversation based on agent behavior.
+- `getInternalTools` — (optional) declare internal tools the persona LLM can call for self-reflective reasoning.
+
+### Quick Steps
+
+1. Create your strategy file in `packages/scenarios-core/src/execution/strategies/`:
+   ```
+   packages/scenarios-core/src/execution/strategies/
+   ├── default.strategy.ts
+   ├── reactive.strategy.ts
+   └── my-custom.strategy.ts      ← your new strategy
+   ```
+
+2. Implement the `PersonaStrategy` interface:
+   ```typescript
+   import {
+     PersonaStrategy,
+     PersonaStrategyContext,
+   } from '../persona-strategy.interface';
+
+   export class MyCustomStrategy implements PersonaStrategy {
+     readonly type = 'my-custom';
+
+     async generateOpening(ctx: PersonaStrategyContext): Promise<string | null> {
+       // Your opening message logic
+       return null; // null = fall back to heuristic
+     }
+
+     async generateUtterance(ctx: PersonaStrategyContext): Promise<string | null> {
+       // Your utterance generation logic
+       return null;
+     }
+   }
+   ```
+
+3. Register in `packages/scenarios-core/src/execution/persona-strategy-registry.ts`:
+   ```typescript
+   import { MyCustomStrategy } from './strategies/my-custom.strategy';
+
+   // In onModuleInit():
+   this.register(new MyCustomStrategy());
+   ```
+
+4. Write tests in `packages/scenarios-core/src/execution/__tests__/my-custom-strategy.spec.ts` covering:
+   - Strategy has the correct `type` property
+   - `generateOpening` returns a string or null
+   - `generateUtterance` handles conversation history correctly
+   - Internal tools (if any) return valid definitions
+   - Error handling (LLM failures return null gracefully)
+
+5. Update docs (this file and `docs/architecture/persona-strategies.md`)
+
+### How Internal Tools Work
+
+Internal tools are **self-reflective chain-of-thought** tools, NOT external API calls. They work like this:
+
+1. The persona LLM receives tool definitions along with the conversation history
+2. The LLM "calls" a tool by providing structured arguments (e.g., `analyze_response → { assessment: "dismissive", emotional_reaction: "frustrated" }`)
+3. The tool call arguments ARE the reasoning — the LLM's structured analysis of the conversation
+4. Tool results feed back as messages so the LLM can use its own reasoning to generate the final customer-facing response
+5. Maximum 3 iterations per turn to bound cost (~$0.001-0.005 per tool call)
+
+Example tool definition from the reactive strategy:
+
+```typescript
+const PERSONA_TOOLS: PersonaToolDefinition[] = [
+  {
+    name: 'assess_progress',
+    description:
+      'Evaluate whether this conversation is making progress toward resolving your issue.',
+    parameters: {
+      type: 'object',
+      properties: {
+        progress_percentage: {
+          type: 'number',
+          description: 'How close you are to resolution (0-100)',
+        },
+        next_action: {
+          type: 'string',
+          enum: ['continue_cooperatively', 'push_harder', 'accept_offer', 'threaten_to_leave', 'request_supervisor'],
+          description: 'What you should do next',
+        },
+        turns_until_impatient: {
+          type: 'number',
+          description: 'How many more turns before you escalate or give up',
+        },
+      },
+      required: ['progress_percentage', 'next_action'],
+    },
+  },
+];
+```
+
+## Extension Points
+
+chanl-eval has three pluggable systems that follow the same registry pattern:
+
+| Extension | Interface | Registry | Example |
+|-----------|-----------|----------|---------|
+| Agent Adapter | `AgentAdapter` | `AdapterRegistry` | `openai.adapter.ts` |
+| Criteria Handler | `CriteriaHandler` | `CriteriaHandlerRegistry` | `prompt.handler.ts` |
+| Persona Strategy | `PersonaStrategy` | `PersonaStrategyRegistry` | `reactive.strategy.ts` |
+
+Each follows the same pattern: implement the interface, register in the corresponding registry, write tests, add docs.
+
 ## How to Contribute Templates
 
 Scenario templates are pre-built scenario configurations that others can use as starting points.

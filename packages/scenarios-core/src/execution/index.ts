@@ -5,3 +5,6 @@ export * from './execution-processor';
 export * from './queues.config';
 export * from './interfaces/job-data.interface';
 export * from './template-renderer';
+export * from './llm-config-resolver';
+export * from './agent-config-resolver';
+export { buildLlmJudge, buildOpenAiJudge } from './judge-llm';

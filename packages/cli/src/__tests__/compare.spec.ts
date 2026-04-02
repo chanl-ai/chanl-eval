@@ -208,70 +208,36 @@ describe('determineWinner', () => {
 
 describe('validateCompareOptions', () => {
   it('returns error when scenario is missing', () => {
-    const err = validateCompareOptions({ agentA: 'a.yaml', agentB: 'b.yaml' });
+    const err = validateCompareOptions({ promptA: 'p1', promptB: 'p2' });
     expect(err).toContain('--scenario');
   });
 
-  it('returns error when mixing agent and model flags', () => {
+  it('returns error when promptA is missing', () => {
     const err = validateCompareOptions({
       scenario: 'test',
-      agentA: 'a.yaml',
-      modelB: 'gpt-4o',
+      promptB: 'p2',
     });
-    expect(err).toContain('Cannot mix');
+    expect(err).toContain('Both --prompt-a and --prompt-b');
   });
 
-  it('returns error when neither agents nor models are specified', () => {
+  it('returns error when promptB is missing', () => {
+    const err = validateCompareOptions({
+      scenario: 'test',
+      promptA: 'p1',
+    });
+    expect(err).toContain('Both --prompt-a and --prompt-b');
+  });
+
+  it('returns error when both prompts are missing', () => {
     const err = validateCompareOptions({ scenario: 'test' });
-    expect(err).toContain('Specify either');
+    expect(err).toContain('Both --prompt-a and --prompt-b');
   });
 
-  it('returns error when only agentA is provided', () => {
+  it('returns null for valid prompt pair', () => {
     const err = validateCompareOptions({
       scenario: 'test',
-      agentA: 'a.yaml',
-    });
-    expect(err).toContain('Both --agent-a and --agent-b');
-  });
-
-  it('returns error when only agentB is provided', () => {
-    const err = validateCompareOptions({
-      scenario: 'test',
-      agentB: 'b.yaml',
-    });
-    expect(err).toContain('Both --agent-a and --agent-b');
-  });
-
-  it('returns error when only modelA is provided', () => {
-    const err = validateCompareOptions({
-      scenario: 'test',
-      modelA: 'gpt-4o',
-    });
-    expect(err).toContain('Both --model-a and --model-b');
-  });
-
-  it('returns error when only modelB is provided', () => {
-    const err = validateCompareOptions({
-      scenario: 'test',
-      modelB: 'gpt-4o',
-    });
-    expect(err).toContain('Both --model-a and --model-b');
-  });
-
-  it('returns null for valid agent pair', () => {
-    const err = validateCompareOptions({
-      scenario: 'test',
-      agentA: 'a.yaml',
-      agentB: 'b.yaml',
-    });
-    expect(err).toBeNull();
-  });
-
-  it('returns null for valid model pair', () => {
-    const err = validateCompareOptions({
-      scenario: 'test',
-      modelA: 'gpt-4o',
-      modelB: 'claude-sonnet-4-20250514',
+      promptA: 'prompt-id-1',
+      promptB: 'prompt-id-2',
     });
     expect(err).toBeNull();
   });
@@ -512,13 +478,15 @@ describe('compare command registration', () => {
     expect(compare!.description()).toContain('compare');
   });
 
-  it('shows validation error when no model or agent flags are given', async () => {
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation();
-    const logSpy = jest.spyOn(console, 'log').mockImplementation();
+  it('errors when required prompt flags are missing', async () => {
+    const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit');
+    }) as any);
 
     const program = createFreshProgram();
 
-    // Commander will throw on missing required option --scenario
+    // Commander will throw on missing required option --prompt-a
     try {
       await program.parseAsync([
         'node',
@@ -528,16 +496,13 @@ describe('compare command registration', () => {
         'test-scenario',
       ]);
     } catch {
-      // Expected: validation error sets process.exitCode
+      // Expected: Commander errors on missing required option
     }
 
-    const allErrors = errorSpy.mock.calls
-      .map((c) => String(c[0]))
-      .join(' ');
-    // The error should mention specifying agents or models
-    expect(allErrors).toContain('Specify either');
+    // Commander should have called process.exit
+    expect(exitSpy).toHaveBeenCalled();
 
-    errorSpy.mockRestore();
-    logSpy.mockRestore();
+    stderrSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 });

@@ -15,15 +15,26 @@ import {
   Plus,
   MessageSquare,
   Play,
+  RefreshCw,
   RotateCcw,
   Save,
-  Square,
+  Trash2,
   User,
   Wrench,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,11 +47,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Slider } from '@/components/ui/slider';
@@ -221,7 +227,7 @@ function ToolCallBlock({ message }: { message: TranscriptMessage }) {
 // ---------------------------------------------------------------------------
 
 export default function PlaygroundPage() {
-  const { client, adapterType, setAdapterType, simApiKey, simModel } = useEvalConfig();
+  const { client, adapterType, setAdapterType } = useEvalConfig();
   const queryClient = useQueryClient();
 
   const DEFAULT_PROMPT = 'You are a helpful customer support agent. Be friendly, concise, and professional.';
@@ -244,6 +250,8 @@ export default function PlaygroundPage() {
   const [chatMessages, setChatMessages] = useState<TranscriptMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [endChatOpen, setEndChatOpen] = useState(false);
+  const [deletePromptOpen, setDeletePromptOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -300,6 +308,7 @@ export default function PlaygroundPage() {
       setChatMessages((prev) => prev.slice(0, -1));
     } finally {
       setIsChatLoading(false);
+      chatInputRef.current?.focus();
     }
   }, [chatInput, isChatLoading, chatSessionId, savedPromptId, systemPrompt, adapterType, model, temperature, maxTokens, client]);
 
@@ -488,25 +497,23 @@ export default function PlaygroundPage() {
 
   const handleRun = useCallback(async () => {
     if (!selectedScenarioId) { toast.error('Select a scenario to run'); return; }
+    if (!savedPromptId) { toast.error('Save your prompt first before running a test'); return; }
 
     setIsRunning(true); setTranscript([]); setCompletedExecution(null);
 
     try {
-      // Fetch API key from server-side Settings
-      let apiKey: string;
-      try {
-        apiKey = await client.settings.getApiKey(adapterType);
-      } catch {
-        toast.error(`No API key configured for ${adapterType}. Set it via PUT /settings.`);
-        setIsRunning(false);
-        return;
-      }
+      // Save prompt with current adapter config before executing
+      await client.prompts.update(savedPromptId, {
+        content: systemPrompt,
+        adapterConfig: { adapterType, model, temperature, maxTokens },
+      } as any);
 
+      // Execute with promptId only — server resolves adapter config + API key from Prompt + Settings
       const execution = await client.scenarios.execute(selectedScenarioId, {
-        mode: 'text', personaId: selectedPersonaId || undefined, adapterType,
-        adapterConfig: { apiKey, model, systemPrompt, temperature, maxTokens, simulationApiKey: simApiKey || undefined, simulationModel: simModel || undefined },
+        promptId: savedPromptId,
+        personaId: selectedPersonaId || undefined,
         toolFixtureIds: selectedToolIds.length > 0 ? selectedToolIds : undefined,
-      } as never);
+      });
 
       const execAny = execution as unknown as { executionId?: string; id: string };
       const execRef = execAny.executionId || execAny.id;
@@ -523,7 +530,7 @@ export default function PlaygroundPage() {
       } else { toast.error(`Test ${completed.status}`); }
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Execution failed'); }
     finally { setIsRunning(false); }
-  }, [selectedScenarioId, selectedPersonaId, selectedToolIds, adapterType, model, systemPrompt, temperature, maxTokens, client, queryClient]);
+  }, [selectedScenarioId, savedPromptId, selectedPersonaId, selectedToolIds, adapterType, model, systemPrompt, temperature, maxTokens, client, queryClient]);
 
   const hasResults = transcript.length > 0 || completedExecution != null;
 
@@ -533,45 +540,51 @@ export default function PlaygroundPage() {
       title="Playground"
       description="Configure your agent prompt and run simulated conversations"
       actions={
-        <div className="flex items-center gap-2">
-          {/* Prompt selector — always visible */}
-          {promptsQuery.isLoading ? (
-            <Skeleton className="h-8 w-[180px]" />
-          ) : (
-            <div className="flex items-center gap-1">
-              <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
-                <SelectTrigger className="w-[180px] h-8 text-sm" data-testid="prompt-select">
-                  <FileText className="h-3.5 w-3.5 mr-1 shrink-0 text-muted-foreground" />
-                  <SelectValue placeholder="Select prompt..." />
+        <div className="flex items-end gap-3">
+          <div className="space-y-1">
+            <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Scenario</Label>
+            {scenariosQuery.isLoading ? (
+              <Skeleton className="h-9 w-[180px]" />
+            ) : (
+              <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
+                <SelectTrigger className="w-[180px] h-9" data-testid="scenario-select">
+                  <SelectValue placeholder="Select..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {savedPrompts.map((p: Prompt) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  {scenarios.map((s: Scenario) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <span className="flex items-center gap-2">
+                        {s.name}
+                        {s.difficulty && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{s.difficulty}</Badge>}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                onClick={handleCreatePrompt}
-                data-testid="new-prompt-button"
-                title="New prompt"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSavePrompt}
-            disabled={!promptDirty || isSaving}
-            data-testid="save-prompt-button"
-          >
-            {isSaving ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-2 h-3.5 w-3.5" />}
-            {promptDirty ? 'Save Prompt' : 'Saved'}
-          </Button>
+            )}
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Persona</Label>
+            {personasQuery.isLoading ? (
+              <Skeleton className="h-9 w-[160px]" />
+            ) : (
+              <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
+                <SelectTrigger className="w-[160px] h-9" data-testid="persona-select">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {personas.map((p: Persona) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="flex items-center gap-2">
+                        {p.name}
+                        <span className="text-xs text-muted-foreground">{p.emotion}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
           <Button
             onClick={handleRun}
             disabled={isRunning || !selectedScenarioId}
@@ -602,133 +615,72 @@ export default function PlaygroundPage() {
         </div>
       )}
 
-      {/* Test config row — scenario + persona + prompt selectors */}
-      <div className="flex flex-wrap items-end gap-6 -mt-2">
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Scenario</Label>
-          {scenariosQuery.isLoading ? (
-            <Skeleton className="h-9 w-[200px]" />
-          ) : (
-            <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
-              <SelectTrigger className="w-[200px]" data-testid="scenario-select">
-                <SelectValue placeholder="Select scenario..." />
-              </SelectTrigger>
-              <SelectContent>
-                {scenarios.map((s: Scenario) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="flex items-center gap-2">
-                      {s.name}
-                      {s.difficulty && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{s.difficulty}</Badge>}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Persona</Label>
-          {personasQuery.isLoading ? (
-            <Skeleton className="h-9 w-[200px]" />
-          ) : (
-            <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
-              <SelectTrigger className="w-[200px]" data-testid="persona-select">
-                <SelectValue placeholder="Select persona..." />
-              </SelectTrigger>
-              <SelectContent>
-                {personas.map((p: Persona) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <span className="flex items-center gap-2">
-                      {p.name}
-                      <span className="text-xs text-muted-foreground">{p.emotion}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Tools</Label>
-          {toolFixturesQuery.isLoading ? (
-            <Skeleton className="h-9 w-[200px]" />
-          ) : toolFixtures.length === 0 ? (
-            <Button variant="outline" size="sm" className="w-[200px] justify-start text-muted-foreground" disabled>
-              <Wrench className="mr-2 h-3.5 w-3.5" />No tools yet
-            </Button>
-          ) : (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="w-[200px] justify-between" data-testid="tools-select">
-                  <span className="flex items-center gap-2 truncate">
-                    <Wrench className="h-3.5 w-3.5 shrink-0" />
-                    {selectedToolIds.length === 0
-                      ? 'Select tools...'
-                      : `${selectedToolIds.length} tool${selectedToolIds.length > 1 ? 's' : ''} selected`}
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[260px] p-2" align="start">
-                <div className="space-y-1">
-                  {toolFixtures.map((tf: ToolFixture) => (
-                    <label
-                      key={tf.id}
-                      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-accent cursor-pointer transition-colors"
-                    >
-                      <Checkbox
-                        checked={selectedToolIds.includes(tf.id)}
-                        onCheckedChange={(checked) => {
-                          setSelectedToolIds((prev) =>
-                            checked ? [...prev, tf.id] : prev.filter((id) => id !== tf.id)
-                          );
-                        }}
-                        data-testid={`tool-checkbox-${tf.id}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{tf.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{tf.description}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-                {selectedToolIds.length > 0 && (
-                  <>
-                    <Separator className="my-2" />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-xs"
-                      onClick={() => setSelectedToolIds([])}
-                      data-testid="clear-tools"
-                    >
-                      Clear all
-                    </Button>
-                  </>
-                )}
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-
-      </div>
-
-      <Separator className="my-2" />
-
-      {/* Two-column layout: System prompt + Model settings */}
+      {/* Two-column layout: System prompt + Config/Chat */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
         {/* Left: System prompt */}
         <Card className="flex flex-col">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">System Prompt</CardTitle>
-              {hasResults && (
-                <Button variant="outline" size="sm" onClick={handleReset} data-testid="reset-button">
-                  <RotateCcw className="mr-2 h-3.5 w-3.5" />Clear Results
-                </Button>
-              )}
+              <CardTitle className="text-sm font-medium">System Prompt</CardTitle>
+              <div className="flex items-center gap-2">
+                {/* Prompt actions: save + clear */}
+                <div className="flex items-center gap-1">
+                  {hasResults && (
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground" onClick={handleReset} data-testid="reset-button">
+                      <RotateCcw className="mr-1 h-3.5 w-3.5" />Clear
+                    </Button>
+                  )}
+                  <Button
+                    variant={promptDirty ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    onClick={handleSavePrompt}
+                    disabled={!promptDirty || isSaving}
+                    data-testid="save-prompt-button"
+                  >
+                    {isSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                    {promptDirty ? 'Save' : 'Saved'}
+                  </Button>
+                </div>
+
+                <div className="w-px h-6 bg-border" />
+
+                {/* Prompt selector + new + delete */}
+                <div className="flex items-center gap-1">
+                  {promptsQuery.isLoading ? (
+                    <Skeleton className="h-8 w-[140px]" />
+                  ) : (
+                    <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
+                      <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="prompt-select">
+                        <SelectValue placeholder="Prompt..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {savedPrompts.map((p: Prompt) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={handleCreatePrompt} data-testid="new-prompt-button" title="New prompt">
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                  {savedPromptId && savedPrompts.length > 1 && (
+                    <>
+                      <div className="w-px h-4 bg-border" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeletePromptOpen(true)}
+                        data-testid="delete-prompt-button"
+                        title="Delete prompt"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1">
@@ -767,12 +719,17 @@ export default function PlaygroundPage() {
           {sidebarTab === 'config' && <div className="space-y-4 mt-3">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Model</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Model</CardTitle>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
+                    <Link href="/settings">API Keys</Link>
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Provider</Label>
-                  <Select value={adapterType} onValueChange={(v) => setAdapterType(v as AdapterType)}>
+                  <Select value={adapterType} onValueChange={(v) => { setAdapterType(v as AdapterType); setPromptDirty(true); }}>
                     <SelectTrigger data-testid="adapter-select"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="openai">OpenAI</SelectItem>
@@ -783,11 +740,14 @@ export default function PlaygroundPage() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Model</Label>
-                  <Select value={model} onValueChange={setModel}>
+                  <Select value={model} onValueChange={(v) => { setModel(v); setPromptDirty(true); }}>
                     <SelectTrigger data-testid="model-select"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {MODEL_OPTIONS[adapterType].map((m) => (
-                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      {MODEL_OPTIONS[adapterType]?.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          <span>{m.label}</span>
+                          {m.description && <span className="ml-2 text-muted-foreground text-xs">{m.description}</span>}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -798,36 +758,85 @@ export default function PlaygroundPage() {
                     <Label className="text-xs text-muted-foreground">Temperature</Label>
                     <span className="text-xs tabular-nums text-muted-foreground">{temperature.toFixed(2)}</span>
                   </div>
-                  <Slider value={[temperature]} onValueChange={([v]) => setTemperature(v)} min={0} max={2} step={0.01} data-testid="temperature-slider" />
+                  <Slider value={[temperature]} onValueChange={([v]) => { setTemperature(v); setPromptDirty(true); }} min={0} max={2} step={0.01} data-testid="temperature-slider" />
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs text-muted-foreground">Max Tokens</Label>
                     <span className="text-xs tabular-nums text-muted-foreground">{maxTokens}</span>
                   </div>
-                  <Slider value={[maxTokens]} onValueChange={([v]) => setMaxTokens(v)} min={1} max={4096} step={1} data-testid="max-tokens-slider" />
+                  <Slider value={[maxTokens]} onValueChange={([v]) => { setMaxTokens(v); setPromptDirty(true); }} min={1} max={4096} step={1} data-testid="max-tokens-slider" />
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Tools */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Tools</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {toolFixturesQuery.isLoading ? (
+                  <Skeleton className="h-9 w-full" />
+                ) : toolFixtures.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No tool fixtures yet. <Link href="/tool-fixtures" className="text-primary hover:underline">Create one</Link></p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {toolFixtures.map((tf: ToolFixture) => (
+                      <label
+                        key={tf.id}
+                        className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-accent cursor-pointer transition-colors"
+                      >
+                        <Checkbox
+                          checked={selectedToolIds.includes(tf.id)}
+                          onCheckedChange={(checked) => {
+                            setSelectedToolIds((prev) =>
+                              checked ? [...prev, tf.id] : prev.filter((id) => id !== tf.id)
+                            );
+                          }}
+                          data-testid={`tool-checkbox-${tf.id}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate text-xs">{tf.name}</p>
+                        </div>
+                      </label>
+                    ))}
+                    {selectedToolIds.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs h-7 mt-1"
+                        onClick={() => setSelectedToolIds([])}
+                        data-testid="clear-tools"
+                      >
+                        Clear all
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
           </div>}
 
           {/* Chat Tab */}
-          {sidebarTab === 'chat' && <div className="flex flex-col mt-0 min-h-0" style={{ height: 'calc(100vh - 24rem)' }}>
+          {sidebarTab === 'chat' && <div className="flex flex-col mt-3 min-h-0" style={{ height: 'calc(100vh - 18rem)' }}>
             <Card className="flex flex-col flex-1 min-h-0 overflow-hidden gap-0 py-0">
               {/* Chat header */}
               <CardHeader className="px-3 py-2 shrink-0">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Chat</CardTitle>
                   <div className="flex items-center gap-1">
-                    {chatSessionId && chatMessages.length > 0 && (
-                      <Button variant="outline" size="sm" onClick={handleEndChat} className="h-7 px-2 text-xs text-destructive hover:text-destructive" data-testid="chat-end">
-                        <Square className="mr-1 h-3 w-3" />End Chat
-                      </Button>
-                    )}
-                    {chatMessages.length > 0 && !chatSessionId && (
-                      <Button variant="ghost" size="sm" onClick={handleChatReset} className="h-7 px-2 text-xs" data-testid="chat-new">
-                        <Plus className="mr-1 h-3 w-3" />New Chat
+                    {chatMessages.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => setEndChatOpen(true)}
+                        data-testid="chat-restart"
+                        title="Restart chat"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
                       </Button>
                     )}
                   </div>
@@ -849,26 +858,52 @@ export default function PlaygroundPage() {
                 ) : (
                   <div className="space-y-3 py-2">
                     {chatMessages.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={`flex gap-2 ${msg.role === 'persona' ? 'flex-row-reverse' : 'flex-row'}`}
-                      >
-                        <Avatar className="h-6 w-6 shrink-0">
-                          <AvatarFallback className={msg.role === 'agent' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}>
-                            {msg.role === 'agent' ? <Bot className="h-3 w-3" /> : <User className="h-3 w-3" />}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className={`flex flex-col gap-0.5 min-w-0 max-w-[85%] ${msg.role === 'persona' ? 'items-end' : 'items-start'}`}>
-                          <div className={`rounded-lg px-2.5 py-1.5 text-xs ${
-                            msg.role === 'persona' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
-                          }`}>
-                            <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                      msg.role === 'tool' && msg.toolCalls?.length ? (
+                        <div key={i} className="flex gap-2">
+                          <Avatar className="h-6 w-6 shrink-0">
+                            <AvatarFallback className="bg-accent text-accent-foreground">
+                              <Wrench className="h-3 w-3" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            {msg.toolCalls.map((tc, ti) => (
+                              <div key={ti} className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono font-medium">{tc.name}</span>
+                                  <Badge variant="outline" className="text-[9px] px-1 py-0 text-primary">tool</Badge>
+                                </div>
+                                {tc.arguments && Object.keys(tc.arguments).length > 0 && (
+                                  <pre className="text-[10px] font-mono text-muted-foreground overflow-x-auto">{JSON.stringify(tc.arguments)}</pre>
+                                )}
+                                {tc.result != null && (
+                                  <pre className="text-[10px] font-mono text-foreground/70 overflow-x-auto max-h-16 overflow-y-auto">{typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}</pre>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                          {msg.latencyMs != null && (
-                            <span className="text-[10px] tabular-nums text-muted-foreground px-1">{formatDuration(msg.latencyMs)}</span>
-                          )}
                         </div>
-                      </div>
+                      ) : (
+                        <div
+                          key={i}
+                          className={`flex gap-2 ${msg.role === 'persona' ? 'flex-row-reverse' : 'flex-row'}`}
+                        >
+                          <Avatar className="h-6 w-6 shrink-0">
+                            <AvatarFallback className={msg.role === 'agent' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}>
+                              {msg.role === 'agent' ? <Bot className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className={`flex flex-col gap-0.5 min-w-0 max-w-[85%] ${msg.role === 'persona' ? 'items-end' : 'items-start'}`}>
+                            <div className={`rounded-lg px-2.5 py-1.5 text-xs ${
+                              msg.role === 'persona' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                            }`}>
+                              <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                            </div>
+                            {msg.latencyMs != null && (
+                              <span className="text-[10px] tabular-nums text-muted-foreground px-1">{formatDuration(msg.latencyMs)}</span>
+                            )}
+                          </div>
+                        </div>
+                      )
                     ))}
                     {isChatLoading && (
                       <div className="flex gap-2">
@@ -984,6 +1019,64 @@ export default function PlaygroundPage() {
           </CardContent>
         </Card>
       )}
+      <AlertDialog open={endChatOpen} onOpenChange={setEndChatOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End chat and restart?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will end the current conversation and save the transcript. You can start a new chat after.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (chatSessionId) {
+                  handleEndChat();
+                } else {
+                  handleChatReset();
+                }
+                setEndChatOpen(false);
+              }}
+            >
+              End &amp; Restart
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deletePromptOpen} onOpenChange={setDeletePromptOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this prompt?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete &ldquo;{savedPrompts.find((p) => p.id === savedPromptId)?.name}&rdquo;. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!savedPromptId) return;
+                try {
+                  await client.prompts.remove(savedPromptId);
+                  toast.success('Prompt deleted');
+                  setSavedPromptId(null);
+                  setSystemPrompt(DEFAULT_PROMPT);
+                  setPromptDirty(false);
+                  void queryClient.invalidateQueries({ queryKey: ['prompts'] });
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Failed to delete prompt');
+                }
+                setDeletePromptOpen(false);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageLayout>
   );
 }

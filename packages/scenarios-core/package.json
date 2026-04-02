@@ -12,7 +12,7 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsc",
+    "build": "rm -f tsconfig.tsbuildinfo && tsc",
     "test": "jest --passWithNoTests",
     "test:cov": "jest --coverage --passWithNoTests",
     "clean": "rm -rf dist"

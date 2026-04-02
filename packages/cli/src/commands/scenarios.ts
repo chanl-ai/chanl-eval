@@ -6,8 +6,6 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { get, post, formatError } from '../client';
 import { printOutput, printSuccess, printError, truncate } from '../output';
-import { loadConfig } from '../config';
-import { loadAgentYaml, type AgentDefinition } from '../agent-loader';
 
 /**
  * Shared run action — used by both `chanl scenarios run` and `chanl run`.
@@ -15,8 +13,7 @@ import { loadAgentYaml, type AgentDefinition } from '../agent-loader';
 export async function runScenarioAction(
   idOrNameOrFile: string | undefined,
   options: {
-    agent?: string;
-    agentId?: string;
+    promptId?: string;
     personaId?: string;
     scorecardId?: string;
     mode?: string;
@@ -103,8 +100,7 @@ export async function runScenarioAction(
 async function executeAndPoll(
   scenarioId: string,
   options: {
-    agent?: string;
-    agentId?: string;
+    promptId?: string;
     personaId?: string;
     scorecardId?: string;
     mode?: string;
@@ -115,7 +111,19 @@ async function executeAndPoll(
   format?: string,
 ): Promise<void> {
   const executeDto: Record<string, any> = {};
-  if (options.agentId) executeDto.agentId = options.agentId;
+
+  // promptId is required — the Prompt entity + server Settings are the only config source
+  if (!options.promptId) {
+    const msg =
+      'Missing --prompt-id. The server resolves adapter config from the Prompt entity.\n' +
+      'Create a prompt in the dashboard or via the API, then pass its ID:\n' +
+      '  chanl scenarios run <scenario> --prompt-id <id>';
+    printError(msg);
+    process.exitCode = 1;
+    throw new Error(msg);
+  }
+  executeDto.promptId = options.promptId;
+
   if (options.personaId) executeDto.personaId = options.personaId;
   if (options.scorecardId) executeDto.scorecardId = options.scorecardId;
   if (options.mode) executeDto.mode = options.mode;
@@ -127,128 +135,7 @@ async function executeAndPoll(
       .filter(Boolean);
   }
 
-  const config = loadConfig();
-
-  // If --agent is provided, load the agent YAML and use it to configure the adapter
-  let agentDef: AgentDefinition | undefined;
-  if (options.agent) {
-    try {
-      agentDef = loadAgentYaml(options.agent, config.provider || undefined);
-      console.log(chalk.dim(`Using agent: ${agentDef.name} (${agentDef.provider}:${agentDef.model || agentDef.httpEndpoint})`));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      printError(`Failed to load agent YAML: ${message}`);
-      process.exitCode = 1;
-      throw err;
-    }
-  }
-
-  // Resolve adapter type and config — agent YAML overrides CLI config for provider/model
-  if (agentDef) {
-    // Agent YAML determines provider and model; API keys still come from config/.env
-    if (agentDef.provider === 'openai') {
-      if (!config.openaiApiKey) {
-        const msg = `Agent "${agentDef.name}" uses OpenAI but no API key is configured. Set it with: chanl config set openaiApiKey sk-...`;
-        printError(msg);
-        process.exitCode = 1;
-        throw new Error(msg);
-      }
-      executeDto.adapterType = 'openai';
-      executeDto.adapterConfig = {
-        apiKey: config.openaiApiKey,
-        model: agentDef.model,
-        systemPrompt: agentDef.systemPrompt,
-        ...(agentDef.temperature !== undefined ? { temperature: agentDef.temperature } : {}),
-        ...(agentDef.maxTokens !== undefined ? { maxTokens: agentDef.maxTokens } : {}),
-      };
-    } else if (agentDef.provider === 'anthropic') {
-      if (!config.anthropicApiKey) {
-        const msg = `Agent "${agentDef.name}" uses Anthropic but no API key is configured. Set it with: chanl config set anthropicApiKey sk-ant-...`;
-        printError(msg);
-        process.exitCode = 1;
-        throw new Error(msg);
-      }
-      executeDto.adapterType = 'anthropic';
-      executeDto.adapterConfig = {
-        apiKey: config.anthropicApiKey,
-        model: agentDef.model,
-        systemPrompt: agentDef.systemPrompt,
-        ...(agentDef.temperature !== undefined ? { temperature: agentDef.temperature } : {}),
-        ...(agentDef.maxTokens !== undefined ? { maxTokens: agentDef.maxTokens } : {}),
-      };
-    } else if (agentDef.provider === 'http') {
-      const endpoint = agentDef.httpEndpoint || config.httpEndpoint;
-      if (!endpoint) {
-        const msg = `Agent "${agentDef.name}" uses HTTP provider but no endpoint is configured.`;
-        printError(msg);
-        process.exitCode = 1;
-        throw new Error(msg);
-      }
-      executeDto.adapterType = 'http';
-      executeDto.adapterConfig = {
-        endpoint,
-        systemPrompt: agentDef.systemPrompt,
-        ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
-        ...(agentDef.temperature !== undefined ? { temperature: agentDef.temperature } : {}),
-        ...(agentDef.maxTokens !== undefined ? { maxTokens: agentDef.maxTokens } : {}),
-      };
-    } else {
-      const msg = `Unsupported provider "${agentDef.provider}" in agent YAML.`;
-      printError(msg);
-      process.exitCode = 1;
-      throw new Error(msg);
-    }
-  } else {
-    // Original logic: inject adapter config from CLI config
-    if (config.provider === 'openai' && config.openaiApiKey) {
-      executeDto.adapterType = 'openai';
-      executeDto.adapterConfig = { apiKey: config.openaiApiKey };
-    } else if (config.provider === 'anthropic' && config.anthropicApiKey) {
-      executeDto.adapterType = 'anthropic';
-      executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
-    } else if (config.provider === 'http' && config.httpEndpoint) {
-      executeDto.adapterType = 'http';
-      executeDto.adapterConfig = {
-        endpoint: config.httpEndpoint,
-        ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
-      };
-    } else if (config.openaiApiKey) {
-      // Fallback: if openaiApiKey is set but no provider specified, use openai
-      executeDto.adapterType = 'openai';
-      executeDto.adapterConfig = { apiKey: config.openaiApiKey };
-    } else if (config.anthropicApiKey) {
-      executeDto.adapterType = 'anthropic';
-      executeDto.adapterConfig = { apiKey: config.anthropicApiKey };
-    }
-  }
-
-  if (!executeDto.adapterType) {
-    let msg = '';
-    if (config.provider === 'openai' && !config.openaiApiKey) {
-      msg =
-        'Missing OpenAI API key. Set it with: chanl config set openaiApiKey sk-...';
-    } else if (config.provider === 'anthropic' && !config.anthropicApiKey) {
-      msg =
-        'Missing Anthropic API key. Set it with: chanl config set anthropicApiKey sk-ant-...';
-    } else if (config.provider === 'http' && !config.httpEndpoint) {
-      msg =
-        'Missing HTTP endpoint. Set it with: chanl config set httpEndpoint http://localhost:19000';
-    } else {
-      msg =
-        'No provider configured. Set a provider and API key first:\n' +
-        '  chanl config set provider openai\n' +
-        '  chanl config set openaiApiKey sk-...\n' +
-        'Or:\n' +
-        '  chanl config set provider anthropic\n' +
-        '  chanl config set anthropicApiKey sk-ant-...\n' +
-        'Or (no BYOK, local dev only):\n' +
-        '  chanl config set provider http\n' +
-        '  chanl config set httpEndpoint http://localhost:19000';
-    }
-    printError(msg);
-    process.exitCode = 1;
-    throw new Error(msg);
-  }
+  console.log(chalk.dim(`Using prompt: ${options.promptId}`));
 
   const spinner = ora('Starting scenario execution...').start();
   const execResult = await post(
@@ -332,8 +219,7 @@ export function registerScenariosCommand(program: Command): void {
   scenarios
     .command('run [idOrFile]')
     .description('Execute a scenario by ID, name, or from a YAML file')
-    .option('--agent <path>', 'Path to agent YAML file (test prompts without deploying)')
-    .option('--agent-id <agentId>', 'Override agent ID')
+    .requiredOption('--prompt-id <promptId>', 'Prompt entity ID (defines the agent under test)')
     .option('--persona-id <personaId>', 'Override persona ID')
     .option('--scorecard-id <scorecardId>', 'Override scorecard ID')
     .option('--tools <ids>', 'Comma-separated tool fixture IDs to attach')
@@ -365,7 +251,6 @@ export function registerScenariosCommand(program: Command): void {
     )
     .option('--difficulty <difficulty>', 'Difficulty (easy, medium, hard)', 'medium')
     .option('--persona-ids <ids>', 'Comma-separated persona IDs')
-    .option('--agent-ids <ids>', 'Comma-separated agent IDs')
     .option('--scorecard-id <id>', 'Scorecard ID')
     .option('--tags <tags>', 'Comma-separated tags')
     .option('--status <status>', 'Status (draft, active)', 'draft')
@@ -379,9 +264,6 @@ export function registerScenariosCommand(program: Command): void {
           status: options.status,
           personaIds: options.personaIds
             ? options.personaIds.split(',').map((s: string) => s.trim())
-            : [],
-          agentIds: options.agentIds
-            ? options.agentIds.split(',').map((s: string) => s.trim())
             : [],
         };
 

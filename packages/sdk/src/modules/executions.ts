@@ -37,7 +37,7 @@ export class ExecutionsModule {
   async list(params?: ListExecutionsParams): Promise<ListExecutionsResponse> {
     const queryParams: Record<string, string | number | boolean> = {};
     if (params?.scenarioId) queryParams.scenarioId = params.scenarioId;
-    if (params?.agentId) queryParams.agentId = params.agentId;
+    if (params?.promptId) queryParams.promptId = params.promptId;
     if (params?.personaId) queryParams.personaId = params.personaId;
     if (params?.status) queryParams.status = params.status;
     if (params?.triggerId) queryParams.triggerId = params.triggerId;

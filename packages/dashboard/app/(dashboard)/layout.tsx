@@ -2,6 +2,7 @@
 
 import { EvalAppSidebar } from '@/components/eval-app-sidebar';
 import { SiteHeader } from '@/components/site-header';
+import { WhatsNewFloat } from '@/components/whats-new-popup';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <SiteHeader />
         <div className="flex flex-1 flex-col min-h-0 overflow-y-auto">{children}</div>
       </SidebarInset>
+      <WhatsNewFloat />
     </SidebarProvider>
   );
 }

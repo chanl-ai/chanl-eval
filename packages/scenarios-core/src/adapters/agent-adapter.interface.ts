@@ -1,5 +1,5 @@
 export interface AgentMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   timestamp?: Date;
   /**

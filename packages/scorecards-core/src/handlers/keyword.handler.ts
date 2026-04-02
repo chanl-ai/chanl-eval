@@ -14,7 +14,7 @@ export class KeywordHandler implements CriteriaHandler {
   ): Promise<CriteriaHandlerResult> {
     const settings = criteria.settings as KeywordCriteriaSettings;
     // Support both 'keyword' (singular) and 'keywords' (plural) from DB
-    const rawKeywords = (settings as any).keywords || settings.keyword;
+    const rawKeywords = settings.keywords || settings.keyword;
     if (!rawKeywords || (Array.isArray(rawKeywords) && rawKeywords.length === 0)) {
       return {
         result: false,
@@ -26,7 +26,7 @@ export class KeywordHandler implements CriteriaHandler {
     const keywords = Array.isArray(rawKeywords) ? rawKeywords : [rawKeywords];
     const caseSensitive = settings.caseSensitive ?? false;
     // Support 'any'/'all' matchType aliases alongside 'must_contain'/'must_not_contain'
-    const rawMatchType = (settings as any).matchType || settings.matchType || 'must_contain';
+    const rawMatchType = settings.matchType || 'must_contain';
     const matchType = rawMatchType === 'any' ? 'must_contain'
       : rawMatchType === 'none' ? 'must_not_contain'
       : rawMatchType;

@@ -3,6 +3,8 @@ import { MongooseModule } from '@nestjs/mongoose';
 import {
   ScenarioExecution,
   ScenarioExecutionSchema,
+  ToolFixtureModule,
+  AgentConfigResolver,
 } from '@chanl/scenarios-core';
 import { ChatService } from './chat.service';
 import { ChatController } from './chat.controller';
@@ -16,9 +18,10 @@ import { SettingsModule } from '../settings/settings.module';
     ]),
     PromptsModule,
     SettingsModule,
+    ToolFixtureModule,
   ],
   controllers: [ChatController],
-  providers: [ChatService],
+  providers: [AgentConfigResolver, ChatService],
   exports: [ChatService],
 })
 export class ChatModule {}

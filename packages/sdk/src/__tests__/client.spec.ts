@@ -248,7 +248,6 @@ describe('EvalClient', () => {
         name: 'New Scenario',
         prompt: 'Test prompt',
         personaIds: ['p1'],
-        agentIds: ['a1'],
       };
       mockInstance.post.mockResolvedValue({
         data: { scenario: { id: 's2', ...dto } },
@@ -281,7 +280,7 @@ describe('EvalClient', () => {
     });
 
     it('execute() should call POST /scenarios/:id/execute', async () => {
-      const options = { mode: 'text' as const, agentId: 'a1' };
+      const options = { promptId: 'p1', mode: 'text' as const };
       mockInstance.post.mockResolvedValue({
         data: { execution: { id: 'e1', scenarioId: 's1', status: 'pending' } },
       });
@@ -291,13 +290,13 @@ describe('EvalClient', () => {
       expect(result.status).toBe('pending');
     });
 
-    it('execute() should send empty body when no options provided', async () => {
+    it('execute() should send promptId in body', async () => {
       mockInstance.post.mockResolvedValue({
         data: { execution: { id: 'e1', scenarioId: 's1', status: 'pending' } },
       });
 
-      await client.scenarios.execute('s1');
-      expect(mockInstance.post).toHaveBeenCalledWith('/scenarios/s1/execute', {});
+      await client.scenarios.execute('s1', { promptId: 'p1' });
+      expect(mockInstance.post).toHaveBeenCalledWith('/scenarios/s1/execute', { promptId: 'p1' });
     });
 
     it('importYaml() should call POST /scenarios/import/yaml', async () => {

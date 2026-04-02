@@ -66,7 +66,7 @@ export default function ScenariosListPage() {
               icon={FileText}
               title="No scenarios yet"
               description="Import scenarios via CLI or create them through the API."
-              action={{ label: 'Go to Playground', href: '/' }}
+              action={{ label: 'Go to Playground', href: '/playground' }}
             />
           </CardContent>
         </Card>

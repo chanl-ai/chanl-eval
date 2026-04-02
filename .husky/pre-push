@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+
+echo "🔍 Pre-push: typecheck + build + test"
+
+# Block 'as any', @ts-ignore, @ts-nocheck in ALL source files
+echo ""
+echo "Checking for TypeScript escape hatches..."
+VIOLATIONS=$(grep -rn --include="*.ts" --include="*.tsx" \
+  -e "as any" \
+  -e "@ts-ignore" \
+  -e "@ts-nocheck" \
+  -e "@ts-expect-error" \
+  packages/*/src/ 2>/dev/null | grep -v "node_modules" | grep -v ".spec." | grep -v ".test." || true)
+
+if [ -n "$VIOLATIONS" ]; then
+  echo "❌ TypeScript escape hatches found:"
+  echo "$VIOLATIONS"
+  echo ""
+  echo "Fix these before pushing. Use proper types instead of 'as any'."
+  exit 1
+fi
+echo "  ✓ No 'as any', @ts-ignore, or @ts-nocheck"
+
+# Build
+echo ""
+echo "Building..."
+pnpm build || { echo "❌ Build failed"; exit 1; }
+echo "  ✓ Build passed"
+
+# Test
+echo ""
+echo "Testing..."
+pnpm test || { echo "❌ Tests failed"; exit 1; }
+echo "  ✓ Tests passed"
+
+echo ""
+echo "✅ All pre-push checks passed"

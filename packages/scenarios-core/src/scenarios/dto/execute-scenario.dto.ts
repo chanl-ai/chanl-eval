@@ -9,6 +9,9 @@ import {
 } from 'class-validator';
 
 export class ExecuteScenarioDto {
+  @IsString()
+  promptId!: string;
+
   @IsOptional()
   @IsEnum(['text', 'phone'])
   mode?: 'text' | 'phone';
@@ -16,10 +19,6 @@ export class ExecuteScenarioDto {
   @IsOptional()
   @IsString()
   phoneNumber?: string;
-
-  @IsOptional()
-  @IsString()
-  agentId?: string;
 
   @IsOptional()
   @IsString()
@@ -50,14 +49,6 @@ export class ExecuteScenarioDto {
   dryRun?: boolean;
 
   @IsOptional()
-  @IsString()
-  adapterType?: string;
-
-  @IsOptional()
-  @IsObject()
-  adapterConfig?: Record<string, any>;
-
-  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   toolFixtureIds?: string[];
@@ -80,7 +71,7 @@ export class ExecutionFiltersDto {
 
   @IsOptional()
   @IsString()
-  agentId?: string;
+  promptId?: string;
 
   @IsOptional()
   @IsString()

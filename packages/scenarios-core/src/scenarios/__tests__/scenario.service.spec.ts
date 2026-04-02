@@ -40,9 +40,6 @@ describe('ScenarioService', () => {
   let personaId1: string;
   let personaId2: string;
 
-  const agentId1 = new Types.ObjectId().toString();
-  const agentId2 = new Types.ObjectId().toString();
-
   const validScenarioData = {
     name: 'Customer Support Test',
     description: 'Test customer support agent handling complaints',
@@ -51,7 +48,6 @@ describe('ScenarioService', () => {
     difficulty: 'medium' as const,
     tags: ['support', 'complaint'],
     personaIds: [] as string[],
-    agentIds: [agentId1],
   };
 
   beforeAll(async () => {
@@ -111,7 +107,6 @@ describe('ScenarioService', () => {
       expect(result.tags).toEqual(['support', 'complaint']);
       expect(result.createdBy).toBe('user1');
       expect(result.personaIds).toHaveLength(1);
-      expect(result.agentIds).toHaveLength(1);
     });
 
     it('should create a scenario without createdBy (OSS mode)', async () => {
@@ -124,18 +119,13 @@ describe('ScenarioService', () => {
       const placeholderId = new Types.ObjectId().toString();
       const result = json(await service.create({
         ...validScenarioData, status: 'draft',
-        personaIds: [placeholderId], agentIds: [placeholderId],
+        personaIds: [placeholderId],
       }, 'user1'));
       expect(result.status).toBe('draft');
     });
 
     it('should throw when non-draft has no personaIds', async () => {
       await expect(service.create({ ...validScenarioData, personaIds: [] }, 'user1'))
-        .rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw when non-draft has no agentIds', async () => {
-      await expect(service.create({ ...validScenarioData, agentIds: [] }, 'user1'))
         .rejects.toThrow(BadRequestException);
     });
 
@@ -177,7 +167,7 @@ describe('ScenarioService', () => {
 
     it('should filter by status', async () => {
       await service.create(validScenarioData);
-      await service.create({ ...validScenarioData, name: 'Draft', status: 'draft', personaIds: [personaId1], agentIds: [agentId1] });
+      await service.create({ ...validScenarioData, name: 'Draft', status: 'draft', personaIds: [personaId1] });
       const result = await service.findAll({ status: 'active' });
       expect(result.scenarios.length).toBe(1);
       expect(json(result.scenarios[0]).name).toBe('Customer Support Test');
@@ -370,14 +360,6 @@ describe('ScenarioService', () => {
       expect(result.errors).toContain('At least one persona is required');
     });
 
-    it('should error on missing agentIds', async () => {
-      const created = json(await service.create({ ...validScenarioData, status: 'draft' }));
-      await scenarioModel.findByIdAndUpdate(created.id, { agentIds: [] });
-      const result = await service.validate(created.id);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('At least one agent is required');
-    });
-
     it('should warn on missing description', async () => {
       const created = json(await service.create({ ...validScenarioData, description: undefined }));
       const result = await service.validate(created.id);
@@ -392,7 +374,7 @@ describe('ScenarioService', () => {
 
     it('should validate persona refs with personaLookup', async () => {
       const fakeId = new Types.ObjectId().toString();
-      const created = json(await service.create({ ...validScenarioData, status: 'draft', personaIds: [fakeId], agentIds: [agentId1] }));
+      const created = json(await service.create({ ...validScenarioData, status: 'draft', personaIds: [fakeId] }));
       const lookupFail = async () => { throw new NotFoundException('Not found'); };
       const result = await service.validate(created.id, lookupFail);
       expect(result.valid).toBe(false);
@@ -410,7 +392,6 @@ category: support
 difficulty: easy
 tags: [yaml, import]
 personaIds: [${personaId1}]
-agentIds: [${agentId1}]
 `;
       const result = json(await service.fromYaml(yamlStr, 'yaml-user'));
       expect(result.id).toBeDefined();

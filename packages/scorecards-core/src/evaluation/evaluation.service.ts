@@ -123,6 +123,7 @@ export class EvaluationService {
             passed: handlerResult.passed,
             reasoning: handlerResult.reasoning,
             evidence: handlerResult.evidence,
+            ...(handlerResult.notApplicable ? { notApplicable: true } : {}),
           });
         } catch (error: any) {
           this.logger.error(

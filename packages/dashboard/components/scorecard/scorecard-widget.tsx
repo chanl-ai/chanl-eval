@@ -100,7 +100,7 @@ function ScorecardMetricRow({ metric }: { metric: ScoreMetric }) {
   const segmentCount = metric.maxScore || metric.criteria?.length || 1;
   const maxPossibleSegments = 10;
   const segmentWidth = maxPossibleSegments / segmentCount;
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const dotPosition = metric.score > 0 ? metric.score - 1 : -1;
 

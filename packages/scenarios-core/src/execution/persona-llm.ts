@@ -1,43 +1,20 @@
 import { OpenAIAdapter } from '../adapters/openai.adapter';
 import { AnthropicAdapter } from '../adapters/anthropic.adapter';
 import { AgentMessage } from '../adapters/agent-adapter.interface';
+import { resolveLlmConfigSync } from './llm-config-resolver';
 
 const USER_TURN =
   'Respond as the customer with your next message only. Stay in character. Keep it to one or two short sentences. No role labels or quotes.';
 
 /**
  * Resolve API material for a separate "persona" LLM call (does not use the agent adapter instance).
+ * Delegates to the central resolver (tiers 1-3: config → legacy → env vars).
  */
 export function resolvePersonaLlmKey(
   adapterType: string | undefined,
   adapterConfig: Record<string, any> | undefined,
 ): { kind: 'openai' | 'anthropic'; apiKey: string; model?: string } | null {
-  const cfg = adapterConfig || {};
-
-  // Priority 1: Dedicated simulation key (separate from agent key)
-  if (typeof cfg.simulationApiKey === 'string' && cfg.simulationApiKey.length > 0) {
-    return {
-      kind: 'openai',
-      apiKey: cfg.simulationApiKey,
-      model: cfg.simulationModel || undefined,
-    };
-  }
-
-  // Priority 2: Legacy explicit persona key fields
-  const explicit =
-    cfg.personaLlmApiKey || cfg.personaOpenAiKey || cfg.openaiApiKey;
-  if (typeof explicit === 'string' && explicit.length > 0) {
-    return { kind: 'openai', apiKey: explicit };
-  }
-
-  // Priority 3: Fall back to agent's own key
-  if (adapterType === 'openai' && cfg.apiKey) {
-    return { kind: 'openai', apiKey: cfg.apiKey };
-  }
-  if (adapterType === 'anthropic' && cfg.apiKey) {
-    return { kind: 'anthropic', apiKey: cfg.apiKey };
-  }
-  return null;
+  return resolveLlmConfigSync(adapterType, adapterConfig);
 }
 
 /**

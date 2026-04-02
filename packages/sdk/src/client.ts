@@ -94,7 +94,9 @@ export class EvalClient {
       (error) => {
         if (axios.isAxiosError(error) && error.response) {
           const status = error.response.status;
-          const body = error.response.data as any;
+          const body = error.response.data as
+            | { message?: string; error?: { message?: string; code?: string } }
+            | undefined;
           const message = body?.message || body?.error?.message || error.message;
 
           if (status === 401) {

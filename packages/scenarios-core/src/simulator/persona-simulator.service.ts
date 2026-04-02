@@ -155,6 +155,21 @@ export class PersonaSimulatorService {
       parts.push(persona.backstory);
     }
 
+    // Custom variables — the persona's own details (order ID, email, etc.)
+    if (persona.variables && Object.keys(persona.variables).length > 0) {
+      parts.push('');
+      parts.push('## Your Details');
+      parts.push(
+        'These are YOUR details as a customer. Provide them when the agent asks or when relevant:',
+      );
+      for (const [key, value] of Object.entries(persona.variables)) {
+        const label = key
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        parts.push(`- ${label}: ${value}`);
+      }
+    }
+
     // Pacing guidance
     parts.push('');
     parts.push('## Pacing');
@@ -435,9 +450,9 @@ export class PersonaSimulatorService {
       neutral:
         'Be neutral in your cooperation. Answer direct questions but do not volunteer extra information.',
       difficult:
-        "Be somewhat resistant. Question instructions. Don't provide information easily. Make the agent work for it.",
+        "Be somewhat resistant and skeptical. Question the agent's suggestions. Provide your details when asked directly, but don't volunteer extra information. Make the agent earn your trust.",
       hostile:
-        'Be hostile and adversarial. Challenge everything the agent says. Refuse to cooperate unless given good reasons.',
+        'Be hostile and confrontational. Push hard for what you want. When the agent asks for your details (name, order number, email), provide them grudgingly — you shouldn\'t have to repeat yourself. Challenge solutions the agent proposes. Demand better options or escalation.',
     };
 
     return prompts[level] || prompts.cooperative;

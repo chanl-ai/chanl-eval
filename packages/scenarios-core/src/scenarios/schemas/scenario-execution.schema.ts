@@ -278,6 +278,9 @@ export class ScenarioExecution {
     retryReason: string;
   };
 
+  @Prop({ type: String })
+  scorecardSummary?: string;
+
   @Prop({ type: Object })
   scorecardResults?: {
     scorecardId: string;

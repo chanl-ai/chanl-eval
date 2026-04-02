@@ -184,56 +184,12 @@ export class Scenario {
     }[];
   };
 
-  // Template approach: arrays of personas and agents (cross-product generated at execution)
+  // Template approach: arrays of personas (cross-product generated at execution)
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Persona' }], required: true })
   personaIds!: Types.ObjectId[];
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Agent' }], required: true })
-  agentIds!: Types.ObjectId[];
-
   @Prop({ type: Types.ObjectId, ref: 'Scorecard', required: false })
   scorecardId?: Types.ObjectId;
-
-  /**
-   * Agent configuration overrides for testing scenarios.
-   * Keyed by agentId, allows per-agent customization without modifying the base agent.
-   */
-  @Prop({
-    type: Map,
-    of: {
-      type: Object,
-      properties: {
-        promptOverride: { type: String },
-        promptVariables: { type: Object },
-        temperature: { type: Number },
-        maxTokens: { type: Number },
-        tools: { type: [String] },
-        voice: {
-          type: Object,
-          properties: {
-            voiceId: { type: String },
-            speed: { type: Number },
-            stability: { type: Number },
-          },
-        },
-      },
-    },
-  })
-  agentOverrides?: Map<
-    string,
-    {
-      promptOverride?: string;
-      promptVariables?: Record<string, string>;
-      temperature?: number;
-      maxTokens?: number;
-      tools?: string[];
-      voice?: {
-        voiceId?: string;
-        speed?: number;
-        stability?: number;
-      };
-    }
-  >;
 
   // Optional: Phone number for phone simulation mode
   @Prop({ type: String })
@@ -245,6 +201,20 @@ export class Scenario {
     enum: ['text', 'websocket', 'phone'],
   })
   simulationMode?: 'text' | 'websocket' | 'phone';
+
+  /**
+   * Known facts the agent should adhere to. Used by the hallucination
+   * criteria handler to detect fabricated or contradictory responses.
+   */
+  @Prop({ type: String })
+  groundTruth?: string;
+
+  /**
+   * Which persona strategy to use during execution.
+   * 'default' = standard LLM persona, 'reactive' = tool-augmented persona.
+   */
+  @Prop({ type: String, default: 'default' })
+  personaStrategyType?: string;
 
   // Tags for organization and filtering
   @Prop({ type: [String], default: [] })
@@ -287,4 +257,3 @@ ScenarioSchema.index({ createdBy: 1 });
 ScenarioSchema.index({ tags: 1 });
 ScenarioSchema.index({ 'metrics.lastExecuted': 1 });
 ScenarioSchema.index({ personaIds: 1 });
-ScenarioSchema.index({ agentIds: 1 });

@@ -411,14 +411,15 @@ describe('ToolCallHandler', () => {
     expect(result.passed).toBe(true);
   });
 
-  it('should fail gracefully when no tool calls exist', async () => {
+  it('should return N/A when no tool calls exist', async () => {
     const criteria = makeCriteria({
       type: CriteriaType.TOOL_CALL,
       settings: { expectedTool: 'process_refund' },
     });
     const result = await handler.evaluate(criteria, makeContext());
-    expect(result.passed).toBe(false);
-    expect(result.reasoning).toContain('none');
+    expect(result.passed).toBe(true);
+    expect(result.notApplicable).toBe(true);
+    expect(result.reasoning).toContain('No tools available');
   });
 });
 

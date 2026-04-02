@@ -80,7 +80,7 @@ export default function RunsListPage() {
               icon={ScrollText}
               title="No test runs yet"
               description="Run your first scenario test from the playground to see results here."
-              action={{ label: 'Go to Playground', href: '/' }}
+              action={{ label: 'Go to Playground', href: '/playground' }}
             />
           </CardContent>
         </Card>

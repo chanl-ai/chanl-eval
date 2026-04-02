@@ -1,15 +1,17 @@
 import type { ExecuteScenarioDto } from '@chanl/eval-sdk';
-import type { AdapterType } from '@/lib/eval-config';
 
+/**
+ * Build the execute payload for a scenario run.
+ * The only agent config source is the Prompt entity identified by promptId.
+ * API keys come from server-side Settings — never sent from the client.
+ */
 export function buildExecutePayload(
-  adapterType: AdapterType,
-  agentApiKey: string,
-  extra?: Partial<ExecuteScenarioDto>,
-): ExecuteScenarioDto & { adapterType: string; adapterConfig: { apiKey: string } } {
+  promptId: string,
+  extra?: Partial<Omit<ExecuteScenarioDto, 'promptId'>>,
+): ExecuteScenarioDto {
   return {
+    promptId,
     mode: 'text',
     ...extra,
-    adapterType,
-    adapterConfig: { apiKey: agentApiKey },
   };
 }

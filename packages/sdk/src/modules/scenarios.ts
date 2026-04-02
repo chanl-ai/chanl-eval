@@ -24,7 +24,6 @@ export class ScenariosModule {
    */
   async list(params?: ListScenariosParams): Promise<ListScenariosResponse> {
     const queryParams: Record<string, string | number | boolean> = {};
-    if (params?.agentId) queryParams.agentId = params.agentId;
     if (params?.status) queryParams.status = params.status;
     if (params?.category) queryParams.category = params.category;
     if (params?.difficulty) queryParams.difficulty = params.difficulty;
@@ -81,8 +80,8 @@ export class ScenariosModule {
   /**
    * Execute a scenario.
    */
-  async execute(id: string, options?: ExecuteScenarioDto): Promise<Execution> {
-    const response = await this.http.post(`/scenarios/${id}/execute`, options || {});
+  async execute(id: string, options: ExecuteScenarioDto): Promise<Execution> {
+    const response = await this.http.post(`/scenarios/${id}/execute`, options);
     const data = unwrapResponse<any>(response);
     return data.execution || data;
   }

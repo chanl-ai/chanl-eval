@@ -36,6 +36,9 @@ export interface EvaluationContext {
     function?: { name: string };
   }>;
 
+  /** Ground truth facts for hallucination detection */
+  groundTruth?: string;
+
   /** Optional LLM evaluation function for prompt-type criteria */
   llmEvaluate?: (params: {
     criterionName: string;
@@ -85,4 +88,6 @@ export interface CriteriaHandlerResult {
   passed: boolean;
   reasoning: string;
   evidence: string[];
+  /** When true, this criterion was skipped (no ground truth, no tools, etc.) — should display as N/A, not pass/fail */
+  notApplicable?: boolean;
 }

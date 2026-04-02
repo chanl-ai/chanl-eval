@@ -1,8 +1,9 @@
 import { Command } from 'commander';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
+import axios from 'axios';
 import { setConfig, getConfig } from '../config';
-import { get, formatError } from '../client';
+import { formatError } from '../client';
 import { printSuccess, printError } from '../output';
 
 export function registerLoginCommand(program: Command): void {
@@ -40,10 +41,11 @@ export function registerLoginCommand(program: Command): void {
         // Store the key
         setConfig('apiKey', apiKey);
 
-        // Verify the key works by hitting the health endpoint
+        // Verify the key works by hitting the health endpoint (root path, no /api/v1 prefix)
         const server = getConfig('server');
         try {
-          const health = await get('/health');
+          const res = await axios.get(`${server}/health`, { timeout: 3000 });
+          const health = res.data;
           printSuccess(
             `Authenticated with ${server} (server v${health.version || 'unknown'})`,
           );

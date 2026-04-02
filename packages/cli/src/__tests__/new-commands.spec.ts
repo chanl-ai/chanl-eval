@@ -455,6 +455,7 @@ describe('New CLI Commands', () => {
         'scenarios',
         'run',
         'angry-customer-refund',
+        '--prompt-id', 'prompt-abc',
         '--no-wait',
       ]);
 

@@ -529,7 +529,7 @@ export class ScorecardsService {
         status: defaultData.status,
       });
 
-      const scorecardId = (createdScorecard as any)._id;
+      const scorecardId = createdScorecard._id;
       if (!scorecardId) {
         throw new Error('Failed to extract scorecard ID after creation');
       }
@@ -551,7 +551,7 @@ export class ScorecardsService {
         );
 
         const categoryIdStr =
-          (category as any)._id?.toString() || '';
+          category._id?.toString() || '';
 
         for (const criteriaData of categoryData.criteria) {
           await this.createCriteria(

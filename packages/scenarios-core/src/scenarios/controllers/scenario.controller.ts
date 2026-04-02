@@ -64,7 +64,6 @@ export class ScenarioController {
 
   @Get()
   async findAll(
-    @Query('agentId') agentId?: string,
     @Query('status') status?: string,
     @Query('category') category?: string,
     @Query('difficulty') difficulty?: string,
@@ -77,7 +76,6 @@ export class ScenarioController {
   ) {
     try {
       const filters: any = {};
-      if (agentId) filters.agentId = agentId;
       if (status) filters.status = status;
       if (category) filters.category = category;
       if (difficulty) filters.difficulty = difficulty;

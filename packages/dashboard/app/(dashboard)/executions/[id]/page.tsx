@@ -42,6 +42,8 @@ import { PageLayout } from '@/components/shared/page-layout';
 import { DeleteDialog } from '@/components/shared/delete-dialog';
 import { TranscriptView, type TranscriptMessage } from '@/components/transcript/transcript-view';
 import { ScorecardWidget } from '@/components/scorecard/scorecard-widget';
+import { ShareResults } from '@/components/share-results';
+import { useFirstRunPrompt } from '@/components/first-run-prompt';
 import { useEvalConfig } from '@/lib/eval-config';
 import type { ScoreMetric, ScorecardCriterionDisplay } from '@/components/scorecard/types';
 import type { Execution, Scorecard, ScorecardResult } from '@chanl/eval-sdk';
@@ -168,17 +170,20 @@ function scorecardResultToMetrics(result: ScorecardResult): ScoreMetric[] {
       name: cr.criteriaName,
       passed: cr.passed,
       explanation: cr.reasoning,
-      evidence: cr.evidence?.length > 0 ? cr.evidence : undefined,
+      evidence: cr.evidence?.length > 0 ? cr.evidence.slice(0, 2) : undefined,
+      notApplicable: (cr as any).notApplicable ?? false,
+      notApplicableReason: (cr as any).notApplicable ? cr.reasoning : undefined,
     });
   }
 
   return Array.from(categoryMap.values()).map(({ name, criteria }) => {
-    const passed = criteria.filter((c) => c.passed).length;
+    const applicable = criteria.filter((c) => !c.notApplicable);
+    const passed = applicable.filter((c) => c.passed).length;
     return {
       name,
       score: passed,
-      maxScore: criteria.length,
-      status: passed >= criteria.length * 0.5 ? 'pass' as const : 'fail' as const,
+      maxScore: applicable.length,
+      status: applicable.length === 0 ? 'pass' as const : passed > applicable.length * 0.5 ? 'pass' as const : 'fail' as const,
       criteria,
     };
   });
@@ -211,17 +216,20 @@ function embeddedResultsToMetrics(result: {
       name: cr.criteriaName || cr.criteriaId,
       passed: cr.passed,
       explanation: cr.reasoning,
-      evidence: cr.evidence?.length ? cr.evidence : undefined,
+      evidence: cr.evidence?.length ? cr.evidence.slice(0, 2) : undefined,
+      notApplicable: (cr as any).notApplicable ?? false,
+      notApplicableReason: (cr as any).notApplicable ? cr.reasoning : undefined,
     });
   }
 
   return Array.from(categoryMap.values()).map(({ name, criteria }) => {
-    const passed = criteria.filter((c) => c.passed).length;
+    const applicable = criteria.filter((c) => !c.notApplicable);
+    const passed = applicable.filter((c) => c.passed).length;
     return {
       name,
       score: passed,
-      maxScore: criteria.length,
-      status: passed >= criteria.length * 0.5 ? 'pass' as const : 'fail' as const,
+      maxScore: applicable.length,
+      status: applicable.length === 0 ? 'pass' as const : passed > applicable.length * 0.5 ? 'pass' as const : 'fail' as const,
       criteria,
     };
   });
@@ -323,19 +331,35 @@ export default function RunDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = typeof params.id === 'string' ? params.id : '';
-  const { client, agentApiKey, simApiKey } = useEvalConfig();
+  const { client } = useEvalConfig();
   const qc = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fetch execution data
+  // Fetch execution data — auto-poll while running/queued
   const q = useQuery({
     queryKey: ['execution', id],
     queryFn: () => client.executions.get(id),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'running' || status === 'queued' ? 2000 : false;
+    },
   });
 
   const execution = q.data;
+  const isActive = execution?.status === 'running' || execution?.status === 'queued';
+
+  // Fetch scenario name for share dialog
+  const scenarioQ = useQuery({
+    queryKey: ['scenario', execution?.scenarioId],
+    queryFn: () => client.scenarios.get(execution!.scenarioId!),
+    enabled: !!execution?.scenarioId,
+  });
+  const scenarioName = scenarioQ.data?.name;
+
+  // First-run star/follow prompt
+  useFirstRunPrompt(execution?.status === 'completed');
 
   // Scorecard evaluation state
   const [selectedScorecardId, setSelectedScorecardId] = useState<string>('');
@@ -388,14 +412,14 @@ export default function RunDetailPage() {
       ? Math.round(scorecardResult.overallScore * 10)
       : execution?.overallScore ?? undefined;
 
+  const scorecardSummary = (execution as any)?.scorecardSummary as string | undefined;
+
   const messages = execution ? executionToMessages(execution) : [];
 
-  // Evaluate mutation — passes user's API key for the LLM judge
-  // Priority: simApiKey (dedicated judge key) > agentApiKey (fallback)
-  const judgeKey = simApiKey || agentApiKey || undefined;
+  // Evaluate mutation — server resolves API key from env vars
   const evaluateMutation = useMutation({
     mutationFn: (scorecardId: string) =>
-      client.executions.evaluate(id, { scorecardId, apiKey: judgeKey }),
+      client.executions.evaluate(id, { scorecardId }),
     onSuccess: () => {
       toast.success('Scorecard evaluation complete');
       void qc.invalidateQueries({ queryKey: ['execution', id] });
@@ -426,14 +450,37 @@ export default function RunDetailPage() {
       backHref="/executions"
       title={execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail'}
       description={execution ? formatDate(execution.createdAt) : 'Loading...'}
+      titleExtra={
+        execution ? (
+          <div className="flex items-center gap-2">
+            <Badge variant={getStatusVariant(execution.status)} className="gap-1">
+              {isActive ? <Loader2 className="h-3 w-3 animate-spin" /> : getStatusIcon(execution.status)}
+              {execution.status}
+            </Badge>
+            {displayScore != null && (
+              <Badge variant="outline" className="font-mono tabular-nums">
+                {displayScore}%
+              </Badge>
+            )}
+          </div>
+        ) : undefined
+      }
       actions={
         execution ? (
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => router.push('/playground')}>
+            <ShareResults
+              metrics={metrics}
+              overallScore={displayScore}
+              scenarioName={scenarioName}
+              executionDate={execution.createdAt}
+              turnCount={messages.length}
+              duration={formatDuration(execution.duration ?? (execution.endTime && execution.startTime ? new Date(execution.endTime).getTime() - new Date(execution.startTime).getTime() : undefined))}
+            />
+            <Button variant="outline" size="sm" onClick={() => router.push('/playground')} disabled={isActive}>
               <RotateCcw className="mr-2 h-3.5 w-3.5" />
               Run Again
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} data-testid="delete-run">
+            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} disabled={isActive} data-testid="delete-run">
               <Trash2 className="mr-2 h-3.5 w-3.5" />
               Delete
             </Button>
@@ -455,19 +502,6 @@ export default function RunDetailPage() {
         </Card>
       ) : execution ? (
         <div className="space-y-6">
-          {/* Status bar */}
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge variant={getStatusVariant(execution.status)} className="gap-1">
-              {getStatusIcon(execution.status)}
-              {execution.status}
-            </Badge>
-            {execution.overallScore != null && (
-              <Badge variant="outline" className="font-mono tabular-nums">
-                Score: {execution.overallScore}%
-              </Badge>
-            )}
-          </div>
-
           {/* Stat cards */}
           <StatCards execution={execution} />
 
@@ -514,7 +548,14 @@ export default function RunDetailPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {evaluateMutation.isPending ? (
+                {isActive ? (
+                  /* State 0: Running */
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+                    <p className="text-sm font-medium text-muted-foreground">Test is running...</p>
+                    <p className="text-xs text-muted-foreground mt-1">Waiting for the conversation to complete. This page updates automatically.</p>
+                  </div>
+                ) : evaluateMutation.isPending ? (
                   /* State 2: Evaluating */
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
@@ -526,6 +567,7 @@ export default function RunDetailPage() {
                   <ScorecardWidget
                     metrics={metrics}
                     overallScorePercentage={displayScore}
+                    summary={scorecardSummary}
                   />
                 ) : (
                   /* State 1: No evaluation — show picker */
@@ -535,15 +577,7 @@ export default function RunDetailPage() {
                     <p className="text-xs text-muted-foreground mt-1 mb-4">
                       Select a scorecard to evaluate this conversation
                     </p>
-                    {!judgeKey && (
-                      <p className="text-xs text-destructive mb-3">
-                        No API key configured. Set one in{' '}
-                        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => router.push('/settings')}>
-                          Settings
-                        </Button>{' '}
-                        (Agent or Simulation key).
-                      </p>
-                    )}
+                    {/* Server resolves API key from environment — no client key needed */}
                     <div className="w-full max-w-[220px] space-y-3">
                       <Select value={selectedScorecardId} onValueChange={setSelectedScorecardId}>
                         <SelectTrigger data-testid="scorecard-picker">
@@ -561,7 +595,7 @@ export default function RunDetailPage() {
                       <Button
                         className="w-full"
                         size="sm"
-                        disabled={!selectedScorecardId || evaluateMutation.isPending}
+                        disabled={!selectedScorecardId || evaluateMutation.isPending || isActive}
                         onClick={() => evaluateMutation.mutate(selectedScorecardId)}
                         data-testid="evaluate-button"
                       >

@@ -20,7 +20,8 @@ import {
 } from '../dto/execute-scenario.dto';
 import { QueueProducerService } from '../../execution/queue-producer.service';
 import { EvaluationService } from '@chanl/scorecards-core';
-import { buildOpenAiJudge } from '../../execution/judge-llm';
+import { buildLlmJudge } from '../../execution/judge-llm';
+
 
 @Injectable()
 export class ScenarioExecutionService {
@@ -63,9 +64,7 @@ export class ScenarioExecutionService {
       const executionData: any = {
         executionId,
         scenarioId: new Types.ObjectId(scenarioId),
-        agentId: executeDto.agentId
-          ? new Types.ObjectId(executeDto.agentId)
-          : scenario.agentIds?.[0],
+        promptId: new Types.ObjectId(executeDto.promptId),
         personaId: executeDto.personaId
           ? new Types.ObjectId(executeDto.personaId)
           : scenario.personaIds?.[0],
@@ -90,11 +89,9 @@ export class ScenarioExecutionService {
 
       // Enqueue the BullMQ job for the execution processor
       await this.queueProducer.enqueueExecution(executionId, scenarioId, {
-        adapterType: executeDto.adapterType,
-        adapterConfig: executeDto.adapterConfig,
+        promptId: executeDto.promptId,
         personaId:
           executeDto.personaId || scenario.personaIds?.[0]?.toString(),
-        agentId: executeDto.agentId || scenario.agentIds?.[0]?.toString(),
         parameters: executeDto.parameters,
         toolFixtureIds: executeDto.toolFixtureIds,
       });
@@ -502,11 +499,37 @@ export class ScenarioExecutionService {
     }));
 
     // 3. Resolve an API key for the LLM judge
-    //    Priority: dto.apiKey > OPENAI_API_KEY env var
-    const judgeApiKey =
-      dto.apiKey || process.env.OPENAI_API_KEY || undefined;
+    // Priority: Settings DB (UI-configured) > env vars (headless/CI fallback)
+    let judgeApiKey: string | undefined;
+    let judgeKind: 'openai' | 'anthropic' = 'openai';
 
-    const llmEvaluate = buildOpenAiJudge(judgeApiKey);
+    // Settings DB first — this is where the Settings UI saves keys
+    try {
+      const settingsDoc = await this.executionModel.db.collection('settings').findOne({});
+      const providerKeys: Record<string, string> = settingsDoc?.providerKeys ?? {};
+      if (providerKeys.openai) {
+        judgeApiKey = providerKeys.openai;
+        judgeKind = 'openai';
+      } else if (providerKeys.anthropic) {
+        judgeApiKey = providerKeys.anthropic;
+        judgeKind = 'anthropic';
+      }
+    } catch {
+      // Settings lookup failed — fall through to env vars
+    }
+
+    // Env var fallback (headless/CI)
+    if (!judgeApiKey && process.env.CHANL_OPENAI_API_KEY) {
+      judgeApiKey = process.env.CHANL_OPENAI_API_KEY;
+      judgeKind = 'openai';
+    } else if (!judgeApiKey && process.env.CHANL_ANTHROPIC_API_KEY) {
+      judgeApiKey = process.env.CHANL_ANTHROPIC_API_KEY;
+      judgeKind = 'anthropic';
+    }
+
+    const llmEvaluate = judgeApiKey
+      ? buildLlmJudge({ kind: judgeKind, apiKey: judgeApiKey })
+      : undefined;
 
     // 4. Calculate first-response latency metric
     const firstAgentStep = conversationSteps.find((s) => s.role === 'agent');
@@ -552,9 +575,19 @@ export class ScenarioExecutionService {
         ? { _id: executionId }
         : { executionId };
 
+      // Generate critical summary — reuse the same judge key
+      let scorecardSummary: string | undefined;
+      if (judgeApiKey) {
+        try {
+          scorecardSummary = await this.generateEvalSummary(evalResult, { kind: judgeKind, apiKey: judgeApiKey });
+        } catch {
+          // Non-fatal — summary is optional
+        }
+      }
+
       const updated = await this.executionModel.findOneAndUpdate(
         filter,
-        { $set: { scorecardResults } },
+        { $set: { scorecardResults, ...(scorecardSummary ? { scorecardSummary } : {}) } },
         { new: true },
       );
 
@@ -584,5 +617,60 @@ export class ScenarioExecutionService {
         `Evaluation failed: ${error.message}`,
       );
     }
+  }
+
+  private async generateEvalSummary(
+    evalResult: { overallScore: number; passed: boolean; criteriaResults: Array<{ criteriaName?: string; categoryName?: string; passed: boolean; reasoning?: string }> },
+    llmConfig: { kind: string; apiKey: string; model?: string },
+  ): Promise<string | undefined> {
+    const failed = evalResult.criteriaResults.filter((c) => !c.passed);
+    const passed = evalResult.criteriaResults.filter((c) => c.passed);
+    const scorePercent = Math.round(evalResult.overallScore * 10);
+
+    const prompt = `You are a QA analyst summarizing an AI agent evaluation.
+
+Score: ${scorePercent}% (${passed.length}/${evalResult.criteriaResults.length} criteria passed)
+
+Failed criteria:
+${failed.length === 0 ? 'None — all criteria passed.' : failed.map((c) => `- ${c.criteriaName} (${c.categoryName}): ${c.reasoning || 'No reasoning'}`).join('\n')}
+
+Passed criteria:
+${passed.map((c) => `- ${c.criteriaName} (${c.categoryName})`).join('\n')}
+
+Write a critical 2-3 sentence summary. Focus on what went wrong (if anything) and the most important strengths. Be specific — name the criteria. No filler.`;
+
+    if (llmConfig.kind === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${llmConfig.apiKey}` },
+        body: JSON.stringify({
+          model: llmConfig.model || 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 150,
+          temperature: 0.3,
+        }),
+      });
+      if (!res.ok) return undefined;
+      const data: any = await res.json();
+      return data.choices?.[0]?.message?.content?.trim() || undefined;
+    } else if (llmConfig.kind === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': llmConfig.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: llmConfig.model || 'claude-3-5-haiku-20241022',
+          max_tokens: 150,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      if (!res.ok) return undefined;
+      const data: any = await res.json();
+      return data.content?.[0]?.text?.trim() || undefined;
+    }
+    return undefined;
   }
 }

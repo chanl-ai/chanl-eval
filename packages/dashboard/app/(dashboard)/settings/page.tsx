@@ -125,7 +125,7 @@ export default function SettingsPage() {
         {/* Agent Under Test */}
         <LlmConfigCard
           title="Agent Under Test"
-          description="The LLM being evaluated. This is the model your production agent uses."
+          description="The LLM being evaluated. Model and provider are saved per Prompt. API key is resolved server-side from environment variables."
           provider={adapterType}
           onProviderChange={setAdapterType}
           showProvider
@@ -134,7 +134,7 @@ export default function SettingsPage() {
           modelHint="The exact model your agent runs in production. Select a preset or type any model ID."
           apiKey={agentApiKey}
           onApiKeyChange={setAgentApiKey}
-          apiKeyHint="Sent directly to the provider during test runs. Never stored on the eval server."
+          apiKeyHint="Optional override. Server resolves from CHANL_OPENAI_API_KEY / CHANL_ANTHROPIC_API_KEY if empty."
           baseUrl={agentBaseUrl}
           onBaseUrlChange={setAgentBaseUrl}
           showBaseUrl
@@ -156,9 +156,7 @@ export default function SettingsPage() {
           apiKey={simApiKey}
           onApiKeyChange={setSimApiKey}
           apiKeyPlaceholder={agentApiKey ? 'Leave empty to reuse Agent key' : 'sk-...'}
-          apiKeyHint={agentApiKey
-            ? 'Falls back to the Agent API key if left empty.'
-            : 'OpenAI API key for persona generation and scorecard judge.'}
+          apiKeyHint="Optional override. Falls back to agent key, then server environment variables."
         />
 
         {/* API Docs */}

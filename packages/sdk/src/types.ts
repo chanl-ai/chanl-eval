@@ -92,7 +92,6 @@ export interface Scenario {
   difficulty?: string;
   tags?: string[];
   personaIds?: string[];
-  agentIds?: string[];
   scorecardId?: string;
   simulationMode?: 'text' | 'websocket' | 'phone';
   phoneNumber?: string;
@@ -102,18 +101,6 @@ export interface Scenario {
     defaultValue: string;
     description?: string;
     required?: boolean;
-  }>;
-  agentOverrides?: Record<string, {
-    promptOverride?: string;
-    promptVariables?: Record<string, string>;
-    temperature?: number;
-    maxTokens?: number;
-    tools?: string[];
-    voice?: {
-      voiceId?: string;
-      speed?: number;
-      stability?: number;
-    };
   }>;
   createdBy?: string;
   createdAt?: string;
@@ -135,7 +122,6 @@ export interface CreateScenarioDto {
   difficulty?: 'easy' | 'medium' | 'hard';
   tags?: string[];
   personaIds: string[];
-  agentIds: string[];
   scorecardId?: string;
   simulationMode?: 'text' | 'websocket' | 'phone';
   phoneNumber?: string;
@@ -146,24 +132,11 @@ export interface CreateScenarioDto {
     description?: string;
     required?: boolean;
   }>;
-  agentOverrides?: Record<string, {
-    promptOverride?: string;
-    promptVariables?: Record<string, string>;
-    temperature?: number;
-    maxTokens?: number;
-    tools?: string[];
-    voice?: {
-      voiceId?: string;
-      speed?: number;
-      stability?: number;
-    };
-  }>;
 }
 
 export interface UpdateScenarioDto extends Partial<CreateScenarioDto> {}
 
 export interface ListScenariosParams {
-  agentId?: string;
   status?: string;
   category?: string;
   difficulty?: string;
@@ -189,7 +162,8 @@ export interface Execution {
   /** UUID format: exec_<uuid>. Used to link scorecard results. */
   executionId?: string;
   scenarioId: string;
-  agentId?: string;
+  /** The Prompt entity used for this execution */
+  promptId?: string;
   personaId?: string;
   status: string;
   mode?: 'text' | 'phone';
@@ -219,9 +193,10 @@ export interface Execution {
 }
 
 export interface ExecuteScenarioDto {
+  /** The Prompt entity that defines the agent under test (required) */
+  promptId: string;
   mode?: 'text' | 'phone';
   phoneNumber?: string;
-  agentId?: string;
   personaId?: string;
   scorecardId?: string;
   toolFixtureIds?: string[];
@@ -234,7 +209,7 @@ export interface ExecuteScenarioDto {
 
 export interface ListExecutionsParams {
   scenarioId?: string;
-  agentId?: string;
+  promptId?: string;
   personaId?: string;
   status?: string;
   triggerId?: string;

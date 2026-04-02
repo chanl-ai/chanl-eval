@@ -23,6 +23,11 @@ export class OpenAIAdapter implements AgentAdapter {
       endpoint: 'https://api.openai.com/v1/chat/completions',
       ...config,
     };
+    // Defense-in-depth: AgentConfigResolver strips undefined values, but
+    // guard against endpoint being wiped if config is assembled elsewhere.
+    if (!this.config.endpoint) {
+      this.config.endpoint = 'https://api.openai.com/v1/chat/completions';
+    }
     this.connected = true;
   }
 
@@ -115,7 +120,7 @@ export class OpenAIAdapter implements AgentAdapter {
 
   formatToolResult(toolCallId: string, _toolName: string, result: any): AgentMessage {
     return {
-      role: 'user' as any,
+      role: 'user',
       content: typeof result === 'string' ? result : JSON.stringify(result),
       providerData: {
         role: 'tool',

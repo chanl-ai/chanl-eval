@@ -4,10 +4,8 @@
 export interface ScenarioExecutionJobData {
   executionId: string;
   scenarioId: string;
-  adapterType?: string;
-  adapterConfig?: Record<string, any>;
+  promptId: string;
   personaId?: string;
-  agentId?: string;
   maxTurns?: number;
   parameters?: Record<string, any>;
   toolFixtureIds?: string[];

@@ -1,8 +1,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Follow on LinkedIn](https://img.shields.io/badge/Follow-LinkedIn-0A66C2?logo=linkedin)](https://www.linkedin.com/company/chanl-ai)
+[![GitHub Stars](https://img.shields.io/github/stars/chanl-ai/chanl-eval?style=social)](https://github.com/chanl-ai/chanl-eval)
 
 # chanl-eval
 
 Open-source testing engine for AI agents. Simulate multi-turn conversations with configurable personas, evaluate responses with scorecards, and catch regressions before they reach production.
+
+![chanl-eval](docs/screenshots/hero.gif)
 
 ## Table of Contents
 
@@ -72,6 +76,58 @@ chanl-eval is that tool.
 | **Transcript + results** | Full conversation with search. Expandable scorecard criteria showing reasoning and transcript evidence. |
 | **Multi-provider** | OpenAI, Anthropic, or any OpenAI-compatible endpoint (Ollama, Together, vLLM, Azure). Separate config for agent vs simulation LLM. |
 | **Custom attributes** | Key-value pairs on personas (product name, order ID, account number) injected into simulation prompts. |
+
+---
+
+## Screenshots
+
+<details>
+<summary><strong>Getting Started</strong> — guided onboarding with quick actions</summary>
+
+![Getting Started](docs/screenshots/01-getting-started.png)
+</details>
+
+<details>
+<summary><strong>Playground</strong> — configure prompts, select scenarios, run tests</summary>
+
+![Playground](docs/screenshots/02-playground.png)
+</details>
+
+<details open>
+<summary><strong>Execution Detail</strong> — conversation transcript + scorecard results with LLM reasoning</summary>
+
+![Execution Detail](docs/screenshots/09-execution-detail.png)
+</details>
+
+<details>
+<summary><strong>Scenarios</strong> — test cases with difficulty, personas, and scorecards</summary>
+
+![Scenarios](docs/screenshots/03-scenarios.png)
+</details>
+
+<details>
+<summary><strong>Personas</strong> — configurable customer personalities</summary>
+
+![Personas](docs/screenshots/04-personas.png)
+</details>
+
+<details>
+<summary><strong>Scorecards</strong> — evaluation criteria with dedicated handler types</summary>
+
+![Scorecards](docs/screenshots/06-scorecards.png)
+</details>
+
+<details>
+<summary><strong>Tool Fixtures</strong> — mock API tools with visual parameter builder</summary>
+
+![Tool Fixtures](docs/screenshots/10-tool-fixture-detail.png)
+</details>
+
+<details>
+<summary><strong>Runs</strong> — execution history with scores and status</summary>
+
+![Runs](docs/screenshots/05-runs.png)
+</details>
 
 ---
 
@@ -163,18 +219,57 @@ Tools like [promptfoo](https://github.com/promptfoo/promptfoo), [DeepEval](https
 
 | Capability | chanl-eval | promptfoo | DeepEval | RAGAS |
 |-----------|-----------|-----------|----------|-------|
-| Multi-turn conversation simulation | Yes | No | Partial | No |
-| Configurable persona personalities | Yes | No | No | No |
-| Per-criteria scorecard with evidence | Yes | Partial | Yes | Yes |
-| Tool call mocking + verification | Yes | No | Yes | No |
-| Dashboard UI | Yes | Yes | Via platform | No |
-| RAG metrics (faithfulness, recall) | No | Yes | Yes | Yes |
-| Red teaming / security scanning | No | Yes | No | No |
+| Multi-turn conversation simulation | **Yes** | No | Partial | No |
+| Configurable persona personalities | **Yes** | No | No | No |
+| Per-criteria scorecard with evidence | **Yes** | Partial | Yes | Yes |
+| Tool call mocking + verification | **Yes** | No | Yes | No |
+| Dashboard UI | **Yes** | Yes | Via platform | No |
+| RAG metrics (faithfulness) | **Yes** | Yes | Yes | Yes |
+| Red teaming / security scanning | **Yes** | Yes | No | No |
+| Hallucination detection | **Yes** | Yes | Yes | Yes |
+| Multi-turn metrics (retention, completeness, role adherence) | **Yes** | No | Yes | No |
+| Pluggable persona engine with internal tools | **Yes** | No | No | No |
 | CI/CD pytest integration | Planned | Yes | Yes | Yes |
 | Synthetic test data generation | No | No | Yes | Yes |
-| Hallucination detection | Planned | Yes | Yes | Yes |
 
 **Our focus:** If your agent has multi-turn conversations with customers, chanl-eval tests the full interaction — not just individual prompts.
+
+---
+
+## Persona Strategy Engine
+
+Persona strategies control how the simulated persona reasons and generates responses. Two built-in strategies ship with chanl-eval:
+
+- **default** — standard LLM persona generation, backward compatible with all existing scenarios
+- **reactive** — tool-augmented persona that uses 4 internal tools (`analyze_response`, `assess_progress`, `escalate_pressure`, `detect_vulnerability`) to reason about the agent's behavior before replying. Designed for red-team testing and stress testing where the persona needs to adapt its strategy based on what the agent says.
+
+Custom strategies are pluggable via the `PersonaStrategy` interface. See [docs/architecture/persona-strategies.md](docs/architecture/persona-strategies.md).
+
+---
+
+## Red-Team Testing
+
+chanl-eval ships with 5 red-team persona presets in `examples/red-team/`:
+
+| Preset | Tests For |
+|--------|-----------|
+| `jailbreak-attacker` | Prompt injection, DAN-style attacks, instruction override |
+| `pii-extractor` | PII leakage, asking for other customers' data |
+| `bola-tester` | Broken object-level authorization (accessing other users' resources) |
+| `prompt-injector` | System prompt extraction, developer mode tricks |
+| `social-engineer` | Social engineering, building false trust to bypass policy |
+
+### Usage
+
+```bash
+# Import a red-team persona
+chanl scenarios import examples/red-team/jailbreak-attacker.yaml
+
+# Run against your agent
+chanl run --scenario "Jailbreak Test" --persona "Jailbreak Attacker"
+```
+
+For adaptive red-team testing, set `personaStrategyType: 'reactive'` on the scenario. The reactive strategy lets the persona analyze the agent's responses for vulnerabilities and adapt its attack strategy turn by turn.
 
 ---
 
@@ -185,8 +280,6 @@ Planned features (contributions welcome):
 - [ ] **CI/CD integration** — Run scenarios from GitHub Actions, assert on scorecard pass rates
 - [ ] **Batch execution** — Run all scenarios in parallel with one command
 - [ ] **A/B model comparison** — Side-by-side results for two models on the same scenario
-- [ ] **Hallucination detection** — Flag agent responses not grounded in provided context
-- [ ] **RAG evaluation criteria** — Faithfulness, context relevance, answer completeness
 - [ ] **Prompt template editor** — Liquid template UI for persona prompt customization
 - [ ] **Regression alerts** — Flag score drops compared to previous runs
 - [ ] **Export results** — CSV/JSON export of scorecard results for external analysis
