@@ -108,30 +108,33 @@ export function CreateScenarioDialog({ open, onOpenChange }: CreateScenarioDialo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              placeholder="Describe the scenario context..."
-              className="min-h-[80px] resize-none"
-              {...form.register('description')}
-              data-testid="scenario-description-input"
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="prompt">
-              Prompt <span className="text-destructive">*</span>
+              Situation Prompt <span className="text-destructive">*</span>
             </Label>
             <Textarea
               id="prompt"
-              placeholder="e.g. Handle this customer who was double-charged $49.99..."
-              className="min-h-[120px] resize-none font-mono text-sm"
+              placeholder="e.g. I was charged twice for my subscription — $49.99 on March 20 and again on March 21. I already called about this last week and was told it would be reversed, but nothing happened..."
+              className="min-h-[200px] resize-none font-mono text-sm"
               {...form.register('prompt')}
               data-testid="scenario-prompt-input"
             />
+            <p className="text-[11px] text-muted-foreground">
+              The customer&apos;s situation — written in first person.
+            </p>
             {form.formState.errors.prompt && (
               <p className="text-xs text-destructive">{form.formState.errors.prompt.message}</p>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+            <Textarea
+              id="description"
+              placeholder="What this scenario tests and what a good outcome looks like..."
+              className="min-h-[60px] resize-none"
+              {...form.register('description')}
+              data-testid="scenario-description-input"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

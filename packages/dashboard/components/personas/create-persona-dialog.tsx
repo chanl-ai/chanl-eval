@@ -137,6 +137,20 @@ export function CreatePersonaDialog({ open, onOpenChange }: CreatePersonaDialogP
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="persona-backstory">Backstory <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Textarea
+              id="persona-backstory"
+              placeholder='e.g. You are a longtime customer who has had multiple frustrating support experiences. You have a low tolerance for scripted responses...'
+              className="min-h-[160px] resize-none font-mono text-sm"
+              {...form.register('backstory')}
+              data-testid="persona-backstory-input"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Who is this person? Write in second person: &quot;You are...&quot;
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Emotion</Label>
@@ -197,17 +211,6 @@ export function CreatePersonaDialog({ open, onOpenChange }: CreatePersonaDialogP
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="persona-backstory">Backstory <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Textarea
-              id="persona-backstory"
-              placeholder="Additional context about this persona's situation..."
-              className="min-h-[80px] resize-none"
-              {...form.register('backstory')}
-              data-testid="persona-backstory-input"
-            />
           </div>
 
           <DialogFooter>

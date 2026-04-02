@@ -74,15 +74,15 @@ export default function PersonasListPage() {
                       <CardTitle className="text-base font-medium truncate">
                         {p.name}
                       </CardTitle>
-                      {p.description && (
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {p.description}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {p.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                      {p.description}
+                    </p>
+                  )}
                   <Separator className="mb-3" />
                   <div className="flex flex-wrap gap-1.5">
                     {p.emotion && (
