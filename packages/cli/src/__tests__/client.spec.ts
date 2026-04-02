@@ -78,7 +78,7 @@ describe('Client', () => {
       const mockedAxios = axios as any;
       expect(mockedAxios.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          baseURL: 'http://test-server:8005',
+          baseURL: 'http://test-server:8005/api/v1',
         }),
       );
     });
