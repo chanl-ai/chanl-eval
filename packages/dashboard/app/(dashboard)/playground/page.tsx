@@ -43,7 +43,6 @@ import {
 } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
@@ -763,55 +762,44 @@ export default function PlaygroundPage() {
 
           {/* Config Tab */}
           {sidebarTab === 'config' && <div className="space-y-4 mt-3">
+            {/* Agent config — stored on Prompt, keys resolved server-side */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Model</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Provider</Label>
-                  <Select value={adapterType} onValueChange={(v) => setAdapterType(v as AdapterType)}>
-                    <SelectTrigger data-testid="adapter-select"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="openai">OpenAI</SelectItem>
-                      <SelectItem value="anthropic">Anthropic</SelectItem>
-                      <SelectItem value="http">Custom HTTP</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Agent Config</CardTitle>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
+                    <Link href="/settings">Settings</Link>
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Model</Label>
-                  <Select value={model} onValueChange={setModel}>
-                    <SelectTrigger data-testid="model-select"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {MODEL_OPTIONS[adapterType].map((m) => (
-                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Provider</span>
+                  <Badge variant="outline" className="font-mono text-xs">{adapterType}</Badge>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Model</span>
+                  <Badge variant="outline" className="font-mono text-xs">{model}</Badge>
                 </div>
                 <Separator />
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs text-muted-foreground">Temperature</Label>
-                    <span className="text-xs tabular-nums text-muted-foreground">{temperature.toFixed(2)}</span>
-                  </div>
-                  <Slider value={[temperature]} onValueChange={([v]) => setTemperature(v)} min={0} max={2} step={0.01} data-testid="temperature-slider" />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Temperature</span>
+                  <span className="text-xs tabular-nums">{temperature.toFixed(2)}</span>
                 </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs text-muted-foreground">Max Tokens</Label>
-                    <span className="text-xs tabular-nums text-muted-foreground">{maxTokens}</span>
-                  </div>
-                  <Slider value={[maxTokens]} onValueChange={([v]) => setMaxTokens(v)} min={1} max={4096} step={1} data-testid="max-tokens-slider" />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Max Tokens</span>
+                  <span className="text-xs tabular-nums">{maxTokens}</span>
                 </div>
+                <p className="text-[10px] text-muted-foreground pt-1">
+                  Model config is stored on the prompt. API keys are resolved server-side.
+                </p>
               </CardContent>
             </Card>
 
           </div>}
 
           {/* Chat Tab */}
-          {sidebarTab === 'chat' && <div className="flex flex-col mt-0 min-h-0" style={{ height: 'calc(100vh - 24rem)' }}>
+          {sidebarTab === 'chat' && <div className="flex flex-col mt-3 min-h-0" style={{ height: 'calc(100vh - 18rem)' }}>
             <Card className="flex flex-col flex-1 min-h-0 overflow-hidden gap-0 py-0">
               {/* Chat header */}
               <CardHeader className="px-3 py-2 shrink-0">
@@ -847,26 +835,52 @@ export default function PlaygroundPage() {
                 ) : (
                   <div className="space-y-3 py-2">
                     {chatMessages.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={`flex gap-2 ${msg.role === 'persona' ? 'flex-row-reverse' : 'flex-row'}`}
-                      >
-                        <Avatar className="h-6 w-6 shrink-0">
-                          <AvatarFallback className={msg.role === 'agent' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}>
-                            {msg.role === 'agent' ? <Bot className="h-3 w-3" /> : <User className="h-3 w-3" />}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className={`flex flex-col gap-0.5 min-w-0 max-w-[85%] ${msg.role === 'persona' ? 'items-end' : 'items-start'}`}>
-                          <div className={`rounded-lg px-2.5 py-1.5 text-xs ${
-                            msg.role === 'persona' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
-                          }`}>
-                            <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                      msg.role === 'tool' && msg.toolCalls?.length ? (
+                        <div key={i} className="flex gap-2">
+                          <Avatar className="h-6 w-6 shrink-0">
+                            <AvatarFallback className="bg-accent text-accent-foreground">
+                              <Wrench className="h-3 w-3" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            {msg.toolCalls.map((tc, ti) => (
+                              <div key={ti} className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono font-medium">{tc.name}</span>
+                                  <Badge variant="outline" className="text-[9px] px-1 py-0 text-primary">tool</Badge>
+                                </div>
+                                {tc.arguments && Object.keys(tc.arguments).length > 0 && (
+                                  <pre className="text-[10px] font-mono text-muted-foreground overflow-x-auto">{JSON.stringify(tc.arguments)}</pre>
+                                )}
+                                {tc.result != null && (
+                                  <pre className="text-[10px] font-mono text-foreground/70 overflow-x-auto max-h-16 overflow-y-auto">{typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}</pre>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                          {msg.latencyMs != null && (
-                            <span className="text-[10px] tabular-nums text-muted-foreground px-1">{formatDuration(msg.latencyMs)}</span>
-                          )}
                         </div>
-                      </div>
+                      ) : (
+                        <div
+                          key={i}
+                          className={`flex gap-2 ${msg.role === 'persona' ? 'flex-row-reverse' : 'flex-row'}`}
+                        >
+                          <Avatar className="h-6 w-6 shrink-0">
+                            <AvatarFallback className={msg.role === 'agent' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}>
+                              {msg.role === 'agent' ? <Bot className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className={`flex flex-col gap-0.5 min-w-0 max-w-[85%] ${msg.role === 'persona' ? 'items-end' : 'items-start'}`}>
+                            <div className={`rounded-lg px-2.5 py-1.5 text-xs ${
+                              msg.role === 'persona' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                            }`}>
+                              <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                            </div>
+                            {msg.latencyMs != null && (
+                              <span className="text-[10px] tabular-nums text-muted-foreground px-1">{formatDuration(msg.latencyMs)}</span>
+                            )}
+                          </div>
+                        </div>
+                      )
                     ))}
                     {isChatLoading && (
                       <div className="flex gap-2">
