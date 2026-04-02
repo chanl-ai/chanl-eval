@@ -1,0 +1,65 @@
+[
+  {
+    "version": "0.2.0",
+    "date": "2026-04-01",
+    "title": "Playground Overhaul",
+    "description": "Prompt editor, scenario/persona selectors, tool call rendering, and chat restart. Manual testing is now a first-class workflow.",
+    "tag": "new"
+  },
+  {
+    "version": "0.2.0",
+    "date": "2026-04-01",
+    "title": "Scorecard Builder",
+    "description": "3-column layout with category sidebar, criteria cards, and per-criteria weights. Build evaluation rubrics visually.",
+    "tag": "new"
+  },
+  {
+    "version": "0.2.0",
+    "date": "2026-04-01",
+    "title": "Reactive Persona Strategy",
+    "description": "Personas reason about agent responses using internal tools before replying. Designed for red-team and stress testing.",
+    "tag": "new"
+  },
+  {
+    "version": "0.2.0",
+    "date": "2026-04-01",
+    "title": "5 New Evaluation Criteria",
+    "description": "Hallucination detection, knowledge retention, conversation completeness, role adherence, and RAG faithfulness.",
+    "tag": "new"
+  },
+  {
+    "version": "0.2.0",
+    "date": "2026-04-01",
+    "title": "Tool Fixture Mocking",
+    "description": "Define mock tools with parameter schemas and conditional response rules. Verify tool calls without hitting real APIs.",
+    "tag": "new"
+  },
+  {
+    "version": "0.2.0",
+    "date": "2026-04-01",
+    "title": "Smarter API Key Resolution",
+    "description": "Keys resolve from Settings DB automatically. No more \"No LLM evaluator available\" errors.",
+    "tag": "improved"
+  },
+  {
+    "version": "0.2.0",
+    "date": "2026-04-01",
+    "title": "Execution Auto-Polling",
+    "description": "Running scenarios show a live spinner badge. Results appear the moment execution completes.",
+    "tag": "improved"
+  },
+  {
+    "version": "0.2.0",
+    "date": "2026-04-01",
+    "title": "Red-Team Persona Presets",
+    "description": "5 built-in presets: jailbreak attacker, PII extractor, BOLA tester, prompt injector, and social engineer.",
+    "tag": "new"
+  },
+  {
+    "version": "0.1.0",
+    "date": "2026-03-25",
+    "title": "Initial Release",
+    "description": "Multi-turn conversation simulation, scorecard evaluation, persona engine, CLI, and dashboard.",
+    "tag": "new"
+  }
+]
