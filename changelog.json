@@ -1,5 +1,47 @@
 [
   {
+    "version": "0.3.0",
+    "date": "2026-04-02",
+    "title": "Training Data Generation",
+    "description": "Turn your evaluation runs into fine-tuning datasets. Generate conversations at scale, then export as OpenAI JSONL, ShareGPT, or DPO preference pairs. One command to go from scenario to training data.",
+    "tag": "new"
+  },
+  {
+    "version": "0.3.0",
+    "date": "2026-04-02",
+    "title": "Datasets Dashboard",
+    "description": "New Datasets page to generate, browse, and export training data. View individual conversations in each dataset, download in your preferred format, and filter by score before exporting.",
+    "tag": "new"
+  },
+  {
+    "version": "0.3.0",
+    "date": "2026-04-02",
+    "title": "4 Export Formats",
+    "description": "OpenAI Chat (works with Together AI, Fireworks, Axolotl, Unsloth), OpenAI + Tools (with function calling data), ShareGPT (LLaMA Factory), and DPO Preference pairs (for preference tuning).",
+    "tag": "new"
+  },
+  {
+    "version": "0.3.0",
+    "date": "2026-04-02",
+    "title": "CLI Dataset Commands",
+    "description": "chanl dataset generate, export, preview, and status. Full pipeline flag: --wait --export to generate and download in one command.",
+    "tag": "new"
+  },
+  {
+    "version": "0.3.0",
+    "date": "2026-04-02",
+    "title": "Richer Persona Backstories",
+    "description": "All seed personas rewritten with detailed second-person backstories. Create dialog now has a prominent backstory field with guidance.",
+    "tag": "improved"
+  },
+  {
+    "version": "0.3.0",
+    "date": "2026-04-02",
+    "title": "Strict TypeScript & Pre-Push Checks",
+    "description": "Zero 'as any' policy enforced by pre-push hook. All packages typecheck, build, and pass tests before every push.",
+    "tag": "improved"
+  },
+  {
     "version": "0.2.0",
     "date": "2026-04-01",
     "title": "Playground Overhaul",

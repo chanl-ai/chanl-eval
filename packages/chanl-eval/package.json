@@ -1,6 +1,6 @@
 {
   "name": "chanl-eval",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "AI agent testing and evaluation engine — test your agents with simulated personas",
   "bin": {
     "chanl-eval": "./bin/chanl-eval.js"
