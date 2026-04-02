@@ -637,28 +637,26 @@ export default function PlaygroundPage() {
                   {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
                   {promptDirty ? 'Save' : 'Saved'}
                 </Button>
+                <Separator orientation="vertical" className="h-5 mx-0.5" />
+                {promptsQuery.isLoading ? (
+                  <Skeleton className="h-7 w-[140px]" />
+                ) : (
+                  <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
+                    <SelectTrigger className="w-[140px] h-7 text-xs" data-testid="prompt-select">
+                      <FileText className="h-3 w-3 mr-1 shrink-0 text-muted-foreground" />
+                      <SelectValue placeholder="Prompt..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {savedPrompts.map((p: Prompt) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCreatePrompt} data-testid="new-prompt-button" title="New prompt">
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
               </div>
-            </div>
-            {/* Prompt selector */}
-            <div className="flex items-center gap-2 pt-1">
-              {promptsQuery.isLoading ? (
-                <Skeleton className="h-8 w-[180px]" />
-              ) : (
-                <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
-                  <SelectTrigger className="w-[180px] h-8 text-sm" data-testid="prompt-select">
-                    <FileText className="h-3.5 w-3.5 mr-1.5 shrink-0 text-muted-foreground" />
-                    <SelectValue placeholder="Select prompt..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {savedPrompts.map((p: Prompt) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <Button variant="outline" size="sm" className="h-8" onClick={handleCreatePrompt} data-testid="new-prompt-button" title="New prompt">
-                <Plus className="mr-1.5 h-3.5 w-3.5" />New
-              </Button>
             </div>
           </CardHeader>
           <CardContent className="flex-1">
