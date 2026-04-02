@@ -46,11 +46,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Slider } from '@/components/ui/slider';
@@ -544,44 +539,6 @@ export default function PlaygroundPage() {
       description="Configure your agent prompt and run simulated conversations"
       actions={
         <div className="flex items-center gap-2">
-          {/* Prompt selector — always visible */}
-          {promptsQuery.isLoading ? (
-            <Skeleton className="h-8 w-[180px]" />
-          ) : (
-            <div className="flex items-center gap-1">
-              <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
-                <SelectTrigger className="w-[180px] h-8 text-sm" data-testid="prompt-select">
-                  <FileText className="h-3.5 w-3.5 mr-1 shrink-0 text-muted-foreground" />
-                  <SelectValue placeholder="Select prompt..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {savedPrompts.map((p: Prompt) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                onClick={handleCreatePrompt}
-                data-testid="new-prompt-button"
-                title="New prompt"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSavePrompt}
-            disabled={!promptDirty || isSaving}
-            data-testid="save-prompt-button"
-          >
-            {isSaving ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-2 h-3.5 w-3.5" />}
-            {promptDirty ? 'Save Prompt' : 'Saved'}
-          </Button>
           <Button
             onClick={handleRun}
             disabled={isRunning || !selectedScenarioId}
@@ -612,8 +569,8 @@ export default function PlaygroundPage() {
         </div>
       )}
 
-      {/* Test config row — scenario + persona + prompt selectors */}
-      <div className="flex flex-wrap items-end gap-6 -mt-2">
+      {/* Scenario row */}
+      <div className="flex flex-wrap items-end gap-4 -mt-2">
         <div className="space-y-1.5">
           <Label className="text-xs font-medium text-muted-foreground">Scenario</Label>
           {scenariosQuery.isLoading ? (
@@ -659,73 +616,7 @@ export default function PlaygroundPage() {
             </Select>
           )}
         </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Tools</Label>
-          {toolFixturesQuery.isLoading ? (
-            <Skeleton className="h-9 w-[200px]" />
-          ) : toolFixtures.length === 0 ? (
-            <Button variant="outline" size="sm" className="w-[200px] justify-start text-muted-foreground" disabled>
-              <Wrench className="mr-2 h-3.5 w-3.5" />No tools yet
-            </Button>
-          ) : (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="w-[200px] justify-between" data-testid="tools-select">
-                  <span className="flex items-center gap-2 truncate">
-                    <Wrench className="h-3.5 w-3.5 shrink-0" />
-                    {selectedToolIds.length === 0
-                      ? 'Select tools...'
-                      : `${selectedToolIds.length} tool${selectedToolIds.length > 1 ? 's' : ''} selected`}
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[260px] p-2" align="start">
-                <div className="space-y-1">
-                  {toolFixtures.map((tf: ToolFixture) => (
-                    <label
-                      key={tf.id}
-                      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-accent cursor-pointer transition-colors"
-                    >
-                      <Checkbox
-                        checked={selectedToolIds.includes(tf.id)}
-                        onCheckedChange={(checked) => {
-                          setSelectedToolIds((prev) =>
-                            checked ? [...prev, tf.id] : prev.filter((id) => id !== tf.id)
-                          );
-                        }}
-                        data-testid={`tool-checkbox-${tf.id}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{tf.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{tf.description}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-                {selectedToolIds.length > 0 && (
-                  <>
-                    <Separator className="my-2" />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-xs"
-                      onClick={() => setSelectedToolIds([])}
-                      data-testid="clear-tools"
-                    >
-                      Clear all
-                    </Button>
-                  </>
-                )}
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-
       </div>
-
-      <Separator className="my-2" />
 
       {/* Two-column layout: System prompt + Model settings */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
@@ -733,12 +624,44 @@ export default function PlaygroundPage() {
         <Card className="flex flex-col">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">System Prompt</CardTitle>
-              {hasResults && (
-                <Button variant="outline" size="sm" onClick={handleReset} data-testid="reset-button">
-                  <RotateCcw className="mr-2 h-3.5 w-3.5" />Clear Results
+              <div className="flex items-center gap-2">
+                {promptsQuery.isLoading ? (
+                  <Skeleton className="h-7 w-[160px]" />
+                ) : (
+                  <Select value={savedPromptId ?? ''} onValueChange={handleSelectPrompt}>
+                    <SelectTrigger className="w-[160px] h-7 text-xs" data-testid="prompt-select">
+                      <FileText className="h-3 w-3 mr-1 shrink-0 text-muted-foreground" />
+                      <SelectValue placeholder="Select prompt..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {savedPrompts.map((p: Prompt) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCreatePrompt} data-testid="new-prompt-button" title="New prompt">
+                  <Plus className="h-3.5 w-3.5" />
                 </Button>
-              )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {hasResults && (
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={handleReset} data-testid="reset-button">
+                    <RotateCcw className="mr-1 h-3 w-3" />Clear
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={handleSavePrompt}
+                  disabled={!promptDirty || isSaving}
+                  data-testid="save-prompt-button"
+                >
+                  {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
+                  {promptDirty ? 'Save' : 'Saved'}
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1">
@@ -825,6 +748,53 @@ export default function PlaygroundPage() {
                   </div>
                   <Slider value={[maxTokens]} onValueChange={([v]) => { setMaxTokens(v); setPromptDirty(true); }} min={1} max={4096} step={1} data-testid="max-tokens-slider" />
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Tools */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Tools</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {toolFixturesQuery.isLoading ? (
+                  <Skeleton className="h-9 w-full" />
+                ) : toolFixtures.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No tool fixtures yet. <Link href="/tool-fixtures" className="text-primary hover:underline">Create one</Link></p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {toolFixtures.map((tf: ToolFixture) => (
+                      <label
+                        key={tf.id}
+                        className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-accent cursor-pointer transition-colors"
+                      >
+                        <Checkbox
+                          checked={selectedToolIds.includes(tf.id)}
+                          onCheckedChange={(checked) => {
+                            setSelectedToolIds((prev) =>
+                              checked ? [...prev, tf.id] : prev.filter((id) => id !== tf.id)
+                            );
+                          }}
+                          data-testid={`tool-checkbox-${tf.id}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate text-xs">{tf.name}</p>
+                        </div>
+                      </label>
+                    ))}
+                    {selectedToolIds.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs h-7 mt-1"
+                        onClick={() => setSelectedToolIds([])}
+                        data-testid="clear-tools"
+                      >
+                        Clear all
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
