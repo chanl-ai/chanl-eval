@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageLayout } from '@/components/shared/page-layout';
+import { LlmConfigCard } from '@/components/settings/llm-config-card';
 import { useEvalConfig } from '@/lib/eval-config';
 import { EvalClient } from '@chanl/eval-sdk';
 
@@ -16,6 +17,12 @@ export default function SettingsPage() {
   const {
     baseUrl, setBaseUrl,
     apiKey, setApiKey,
+    adapterType, setAdapterType,
+    agentApiKey, setAgentApiKey,
+    agentModel, setAgentModel,
+    agentBaseUrl, setAgentBaseUrl,
+    simApiKey, setSimApiKey,
+    simModel, setSimModel,
   } = useEvalConfig();
 
   const [isTesting, setIsTesting] = useState(false);
@@ -115,23 +122,42 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* LLM Keys — server-side */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-medium">LLM API Keys</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Agent, persona, and judge API keys are resolved server-side from environment variables.
-              Set <code className="text-xs bg-muted px-1 py-0.5 rounded">CHANL_OPENAI_API_KEY</code> or{' '}
-              <code className="text-xs bg-muted px-1 py-0.5 rounded">CHANL_ANTHROPIC_API_KEY</code> on the eval server.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              Agent model and provider are configured per Prompt (in the Playground).
-              The server resolves the API key automatically — no client-side keys needed.
-            </p>
-          </CardContent>
-        </Card>
+        {/* Agent Under Test */}
+        <LlmConfigCard
+          title="Agent Under Test"
+          description="The LLM being evaluated. Model and provider are saved per Prompt. API key is resolved server-side from environment variables."
+          provider={adapterType}
+          onProviderChange={setAdapterType}
+          showProvider
+          model={agentModel}
+          onModelChange={setAgentModel}
+          modelHint="The exact model your agent runs in production. Select a preset or type any model ID."
+          apiKey={agentApiKey}
+          onApiKeyChange={setAgentApiKey}
+          apiKeyHint="Optional override. Server resolves from CHANL_OPENAI_API_KEY / CHANL_ANTHROPIC_API_KEY if empty."
+          baseUrl={agentBaseUrl}
+          onBaseUrlChange={setAgentBaseUrl}
+          showBaseUrl
+          baseUrlPlaceholder={adapterType === 'http' ? 'https://your-agent.com/chat' : 'Leave empty for default provider URL'}
+          baseUrlHint={adapterType === 'http'
+            ? 'Required — your agent\'s chat endpoint.'
+            : 'Override for OpenAI-compatible endpoints (Ollama, Together, vLLM, Azure, etc.).'}
+        />
+
+        {/* Simulation LLM */}
+        <LlmConfigCard
+          title="Simulation LLM"
+          description="Powers persona dialogue generation and scorecard evaluation (LLM judge). Separate from the agent so you can use a fast, cheap model."
+          showProvider={false}
+          model={simModel}
+          onModelChange={setSimModel}
+          modelPlaceholder="gpt-4o-mini"
+          modelHint="gpt-4o-mini recommended — fast and cheap. Used for persona utterances and scorecard criteria evaluation."
+          apiKey={simApiKey}
+          onApiKeyChange={setSimApiKey}
+          apiKeyPlaceholder={agentApiKey ? 'Leave empty to reuse Agent key' : 'sk-...'}
+          apiKeyHint="Optional override. Falls back to agent key, then server environment variables."
+        />
 
         {/* API Docs */}
         <Card>
