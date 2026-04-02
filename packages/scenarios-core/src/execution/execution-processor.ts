@@ -33,6 +33,11 @@ import { buildTemplateVariables, renderPersonaTemplate } from './template-render
 import { PersonaStrategyRegistry } from './persona-strategy-registry';
 import { PersonaStrategyContext } from './persona-strategy.interface';
 
+/** Shape of a document from the `settings` collection used for provider key lookup. */
+interface SettingsDocument {
+  providerKeys?: Record<string, string>;
+}
+
 const MAX_TOOL_CALLS_PER_TURN = 5;
 
 @Processor(QUEUE_NAMES.SCENARIO_EXECUTION)
@@ -154,7 +159,8 @@ export class ExecutionProcessor {
           const settingsDoc = await this.scenarioModel.db
             .collection('settings')
             .findOne({});
-          const providerKeys = (settingsDoc as any)?.providerKeys || {};
+          const settings = settingsDoc as SettingsDocument | null;
+          const providerKeys = settings?.providerKeys ?? {};
           return providerKeys[provider] || undefined;
         } catch {
           return undefined;

@@ -233,8 +233,20 @@ export class ScenarioTemplateService {
     name?: string,
   ): Promise<ScenarioTemplateDocument> {
     const original = await this.findOne(id);
-    const { _id, __v, createdAt, updatedAt, id: _idAlias, ...rest } =
-      original.toObject() as any;
+
+    /** Plain object with all ScenarioTemplate fields plus Mongoose internals. */
+    interface TemplateObject extends Record<string, unknown> {
+      _id?: unknown;
+      __v?: unknown;
+      id?: unknown;
+      createdAt?: unknown;
+      updatedAt?: unknown;
+      name: string;
+    }
+
+    const obj = original.toObject() as unknown as TemplateObject;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { _id, __v, createdAt, updatedAt, id: _idAlias, ...rest } = obj;
 
     const cloned = await this.templateModel.create({
       ...rest,

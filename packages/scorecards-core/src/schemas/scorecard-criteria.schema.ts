@@ -24,8 +24,10 @@ export interface PromptCriteriaSettings {
 }
 
 export interface KeywordCriteriaSettings {
-  matchType: 'must_contain' | 'must_not_contain';
+  matchType: 'must_contain' | 'must_not_contain' | 'any' | 'none';
   keyword: string | string[];
+  /** Plural alias — some DB documents store `keywords` instead of `keyword` */
+  keywords?: string | string[];
   caseSensitive?: boolean;
 }
 

@@ -109,6 +109,6 @@ export function getConfig(key: keyof CliConfig): string | boolean {
  */
 export function setConfig(key: keyof CliConfig, value: string | boolean): void {
   const config = loadConfig();
-  (config as any)[key] = value;
+  config[key] = value;
   saveConfig(config);
 }

@@ -120,7 +120,7 @@ export class OpenAIAdapter implements AgentAdapter {
 
   formatToolResult(toolCallId: string, _toolName: string, result: any): AgentMessage {
     return {
-      role: 'user' as any,
+      role: 'user',
       content: typeof result === 'string' ? result : JSON.stringify(result),
       providerData: {
         role: 'tool',

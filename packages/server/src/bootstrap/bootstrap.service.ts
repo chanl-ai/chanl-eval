@@ -3,7 +3,7 @@ import {
   Logger,
   OnApplicationBootstrap,
 } from '@nestjs/common';
-import { PersonaService } from '@chanl/scenarios-core';
+import { PersonaService, Persona } from '@chanl/scenarios-core';
 import { ScenarioService } from '@chanl/scenarios-core';
 import { ScorecardsService } from '@chanl/scorecards-core';
 import { ApiKeyService } from '../auth/api-key.service';
@@ -68,7 +68,9 @@ export class BootstrapService implements OnApplicationBootstrap {
     // 4. Seed default scenarios referencing personas + scorecard
     const personaMap: Record<string, string> = {};
     for (const p of personas) {
-      const pid = (p as any).id || (p as any)._id;
+      // Mongoose documents have .id (virtual) and ._id — Persona type omits them
+      const doc = p as Persona & { id?: string; _id?: { toString(): string } };
+      const pid = doc.id || doc._id?.toString();
       if (pid) {
         personaMap[p.name] = pid.toString();
       }

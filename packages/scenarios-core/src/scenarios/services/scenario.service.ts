@@ -19,6 +19,23 @@ import {
 import { CreateScenarioDto } from '../dto/create-scenario.dto';
 import { UpdateScenarioDto } from '../dto/update-scenario.dto';
 
+/**
+ * Safely convert a Mongoose ScenarioDocument to a plain Scenario object.
+ * The virtualIdPlugin ensures toJSON() returns `id` (string) instead of `_id`.
+ */
+function toScenario(doc: ScenarioDocument): Scenario {
+  return doc.toJSON() as unknown as Scenario;
+}
+
+/** Plain-object shape returned by toJSON() — includes `id` but no Mongoose internals. */
+interface ScenarioJSON extends Omit<Scenario, 'personaIds' | 'scorecardId' | 'parentScenarioId'> {
+  id: string;
+  _id?: string;
+  personaIds: (Types.ObjectId | string)[];
+  scorecardId?: Types.ObjectId | string;
+  parentScenarioId?: Types.ObjectId | string;
+}
+
 @Injectable()
 export class ScenarioService {
   private readonly logger = new Logger(ScenarioService.name);
@@ -56,7 +73,7 @@ export class ScenarioService {
         ? createScenarioDto.personaIds.map((id) => new Types.ObjectId(id))
         : [];
 
-      const scenarioData: any = {
+      const scenarioData: Record<string, unknown> = {
         ...createScenarioDto,
         status: createScenarioDto.status || 'active',
         personaIds,
@@ -76,11 +93,12 @@ export class ScenarioService {
 
       const scenario = new this.scenarioModel(scenarioData);
       const savedScenario = await scenario.save();
-      return savedScenario.toJSON() as any as Scenario;
-    } catch (error: any) {
+      return toScenario(savedScenario);
+    } catch (error: unknown) {
+      const err = error as Error;
       this.logger.error(
-        `Failed to create scenario: ${error.message}`,
-        error.stack,
+        `Failed to create scenario: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -105,7 +123,7 @@ export class ScenarioService {
     },
   ): Promise<{ scenarios: Scenario[]; total: number }> {
     try {
-      const query: any = {};
+      const query: Record<string, unknown> = {};
 
       if (filters) {
         if (filters.status) query.status = filters.status;
@@ -131,13 +149,14 @@ export class ScenarioService {
       const total = await this.scenarioModel.countDocuments(query);
 
       const serializedScenarios = scenarios.map(
-        (doc) => doc.toJSON() as any as Scenario,
+        (doc) => toScenario(doc),
       );
       return { scenarios: serializedScenarios, total };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as Error;
       this.logger.error(
-        `Failed to find scenarios: ${error.message}`,
-        error.stack,
+        `Failed to find scenarios: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -154,14 +173,15 @@ export class ScenarioService {
         throw new NotFoundException(`Scenario with ID ${id} not found`);
       }
 
-      return scenario.toJSON() as any as Scenario;
-    } catch (error: any) {
+      return toScenario(scenario);
+    } catch (error: unknown) {
       if (error instanceof NotFoundException) {
         throw error;
       }
+      const err = error as Error;
       this.logger.error(
-        `Failed to find scenario: ${error.message}`,
-        error.stack,
+        `Failed to find scenario: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -175,7 +195,7 @@ export class ScenarioService {
     updateScenarioDto: UpdateScenarioDto,
   ): Promise<Scenario> {
     try {
-      const updateQuery: any = {
+      const updateQuery: Record<string, unknown> = {
         ...updateScenarioDto,
         updatedAt: new Date(),
       };
@@ -210,14 +230,15 @@ export class ScenarioService {
         throw new NotFoundException(`Scenario with ID ${id} not found`);
       }
 
-      return scenario.toJSON() as any as Scenario;
-    } catch (error: any) {
+      return toScenario(scenario);
+    } catch (error: unknown) {
       if (error instanceof NotFoundException) {
         throw error;
       }
+      const err = error as Error;
       this.logger.error(
-        `Failed to update scenario: ${error.message}`,
-        error.stack,
+        `Failed to update scenario: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -237,13 +258,14 @@ export class ScenarioService {
       await this.scenarioModel.findByIdAndUpdate(id, { status: 'archived' });
 
       this.logger.log(`Archived scenario ${id}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof NotFoundException) {
         throw error;
       }
+      const err = error as Error;
       this.logger.error(
-        `Failed to delete scenario: ${error.message}`,
-        error.stack,
+        `Failed to delete scenario: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -260,9 +282,9 @@ export class ScenarioService {
     try {
       const originalScenario = await this.findOne(id);
 
-      const scenarioDoc = originalScenario as any;
+      const scenarioJson = originalScenario as unknown as ScenarioJSON;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { id: originalId, _id: originalObjectId, ...rest } = scenarioDoc;
+      const { id: originalId, _id: originalObjectId, ...rest } = scenarioJson;
       const parentId = originalObjectId || originalId;
 
       const clonedScenario = new this.scenarioModel({
@@ -284,11 +306,12 @@ export class ScenarioService {
       });
 
       const savedClone = await clonedScenario.save();
-      return savedClone.toJSON() as any as Scenario;
-    } catch (error: any) {
+      return toScenario(savedClone);
+    } catch (error: unknown) {
+      const err = error as Error;
       this.logger.error(
-        `Failed to clone scenario: ${error.message}`,
-        error.stack,
+        `Failed to clone scenario: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -301,7 +324,7 @@ export class ScenarioService {
    */
   async validate(
     id: string,
-    personaLookup?: (personaId: string) => Promise<any>,
+    personaLookup?: (personaId: string) => Promise<unknown>,
   ): Promise<{
     valid: boolean;
     errors: string[];
@@ -346,10 +369,11 @@ export class ScenarioService {
         errors,
         warnings,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as Error;
       this.logger.error(
-        `Failed to validate scenario: ${error.message}`,
-        error.stack,
+        `Failed to validate scenario: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -360,7 +384,7 @@ export class ScenarioService {
    */
   async publish(
     id: string,
-    personaLookup?: (personaId: string) => Promise<any>,
+    personaLookup?: (personaId: string) => Promise<unknown>,
   ): Promise<{
     scenario: Scenario;
     previousStatus: string;
@@ -398,13 +422,17 @@ export class ScenarioService {
       );
 
       return {
-        scenario: updatedScenario.toJSON() as any as Scenario,
+        scenario: toScenario(updatedScenario),
         previousStatus,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      const err = error as Error;
       this.logger.error(
-        `Failed to publish scenario: ${error.message}`,
-        error.stack,
+        `Failed to publish scenario: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -441,13 +469,17 @@ export class ScenarioService {
       );
 
       return {
-        scenario: updatedScenario.toJSON() as any as Scenario,
+        scenario: toScenario(updatedScenario),
         previousStatus,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      const err = error as Error;
       this.logger.error(
-        `Failed to unpublish scenario: ${error.message}`,
-        error.stack,
+        `Failed to unpublish scenario: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -540,10 +572,11 @@ export class ScenarioService {
             : null,
         activeRuns,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as Error;
       this.logger.error(
-        `Failed to get scenario stats: ${error.message}`,
-        error.stack,
+        `Failed to get scenario stats: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -558,34 +591,35 @@ export class ScenarioService {
     createdBy?: string,
   ): Promise<Scenario> {
     try {
-      const parsed = yaml.load(yamlString) as Record<string, any>;
+      const parsed = yaml.load(yamlString) as Record<string, unknown>;
 
       if (!parsed || typeof parsed !== 'object') {
         throw new BadRequestException('Invalid YAML: must be an object');
       }
 
       const dto: CreateScenarioDto = {
-        name: parsed.name,
-        description: parsed.description,
-        context: parsed.context,
-        prompt: parsed.prompt,
-        status: parsed.status,
-        promptVariables: parsed.promptVariables,
-        category: parsed.category || 'support',
-        difficulty: parsed.difficulty || 'medium',
-        tags: parsed.tags,
-        personaIds: parsed.personaIds || [],
-        scorecardId: parsed.scorecardId,
-        phoneNumber: parsed.phoneNumber,
-        simulationMode: parsed.simulationMode,
-        createdBy: parsed.createdBy,
+        name: parsed.name as string,
+        description: parsed.description as string | undefined,
+        context: parsed.context as CreateScenarioDto['context'],
+        prompt: parsed.prompt as string,
+        status: parsed.status as string | undefined,
+        promptVariables: parsed.promptVariables as CreateScenarioDto['promptVariables'],
+        category: (parsed.category as string) || 'support',
+        difficulty: (parsed.difficulty as DifficultyLevel) || 'medium',
+        tags: parsed.tags as string[] | undefined,
+        personaIds: (parsed.personaIds as string[]) || [],
+        scorecardId: parsed.scorecardId as string | undefined,
+        phoneNumber: parsed.phoneNumber as string | undefined,
+        simulationMode: parsed.simulationMode as CreateScenarioDto['simulationMode'],
+        createdBy: parsed.createdBy as string | undefined,
       };
 
       return this.create(dto, createdBy);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as Error;
       this.logger.error(
-        `Failed to import scenario from YAML: ${error.message}`,
-        error.stack,
+        `Failed to import scenario from YAML: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -616,7 +650,7 @@ export class ScenarioService {
         this.logger.log(
           `Default scenarios already exist (${updated.length} found)`,
         );
-        return updated.map((doc) => doc.toJSON() as any as Scenario);
+        return updated.map((doc) => toScenario(doc));
       }
 
       const defaults = [
@@ -663,7 +697,7 @@ export class ScenarioService {
           ? [new Types.ObjectId(personaId)]
           : [];
 
-        const scenarioData: any = {
+        const scenarioData: Record<string, unknown> = {
           name: def.name,
           description: def.description,
           prompt: def.prompt,
@@ -683,15 +717,16 @@ export class ScenarioService {
 
         const scenario = new this.scenarioModel(scenarioData);
         const saved = await scenario.save();
-        scenarios.push(saved.toJSON() as any as Scenario);
+        scenarios.push(toScenario(saved));
       }
 
       this.logger.log(`Created ${scenarios.length} default scenarios`);
       return scenarios;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as Error;
       this.logger.error(
-        `Failed to create default scenarios: ${error.message}`,
-        error.stack,
+        `Failed to create default scenarios: ${err.message}`,
+        err.stack,
       );
       throw error;
     }
@@ -701,37 +736,35 @@ export class ScenarioService {
    * Export a scenario to a YAML string.
    */
   toYaml(scenario: Scenario): string {
-    const doc = scenario as any;
-
-    const exportData: Record<string, any> = {
-      name: doc.name,
-      description: doc.description,
-      prompt: doc.prompt,
-      status: doc.status,
-      category: doc.category,
-      difficulty: doc.difficulty,
-      tags: doc.tags,
-      personaIds: (doc.personaIds || []).map((id: any) => id.toString()),
+    const exportData: Record<string, unknown> = {
+      name: scenario.name,
+      description: scenario.description,
+      prompt: scenario.prompt,
+      status: scenario.status,
+      category: scenario.category,
+      difficulty: scenario.difficulty,
+      tags: scenario.tags,
+      personaIds: (scenario.personaIds || []).map((id) => id.toString()),
     };
 
-    if (doc.context) {
-      exportData.context = doc.context;
+    if (scenario.context) {
+      exportData.context = scenario.context;
     }
 
-    if (doc.promptVariables && doc.promptVariables.length > 0) {
-      exportData.promptVariables = doc.promptVariables;
+    if (scenario.promptVariables && scenario.promptVariables.length > 0) {
+      exportData.promptVariables = scenario.promptVariables;
     }
 
-    if (doc.scorecardId) {
-      exportData.scorecardId = doc.scorecardId.toString();
+    if (scenario.scorecardId) {
+      exportData.scorecardId = scenario.scorecardId.toString();
     }
 
-    if (doc.simulationMode) {
-      exportData.simulationMode = doc.simulationMode;
+    if (scenario.simulationMode) {
+      exportData.simulationMode = scenario.simulationMode;
     }
 
-    if (doc.phoneNumber) {
-      exportData.phoneNumber = doc.phoneNumber;
+    if (scenario.phoneNumber) {
+      exportData.phoneNumber = scenario.phoneNumber;
     }
 
     return yaml.dump(exportData, {

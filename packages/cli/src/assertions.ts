@@ -385,16 +385,18 @@ export function evaluateAssertions(
         return evaluateToolCall(assertion as ToolCallAssertion, execution);
       case 'score':
         return evaluateScore(assertion as ScoreAssertion, execution);
-      default:
+      default: {
+        const unknown = assertion as Record<string, unknown>;
         return {
-          type: (assertion as any).type || 'unknown',
+          type: (typeof unknown.type === 'string' ? unknown.type : 'unknown'),
           description:
-            (assertion as any).description || 'Unknown assertion type',
+            (typeof unknown.description === 'string' ? unknown.description : 'Unknown assertion type'),
           passed: false,
           actual: 'N/A',
           expected: 'N/A',
-          reason: `Unknown assertion type: ${(assertion as any).type}`,
+          reason: `Unknown assertion type: ${typeof unknown.type === 'string' ? unknown.type : 'unknown'}`,
         };
+      }
     }
   });
 }

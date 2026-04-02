@@ -23,7 +23,7 @@ export class SettingsService {
 
   async getApiKey(provider: string): Promise<string | undefined> {
     const settings = await this.get();
-    const keys = (settings as any).providerKeys || {};
+    const keys: Record<string, string | undefined> = settings.providerKeys || {};
     return keys[provider] || undefined;
   }
 

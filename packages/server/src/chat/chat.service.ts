@@ -34,7 +34,7 @@ export class ChatService {
   private async resolveAgentConfig(promptId: string) {
     const prompt = await this.promptsService.findById(promptId);
     return this.agentConfigResolver.resolve({
-      prompt: { content: (prompt as any).content, adapterConfig: (prompt as any).adapterConfig },
+      prompt: { content: prompt.content, adapterConfig: prompt.adapterConfig },
       settingsLookup: (provider) => this.settingsService.getApiKey(provider),
     });
   }

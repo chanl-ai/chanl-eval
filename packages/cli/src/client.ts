@@ -26,7 +26,7 @@ export function createClient(): AxiosInstance {
   }
 
   const client = axios.create({
-    baseURL: config.server,
+    baseURL: `${config.server}/api/v1`,
     timeout: 30000,
     headers: {
       'Content-Type': 'application/json',
