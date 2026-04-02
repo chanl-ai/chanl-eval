@@ -538,45 +538,51 @@ export default function PlaygroundPage() {
       title="Playground"
       description="Configure your agent prompt and run simulated conversations"
       actions={
-        <div className="flex items-center gap-3">
-          {scenariosQuery.isLoading ? (
-            <Skeleton className="h-9 w-[180px]" />
-          ) : (
-            <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
-              <SelectTrigger className="w-[180px] h-9" data-testid="scenario-select">
-                <SelectValue placeholder="Scenario..." />
-              </SelectTrigger>
-              <SelectContent>
-                {scenarios.map((s: Scenario) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="flex items-center gap-2">
-                      {s.name}
-                      {s.difficulty && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{s.difficulty}</Badge>}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {personasQuery.isLoading ? (
-            <Skeleton className="h-9 w-[160px]" />
-          ) : (
-            <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
-              <SelectTrigger className="w-[160px] h-9" data-testid="persona-select">
-                <SelectValue placeholder="Persona..." />
-              </SelectTrigger>
-              <SelectContent>
-                {personas.map((p: Persona) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <span className="flex items-center gap-2">
-                      {p.name}
-                      <span className="text-xs text-muted-foreground">{p.emotion}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+        <div className="flex items-end gap-3">
+          <div className="space-y-1">
+            <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Scenario</Label>
+            {scenariosQuery.isLoading ? (
+              <Skeleton className="h-9 w-[180px]" />
+            ) : (
+              <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
+                <SelectTrigger className="w-[180px] h-9" data-testid="scenario-select">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {scenarios.map((s: Scenario) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <span className="flex items-center gap-2">
+                        {s.name}
+                        {s.difficulty && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{s.difficulty}</Badge>}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Persona</Label>
+            {personasQuery.isLoading ? (
+              <Skeleton className="h-9 w-[160px]" />
+            ) : (
+              <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
+                <SelectTrigger className="w-[160px] h-9" data-testid="persona-select">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {personas.map((p: Persona) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="flex items-center gap-2">
+                        {p.name}
+                        <span className="text-xs text-muted-foreground">{p.emotion}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
           <Button
             onClick={handleRun}
             disabled={isRunning || !selectedScenarioId}
