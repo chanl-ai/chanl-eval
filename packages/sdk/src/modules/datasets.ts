@@ -16,8 +16,38 @@ export interface GenerateDatasetOptions {
 
 export interface GenerateDatasetResponse {
   batchId: string;
+  batchName: string;
   executionIds: string[];
   total: number;
+}
+
+export interface DatasetBatch {
+  batchId: string;
+  batchName: string;
+  conversations: number;
+  completed: number;
+  failed: number;
+  avgScore: number;
+  scenarioId: string;
+  createdAt: string;
+}
+
+export interface BatchConversation {
+  executionId: string;
+  personaId: string;
+  status: string;
+  score: number | undefined;
+  turns: number;
+  duration: number | undefined;
+  preview: string;
+  createdAt: string | undefined;
+}
+
+export interface BatchConversationsResponse {
+  conversations: BatchConversation[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export interface BatchStatusResponse {
@@ -56,6 +86,28 @@ export interface ExportPreviewResponse {
 
 export class DatasetsModule {
   constructor(private readonly http: AxiosInstance) {}
+
+  /**
+   * List all dataset batches with aggregated stats.
+   */
+  async list(): Promise<DatasetBatch[]> {
+    const response = await this.http.get('/datasets');
+    return unwrapResponse<DatasetBatch[]>(response);
+  }
+
+  /**
+   * Get paginated conversations within a batch.
+   */
+  async conversations(
+    batchId: string,
+    pagination?: { page?: number; limit?: number },
+  ): Promise<BatchConversationsResponse> {
+    const params: Record<string, number> = {};
+    if (pagination?.page) params.page = pagination.page;
+    if (pagination?.limit) params.limit = pagination.limit;
+    const response = await this.http.get(`/datasets/${batchId}/conversations`, { params });
+    return unwrapResponse<BatchConversationsResponse>(response);
+  }
 
   /**
    * Generate a batch of conversations for dataset creation.

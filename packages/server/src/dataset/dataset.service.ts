@@ -43,13 +43,17 @@ export class DatasetService {
     promptId: string;
     personaIds?: string[];
     count?: number;
-  }): Promise<{ batchId: string; executionIds: string[]; total: number }> {
+  }): Promise<{ batchId: string; batchName: string; executionIds: string[]; total: number }> {
     const batchId = `batch_${randomUUID()}`;
 
     const scenario = await this.scenarioModel.findById(opts.scenarioId);
     if (!scenario) {
       throw new NotFoundException(`Scenario ${opts.scenarioId} not found`);
     }
+
+    // Auto-generate a human-readable name
+    const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const batchName = `${scenario.name} × ${opts.count || 'all'} — ${dateStr}`;
 
     // Determine which personas to use
     let personaIds: string[];
@@ -89,10 +93,10 @@ export class DatasetService {
           },
         );
 
-        // Stamp batchId on the execution
+        // Stamp batchId + batchName on the execution
         await this.executionModel.findOneAndUpdate(
           { executionId },
-          { $set: { batchId } },
+          { $set: { batchId, batchName } },
         );
 
         executionIds.push(executionId);
@@ -103,7 +107,7 @@ export class DatasetService {
 
     this.logger.log(`Created batch ${batchId} with ${executionIds.length} executions`);
 
-    return { batchId, executionIds, total: executionIds.length };
+    return { batchId, batchName, executionIds, total: executionIds.length };
   }
 
   /**
@@ -144,6 +148,110 @@ export class DatasetService {
     }
 
     return { batchId, ...counts, status };
+  }
+
+  /**
+   * List all dataset batches with aggregated stats.
+   */
+  async listBatches(): Promise<Array<{
+    batchId: string;
+    batchName: string;
+    conversations: number;
+    completed: number;
+    failed: number;
+    avgScore: number;
+    scenarioId: string;
+    createdAt: string;
+  }>> {
+    const results = await this.executionModel.aggregate([
+      { $match: { batchId: { $exists: true, $ne: null } } },
+      {
+        $group: {
+          _id: '$batchId',
+          batchName: { $first: '$batchName' },
+          conversations: { $sum: 1 },
+          completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+          failed: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
+          avgScore: { $avg: { $cond: [{ $eq: ['$status', 'completed'] }, '$overallScore', null] } },
+          scenarioId: { $first: '$scenarioId' },
+          createdAt: { $min: '$createdAt' },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+    ]);
+
+    return results.map((r) => ({
+      batchId: r._id as string,
+      batchName: r.batchName || `Batch ${(r._id as string).slice(6, 14)}`,
+      conversations: r.conversations as number,
+      completed: r.completed as number,
+      failed: r.failed as number,
+      avgScore: Math.round((r.avgScore || 0) * 10) / 10,
+      scenarioId: r.scenarioId?.toString() || '',
+      createdAt: r.createdAt?.toISOString() || '',
+    }));
+  }
+
+  /**
+   * Get paginated conversations (executions) within a batch.
+   */
+  async getBatchConversations(
+    batchId: string,
+    pagination?: { page?: number; limit?: number },
+  ): Promise<{
+    conversations: Array<{
+      executionId: string;
+      personaId: string;
+      status: string;
+      score: number | undefined;
+      turns: number;
+      duration: number | undefined;
+      preview: string;
+      createdAt: string | undefined;
+    }>;
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = pagination?.page ?? 1;
+    const limit = pagination?.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [executions, total] = await Promise.all([
+      this.executionModel
+        .find({ batchId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.executionModel.countDocuments({ batchId }),
+    ]);
+
+    return {
+      conversations: executions.map((e) => {
+        // Build a preview from first 2 exchanges
+        const steps = (e.stepResults || []).filter((s) => s.role === 'persona' || s.role === 'agent');
+        const previewLines = steps.slice(0, 4).map((s) => {
+          const role = s.role === 'persona' ? 'Customer' : 'Agent';
+          const text = (s.actualResponse || '').slice(0, 80);
+          return `${role}: ${text}${(s.actualResponse || '').length > 80 ? '...' : ''}`;
+        });
+
+        return {
+          executionId: e.executionId,
+          personaId: e.personaId?.toString() || '',
+          status: e.status,
+          score: e.overallScore,
+          turns: Math.ceil((e.stepResults?.length || 0) / 2),
+          duration: e.duration,
+          preview: previewLines.join('\n'),
+          createdAt: e.createdAt?.toISOString(),
+        };
+      }),
+      total,
+      page,
+      limit,
+    };
   }
 
   /**

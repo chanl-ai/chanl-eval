@@ -20,6 +20,9 @@ export type {
   BatchStatusResponse,
   ExportDatasetOptions,
   ExportPreviewResponse,
+  DatasetBatch,
+  BatchConversation,
+  BatchConversationsResponse,
 } from './modules/datasets';
 export {
   EvalApiError,

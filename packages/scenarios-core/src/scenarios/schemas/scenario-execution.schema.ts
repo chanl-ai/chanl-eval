@@ -100,6 +100,10 @@ export class ScenarioExecution {
   @Prop({ type: String, index: true })
   batchId?: string;
 
+  /** Human-readable name for the dataset batch */
+  @Prop({ type: String })
+  batchName?: string;
+
   @Prop({ required: true, unique: true })
   executionId!: string;
 

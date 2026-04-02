@@ -44,6 +44,27 @@ export class DatasetController {
     });
   }
 
+  @Get()
+  @ApiOperation({ summary: 'List all dataset batches with aggregated stats' })
+  @ApiResponse({ status: 200, description: 'List of batches' })
+  async listBatches() {
+    return this.datasetService.listBatches();
+  }
+
+  @Get(':batchId/conversations')
+  @ApiOperation({ summary: 'Get paginated conversations within a batch' })
+  @ApiResponse({ status: 200, description: 'Paginated conversations' })
+  async getBatchConversations(
+    @Param('batchId') batchId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.datasetService.getBatchConversations(batchId, {
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+  }
+
   @Get('generate/:batchId/status')
   @ApiOperation({ summary: 'Get batch generation status' })
   @ApiResponse({ status: 200, description: 'Batch status' })

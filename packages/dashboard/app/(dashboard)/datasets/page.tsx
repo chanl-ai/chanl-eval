@@ -10,6 +10,8 @@ import {
   FileJson2,
   FileText,
   GitCompare,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,13 +35,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { DataTable } from '@/components/shared/data-table';
 import { PageLayout } from '@/components/shared/page-layout';
 import { EmptyState } from '@/components/shared/empty-state';
 import { useEvalConfig } from '@/lib/eval-config';
 import { toast } from 'sonner';
 import { columns, type DatasetRow } from './columns';
-import type { Execution, ExportDatasetOptions } from '@chanl/eval-sdk';
+import type { ExportDatasetOptions, BatchConversation } from '@chanl/eval-sdk';
 
 const FORMAT_INFO = [
   { value: 'openai', label: 'OpenAI Chat', description: 'OpenAI, Together AI, Fireworks, Axolotl, Unsloth', icon: FileJson2, ext: '.jsonl' },
@@ -60,20 +70,14 @@ function GenerateDialog() {
   const [promptId, setPromptId] = React.useState('');
   const [count, setCount] = React.useState(10);
 
-  const scenariosQ = useQuery({
-    queryKey: ['scenarios-list'],
-    queryFn: () => client.scenarios.list({ limit: 100 }),
-  });
-  const promptsQ = useQuery({
-    queryKey: ['prompts-list'],
-    queryFn: () => client.prompts.list(),
-  });
+  const scenariosQ = useQuery({ queryKey: ['scenarios-list'], queryFn: () => client.scenarios.list({ limit: 100 }) });
+  const promptsQ = useQuery({ queryKey: ['prompts-list'], queryFn: () => client.prompts.list() });
 
   const generateMut = useMutation({
     mutationFn: () => client.datasets.generate({ scenarioId, promptId, count }),
     onSuccess: (data) => {
-      toast.success(`Batch started: ${data.total} conversations queued`);
-      queryClient.invalidateQueries({ queryKey: ['executions'] });
+      toast.success(`Dataset "${data.batchName}" started: ${data.total} conversations queued`);
+      queryClient.invalidateQueries({ queryKey: ['datasets'] });
       setOpen(false);
     },
     onError: (err: Error) => toast.error(`Generation failed: ${err.message}`),
@@ -134,38 +138,158 @@ function GenerateDialog() {
 }
 
 // ---------------------------------------------------------------------------
-// Export Dialog (reusable — can be pre-filtered to a scenario)
+// View Conversations Dialog
+// ---------------------------------------------------------------------------
+
+function ViewConversationsDialog({
+  batchId,
+  batchName,
+  open,
+  onOpenChange,
+}: {
+  batchId: string;
+  batchName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { client } = useEvalConfig();
+  const [page, setPage] = React.useState(1);
+  const limit = 10;
+
+  const q = useQuery({
+    queryKey: ['batch-conversations', batchId, page],
+    queryFn: () => client.datasets.conversations(batchId, { page, limit }),
+    enabled: open,
+  });
+
+  const conversations = q.data?.conversations ?? [];
+  const total = q.data?.total ?? 0;
+  const totalPages = Math.ceil(total / limit);
+
+  function getScoreColor(score: number | undefined): string {
+    if (score == null) return 'text-muted-foreground';
+    if (score >= 80) return 'text-chart-6';
+    if (score >= 60) return 'text-warning';
+    return 'text-destructive';
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-3xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{batchName}</DialogTitle>
+          <DialogDescription>{total} conversation{total !== 1 ? 's' : ''} in this dataset</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 min-h-0 overflow-auto">
+          {q.isLoading ? (
+            <div className="space-y-2 p-4">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+            </div>
+          ) : conversations.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              No conversations yet — batch may still be running.
+            </div>
+          ) : (
+            <div className="rounded-md border bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Persona</TableHead>
+                    <TableHead>Preview</TableHead>
+                    <TableHead className="text-right">Score</TableHead>
+                    <TableHead className="text-right">Turns</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {conversations.map((c: BatchConversation) => (
+                    <TableRow key={c.executionId}>
+                      <TableCell>
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {c.personaId ? c.personaId.slice(-6) : '--'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="max-w-[320px]">
+                        <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">
+                          {c.preview || 'No transcript'}
+                        </p>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className={`text-sm font-semibold tabular-nums ${getScoreColor(c.score)}`}>
+                          {c.score != null ? `${c.score}%` : '--'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="text-xs tabular-nums">{c.turns}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={c.status === 'completed' ? 'default' : c.status === 'failed' ? 'destructive' : 'secondary'}
+                          className="text-[10px]"
+                        >
+                          {c.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-2 border-t">
+            <span className="text-xs text-muted-foreground">
+              Page {page} of {totalPages} ({total} total)
+            </span>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon-sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon-sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Export Dialog
 // ---------------------------------------------------------------------------
 
 function ExportDialog({
   totalCount,
-  prefilterScenarioId,
-  trigger,
-  controlledOpen,
+  prefilterBatchId,
+  open: controlledOpen,
   onOpenChange: onOpenChangeProp,
+  trigger,
 }: {
   totalCount: number;
-  prefilterScenarioId?: string;
-  trigger?: React.ReactNode;
-  controlledOpen?: boolean;
+  prefilterBatchId?: string;
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  trigger?: React.ReactNode;
 }) {
   const { client } = useEvalConfig();
   const [internalOpen, setInternalOpen] = React.useState(false);
   const open = controlledOpen ?? internalOpen;
-  const setOpen = (v: boolean) => {
-    setInternalOpen(v);
-    onOpenChangeProp?.(v);
-  };
+  const setOpen = (v: boolean) => { setInternalOpen(v); onOpenChangeProp?.(v); };
   const [format, setFormat] = React.useState<ExportDatasetOptions['format']>('openai');
   const [minScore, setMinScore] = React.useState<string>('');
   const [exporting, setExporting] = React.useState(false);
 
   const previewQ = useQuery({
-    queryKey: ['dataset-preview', format, minScore, prefilterScenarioId],
+    queryKey: ['dataset-preview', format, minScore, prefilterBatchId],
     queryFn: () => client.datasets.preview(format, {
       ...(minScore ? { minScore: parseInt(minScore) } : {}),
-      ...(prefilterScenarioId ? { scenarioIds: [prefilterScenarioId] } : {}),
+      ...(prefilterBatchId ? { batchId: prefilterBatchId } : {}),
     }),
     enabled: open,
   });
@@ -177,7 +301,7 @@ function ExportDialog({
         format,
         filters: {
           ...(minScore ? { minScore: parseInt(minScore) } : {}),
-          ...(prefilterScenarioId ? { scenarioIds: [prefilterScenarioId] } : {}),
+          ...(prefilterBatchId ? { batchId: prefilterBatchId } : {}),
         },
       });
       const ext = FORMAT_INFO.find((f) => f.value === format)?.ext || '.jsonl';
@@ -273,57 +397,38 @@ function ExportDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Main Page — aggregated by scenario
+// Main Page
 // ---------------------------------------------------------------------------
 
 export default function DatasetsPage() {
   const { client } = useEvalConfig();
-  const [exportScenarioId, setExportScenarioId] = React.useState<string | null>(null);
+  const [viewBatch, setViewBatch] = React.useState<{ id: string; name: string } | null>(null);
+  const [exportBatchId, setExportBatchId] = React.useState<string | null>(null);
 
   const q = useQuery({
-    queryKey: ['executions'],
-    queryFn: () => client.executions.list({ limit: 500, status: 'completed' }),
+    queryKey: ['datasets'],
+    queryFn: () => client.datasets.list(),
   });
 
-  // Aggregate executions by scenario
   const rows: DatasetRow[] = React.useMemo(() => {
-    const executions = q.data?.executions ?? [];
-    const byScenario = new Map<string, Execution[]>();
-
-    for (const e of executions) {
-      const key = e.scenarioId || 'unknown';
-      if (!byScenario.has(key)) byScenario.set(key, []);
-      byScenario.get(key)!.push(e);
-    }
-
-    return Array.from(byScenario.entries()).map(([scenarioId, execs]) => {
-      const scores = execs.map((e) => e.overallScore ?? 0);
-      const turns = execs.map((e) => Math.ceil((e.stepResults?.length ?? 0) / 2));
-      const personas = new Set(execs.map((e) => e.personaId).filter(Boolean));
-      const dates = execs.map((e) => e.createdAt).filter(Boolean).sort().reverse();
-
-      return {
-        scenarioId,
-        scenarioName: `Scenario ${scenarioId.slice(-6)}`,
-        conversations: execs.length,
-        avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
-        minScore: Math.min(...scores),
-        maxScore: Math.max(...scores),
-        avgTurns: Math.round(turns.reduce((a, b) => a + b, 0) / turns.length),
-        personaCount: personas.size,
-        latestRun: dates[0],
-        onExport: (id: string) => setExportScenarioId(id),
-      };
-    }).sort((a, b) => b.conversations - a.conversations);
+    const batches = q.data ?? [];
+    return batches.map((b) => ({
+      ...b,
+      onView: (id: string) => {
+        const batch = batches.find((x) => x.batchId === id);
+        setViewBatch({ id, name: batch?.batchName || id });
+      },
+      onExport: (id: string) => setExportBatchId(id),
+    }));
   }, [q.data]);
 
-  const totalConversations = rows.reduce((sum, r) => sum + r.conversations, 0);
+  const totalConversations = rows.reduce((sum, r) => sum + r.completed, 0);
 
   return (
     <PageLayout
       icon={Database}
       title="Datasets"
-      description="Export completed conversation runs as training data for fine-tuning"
+      description="Generate, browse, and export training data from conversation runs"
       actions={
         <div className="flex items-center gap-2">
           <ExportDialog totalCount={totalConversations} />
@@ -333,9 +438,7 @@ export default function DatasetsPage() {
     >
       {q.isLoading ? (
         <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
         </div>
       ) : q.isError ? (
         <Card>
@@ -348,8 +451,8 @@ export default function DatasetsPage() {
           <CardContent className="p-0">
             <EmptyState
               icon={Database}
-              title="No completed runs yet"
-              description="Run scenarios to generate conversations, then export them as training data."
+              title="No datasets yet"
+              description="Generate your first dataset by running a scenario with multiple personas."
               action={{ label: 'Go to Scenarios', href: '/scenarios' }}
             />
           </CardContent>
@@ -358,25 +461,33 @@ export default function DatasetsPage() {
         <DataTable
           columns={columns}
           data={rows}
-          filterColumn="scenarioName"
-          filterPlaceholder="Search scenarios..."
+          filterColumn="batchName"
+          filterPlaceholder="Search datasets..."
           emptyState={
-            <EmptyState
-              icon={Database}
-              title="No matching scenarios"
-              description="Try adjusting your filters."
-            />
+            <EmptyState icon={Database} title="No matching datasets" description="Try adjusting your search." />
           }
         />
       )}
 
-      {/* Per-scenario export dialog (triggered by row download button) */}
-      <ExportDialog
-        totalCount={exportScenarioId ? 1 : 0}
-        prefilterScenarioId={exportScenarioId ?? undefined}
-        controlledOpen={!!exportScenarioId}
-        onOpenChange={(open) => { if (!open) setExportScenarioId(null); }}
-      />
+      {/* View conversations dialog */}
+      {viewBatch && (
+        <ViewConversationsDialog
+          batchId={viewBatch.id}
+          batchName={viewBatch.name}
+          open={!!viewBatch}
+          onOpenChange={(open) => { if (!open) setViewBatch(null); }}
+        />
+      )}
+
+      {/* Per-batch export dialog */}
+      {exportBatchId && (
+        <ExportDialog
+          totalCount={1}
+          prefilterBatchId={exportBatchId}
+          open={!!exportBatchId}
+          onOpenChange={(open) => { if (!open) setExportBatchId(null); }}
+        />
+      )}
     </PageLayout>
   );
 }
