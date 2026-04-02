@@ -1,6 +1,6 @@
 {
   "name": "@chanl/scenarios-core",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Core scenario engine: personas, scenarios, execution, adapters",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
