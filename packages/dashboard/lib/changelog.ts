@@ -73,6 +73,30 @@ async function fetchRemoteChangelog(): Promise<ChangelogEntry[]> {
 
 const FALLBACK_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.0',
+    date: '2026-04-02',
+    title: 'Training Data Generation',
+    description:
+      'Turn your evaluation runs into fine-tuning datasets. Generate conversations at scale, then export as OpenAI JSONL, ShareGPT, or DPO preference pairs.',
+    tag: 'new',
+  },
+  {
+    version: '0.3.0',
+    date: '2026-04-02',
+    title: 'Datasets Dashboard',
+    description:
+      'New Datasets page to generate, browse, and export training data. View individual conversations, download in your preferred format, filter by score.',
+    tag: 'new',
+  },
+  {
+    version: '0.3.0',
+    date: '2026-04-02',
+    title: 'Richer Persona Backstories',
+    description:
+      'All seed personas rewritten with detailed second-person backstories. Better personas = better training data.',
+    tag: 'improved',
+  },
+  {
     version: '0.2.0',
     date: '2026-04-01',
     title: 'Playground Overhaul',
