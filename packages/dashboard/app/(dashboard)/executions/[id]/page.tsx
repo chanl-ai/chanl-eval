@@ -330,14 +330,19 @@ export default function RunDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fetch execution data
+  // Fetch execution data — auto-poll while running/queued
   const q = useQuery({
     queryKey: ['execution', id],
     queryFn: () => client.executions.get(id),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'running' || status === 'queued' ? 2000 : false;
+    },
   });
 
   const execution = q.data;
+  const isActive = execution?.status === 'running' || execution?.status === 'queued';
 
   // Fetch scenario name for share dialog
   const scenarioQ = useQuery({
@@ -443,7 +448,7 @@ export default function RunDetailPage() {
         execution ? (
           <div className="flex items-center gap-2">
             <Badge variant={getStatusVariant(execution.status)} className="gap-1">
-              {getStatusIcon(execution.status)}
+              {isActive ? <Loader2 className="h-3 w-3 animate-spin" /> : getStatusIcon(execution.status)}
               {execution.status}
             </Badge>
             {displayScore != null && (
@@ -465,11 +470,11 @@ export default function RunDetailPage() {
               turnCount={messages.length}
               duration={formatDuration(execution.duration ?? (execution.endTime && execution.startTime ? new Date(execution.endTime).getTime() - new Date(execution.startTime).getTime() : undefined))}
             />
-            <Button variant="outline" size="sm" onClick={() => router.push('/playground')}>
+            <Button variant="outline" size="sm" onClick={() => router.push('/playground')} disabled={isActive}>
               <RotateCcw className="mr-2 h-3.5 w-3.5" />
               Run Again
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} data-testid="delete-run">
+            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} disabled={isActive} data-testid="delete-run">
               <Trash2 className="mr-2 h-3.5 w-3.5" />
               Delete
             </Button>
@@ -537,7 +542,14 @@ export default function RunDetailPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {evaluateMutation.isPending ? (
+                {isActive ? (
+                  /* State 0: Running */
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+                    <p className="text-sm font-medium text-muted-foreground">Test is running...</p>
+                    <p className="text-xs text-muted-foreground mt-1">Waiting for the conversation to complete. This page updates automatically.</p>
+                  </div>
+                ) : evaluateMutation.isPending ? (
                   /* State 2: Evaluating */
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
@@ -577,7 +589,7 @@ export default function RunDetailPage() {
                       <Button
                         className="w-full"
                         size="sm"
-                        disabled={!selectedScorecardId || evaluateMutation.isPending}
+                        disabled={!selectedScorecardId || evaluateMutation.isPending || isActive}
                         onClick={() => evaluateMutation.mutate(selectedScorecardId)}
                         data-testid="evaluate-button"
                       >
