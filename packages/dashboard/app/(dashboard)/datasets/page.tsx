@@ -64,7 +64,6 @@ function GenerateDialog() {
     queryKey: ['scenarios-list'],
     queryFn: () => client.scenarios.list({ limit: 100 }),
   });
-
   const promptsQ = useQuery({
     queryKey: ['prompts-list'],
     queryFn: () => client.prompts.list(),
@@ -77,9 +76,7 @@ function GenerateDialog() {
       queryClient.invalidateQueries({ queryKey: ['executions'] });
       setOpen(false);
     },
-    onError: (err: Error) => {
-      toast.error(`Generation failed: ${err.message}`);
-    },
+    onError: (err: Error) => toast.error(`Generation failed: ${err.message}`),
   });
 
   const scenarios = scenariosQ.data?.scenarios ?? [];
@@ -88,17 +85,12 @@ function GenerateDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
-          <Play className="mr-2 h-3.5 w-3.5" />
-          Generate
-        </Button>
+        <Button size="sm"><Play className="mr-2 h-3.5 w-3.5" />Generate</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Generate Training Data</DialogTitle>
-          <DialogDescription>
-            Run a scenario with multiple personas to generate conversations for fine-tuning.
-          </DialogDescription>
+          <DialogDescription>Run a scenario with multiple personas to generate conversations for fine-tuning.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-2">
@@ -142,19 +134,39 @@ function GenerateDialog() {
 }
 
 // ---------------------------------------------------------------------------
-// Export Dialog
+// Export Dialog (reusable — can be pre-filtered to a scenario)
 // ---------------------------------------------------------------------------
 
-function ExportDialog({ count }: { count: number }) {
+function ExportDialog({
+  totalCount,
+  prefilterScenarioId,
+  trigger,
+  controlledOpen,
+  onOpenChange: onOpenChangeProp,
+}: {
+  totalCount: number;
+  prefilterScenarioId?: string;
+  trigger?: React.ReactNode;
+  controlledOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const { client } = useEvalConfig();
-  const [open, setOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (v: boolean) => {
+    setInternalOpen(v);
+    onOpenChangeProp?.(v);
+  };
   const [format, setFormat] = React.useState<ExportDatasetOptions['format']>('openai');
   const [minScore, setMinScore] = React.useState<string>('');
   const [exporting, setExporting] = React.useState(false);
 
   const previewQ = useQuery({
-    queryKey: ['dataset-preview', format, minScore],
-    queryFn: () => client.datasets.preview(format, minScore ? { minScore: parseInt(minScore) } : undefined),
+    queryKey: ['dataset-preview', format, minScore, prefilterScenarioId],
+    queryFn: () => client.datasets.preview(format, {
+      ...(minScore ? { minScore: parseInt(minScore) } : {}),
+      ...(prefilterScenarioId ? { scenarioIds: [prefilterScenarioId] } : {}),
+    }),
     enabled: open,
   });
 
@@ -163,7 +175,10 @@ function ExportDialog({ count }: { count: number }) {
     try {
       const data = await client.datasets.export({
         format,
-        filters: minScore ? { minScore: parseInt(minScore) } : undefined,
+        filters: {
+          ...(minScore ? { minScore: parseInt(minScore) } : {}),
+          ...(prefilterScenarioId ? { scenarioIds: [prefilterScenarioId] } : {}),
+        },
       });
       const ext = FORMAT_INFO.find((f) => f.value === format)?.ext || '.jsonl';
       const blob = new Blob([data], { type: 'application/octet-stream' });
@@ -187,12 +202,15 @@ function ExportDialog({ count }: { count: number }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={count === 0}>
-          <Download className="mr-2 h-3.5 w-3.5" />
-          Export
-        </Button>
-      </DialogTrigger>
+      {controlledOpen === undefined && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button variant="outline" size="sm" disabled={totalCount === 0}>
+              <Download className="mr-2 h-3.5 w-3.5" />Export All
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Export as Training Data</DialogTitle>
@@ -233,7 +251,7 @@ function ExportDialog({ count }: { count: number }) {
                 <Badge variant="secondary">{FORMAT_INFO.find((f) => f.value === format)?.ext}</Badge>
               </div>
               {preview.sampleLine && (
-                <pre className="mt-2 max-h-24 overflow-auto rounded bg-background p-2 text-[10px] text-muted-foreground font-mono">
+                <pre className="mt-2 max-h-24 overflow-auto rounded bg-card p-2 text-[10px] text-muted-foreground font-mono">
                   {JSON.stringify(JSON.parse(preview.sampleLine), null, 2).slice(0, 300)}
                   {preview.sampleLine.length > 300 ? '...' : ''}
                 </pre>
@@ -255,29 +273,51 @@ function ExportDialog({ count }: { count: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Main Page
+// Main Page — aggregated by scenario
 // ---------------------------------------------------------------------------
 
 export default function DatasetsPage() {
   const { client } = useEvalConfig();
+  const [exportScenarioId, setExportScenarioId] = React.useState<string | null>(null);
 
   const q = useQuery({
     queryKey: ['executions'],
-    queryFn: () => client.executions.list({ limit: 100, status: 'completed' }),
+    queryFn: () => client.executions.list({ limit: 500, status: 'completed' }),
   });
 
+  // Aggregate executions by scenario
   const rows: DatasetRow[] = React.useMemo(() => {
     const executions = q.data?.executions ?? [];
-    return executions.map((e: Execution) => ({
-      id: e.id,
-      scenarioName: e.scenarioId ? `Scenario ${e.scenarioId.slice(-6)}` : 'Unnamed',
-      personaName: e.personaId ? `Persona ${e.personaId.slice(-6)}` : '--',
-      score: e.overallScore,
-      turns: Math.ceil((e.stepResults?.length ?? 0) / 2),
-      duration: e.duration,
-      createdAt: e.createdAt,
-    }));
+    const byScenario = new Map<string, Execution[]>();
+
+    for (const e of executions) {
+      const key = e.scenarioId || 'unknown';
+      if (!byScenario.has(key)) byScenario.set(key, []);
+      byScenario.get(key)!.push(e);
+    }
+
+    return Array.from(byScenario.entries()).map(([scenarioId, execs]) => {
+      const scores = execs.map((e) => e.overallScore ?? 0);
+      const turns = execs.map((e) => Math.ceil((e.stepResults?.length ?? 0) / 2));
+      const personas = new Set(execs.map((e) => e.personaId).filter(Boolean));
+      const dates = execs.map((e) => e.createdAt).filter(Boolean).sort().reverse();
+
+      return {
+        scenarioId,
+        scenarioName: `Scenario ${scenarioId.slice(-6)}`,
+        conversations: execs.length,
+        avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+        minScore: Math.min(...scores),
+        maxScore: Math.max(...scores),
+        avgTurns: Math.round(turns.reduce((a, b) => a + b, 0) / turns.length),
+        personaCount: personas.size,
+        latestRun: dates[0],
+        onExport: (id: string) => setExportScenarioId(id),
+      };
+    }).sort((a, b) => b.conversations - a.conversations);
   }, [q.data]);
+
+  const totalConversations = rows.reduce((sum, r) => sum + r.conversations, 0);
 
   return (
     <PageLayout
@@ -286,7 +326,7 @@ export default function DatasetsPage() {
       description="Export completed conversation runs as training data for fine-tuning"
       actions={
         <div className="flex items-center gap-2">
-          <ExportDialog count={rows.length} />
+          <ExportDialog totalCount={totalConversations} />
           <GenerateDialog />
         </div>
       }
@@ -319,16 +359,24 @@ export default function DatasetsPage() {
           columns={columns}
           data={rows}
           filterColumn="scenarioName"
-          filterPlaceholder="Search conversations..."
+          filterPlaceholder="Search scenarios..."
           emptyState={
             <EmptyState
               icon={Database}
-              title="No matching conversations"
+              title="No matching scenarios"
               description="Try adjusting your filters."
             />
           }
         />
       )}
+
+      {/* Per-scenario export dialog (triggered by row download button) */}
+      <ExportDialog
+        totalCount={exportScenarioId ? 1 : 0}
+        prefilterScenarioId={exportScenarioId ?? undefined}
+        controlledOpen={!!exportScenarioId}
+        onOpenChange={(open) => { if (!open) setExportScenarioId(null); }}
+      />
     </PageLayout>
   );
 }
