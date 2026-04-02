@@ -49,9 +49,9 @@ export class RagFaithfulnessHandler implements CriteriaHandler {
       return {
         result: true,
         passed: true,
-        reasoning:
-          'No retrieval tools detected in conversation — skipped',
+        reasoning: 'No retrieval tools detected',
         evidence: [],
+        notApplicable: true,
       };
     }
 

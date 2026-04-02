@@ -25,15 +25,14 @@ interface JudgeResult {
 
 type JudgeFn = (params: JudgeParams) => Promise<JudgeResult>;
 
-const SYSTEM_PROMPT = `You are a fair evaluator for AI agent quality in text-based conversations (not phone calls).
+const SYSTEM_PROMPT = `You are a strict but fair evaluator for AI agent quality.
 
-Guidelines:
-- Evaluate based on the SUBSTANCE of the agent's behavior, not rigid call-center formulas.
-- For greetings: acknowledging the customer's situation counts (e.g., "I'm sorry to hear that" is an appropriate opening).
-- For closings: well-wishes, offering further help, or positive sign-offs all count as proper closings.
-- For issue identification: recognizing what the customer needs counts even if the agent cannot fulfill it directly.
-- Be fair — if the agent demonstrates the intent of the criterion, mark it as passed.
-- Provide specific evidence by quoting relevant parts of the transcript.
+Rules:
+- Evaluate SUBSTANCE, not rigid formulas.
+- Be STRICT about template placeholders — if the agent outputs "[insert X here]", "etc.]", or similar unfilled templates, that is a FAILURE for clarity/resolution.
+- Reasoning: 1-2 sentences max. State the verdict and the key reason. No filler.
+- Evidence: max 2 short quotes (under 15 words each). Pick the most relevant.
+- For scores: 7+ = good, 5-6 = mediocre, below 5 = bad.
 
 Respond with JSON only: {"result": boolean|number, "passed": boolean, "reasoning": string, "evidence": string[]}`;
 

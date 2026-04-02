@@ -170,17 +170,20 @@ function scorecardResultToMetrics(result: ScorecardResult): ScoreMetric[] {
       name: cr.criteriaName,
       passed: cr.passed,
       explanation: cr.reasoning,
-      evidence: cr.evidence?.length > 0 ? cr.evidence : undefined,
+      evidence: cr.evidence?.length > 0 ? cr.evidence.slice(0, 2) : undefined,
+      notApplicable: (cr as any).notApplicable ?? false,
+      notApplicableReason: (cr as any).notApplicable ? cr.reasoning : undefined,
     });
   }
 
   return Array.from(categoryMap.values()).map(({ name, criteria }) => {
-    const passed = criteria.filter((c) => c.passed).length;
+    const applicable = criteria.filter((c) => !c.notApplicable);
+    const passed = applicable.filter((c) => c.passed).length;
     return {
       name,
       score: passed,
-      maxScore: criteria.length,
-      status: passed >= criteria.length * 0.5 ? 'pass' as const : 'fail' as const,
+      maxScore: applicable.length,
+      status: applicable.length === 0 ? 'pass' as const : passed > applicable.length * 0.5 ? 'pass' as const : 'fail' as const,
       criteria,
     };
   });
@@ -213,17 +216,20 @@ function embeddedResultsToMetrics(result: {
       name: cr.criteriaName || cr.criteriaId,
       passed: cr.passed,
       explanation: cr.reasoning,
-      evidence: cr.evidence?.length ? cr.evidence : undefined,
+      evidence: cr.evidence?.length ? cr.evidence.slice(0, 2) : undefined,
+      notApplicable: (cr as any).notApplicable ?? false,
+      notApplicableReason: (cr as any).notApplicable ? cr.reasoning : undefined,
     });
   }
 
   return Array.from(categoryMap.values()).map(({ name, criteria }) => {
-    const passed = criteria.filter((c) => c.passed).length;
+    const applicable = criteria.filter((c) => !c.notApplicable);
+    const passed = applicable.filter((c) => c.passed).length;
     return {
       name,
       score: passed,
-      maxScore: criteria.length,
-      status: passed >= criteria.length * 0.5 ? 'pass' as const : 'fail' as const,
+      maxScore: applicable.length,
+      status: applicable.length === 0 ? 'pass' as const : passed > applicable.length * 0.5 ? 'pass' as const : 'fail' as const,
       criteria,
     };
   });

@@ -18,29 +18,36 @@ export class ToolCallHandler implements CriteriaHandler {
       : [settings.expectedTool];
 
     const toolCalls = context.toolCalls || [];
-    const evidence: string[] = [];
 
+    // No tools were available in the conversation — can't evaluate tool usage
+    if (toolCalls.length === 0) {
+      return {
+        result: true,
+        passed: true,
+        reasoning: 'No tools available in this conversation',
+        evidence: [],
+        notApplicable: true,
+      };
+    }
+
+    const evidence: string[] = [];
     const found = expectedTools.some((tool) =>
       toolCalls.some((tc) => {
         const match =
           tc.name === tool || tc.function?.name === tool;
-        if (match && evidence.length < 3) {
-          evidence.push(
-            `Tool called: ${tc.name || tc.function?.name}${tc.timestamp ? ` at ${tc.timestamp}` : ''}`,
-          );
+        if (match && evidence.length < 2) {
+          evidence.push(`Called: ${tc.name || tc.function?.name}`);
         }
         return match;
       }),
     );
 
-    const reasoning = found
-      ? `Expected tool(s) were called: ${expectedTools.join(', ')}`
-      : `Expected tool(s) were NOT called: ${expectedTools.join(', ')}. Available calls: ${toolCalls.map((tc) => tc.name || tc.function?.name).filter(Boolean).join(', ') || 'none'}`;
-
     return {
       result: found,
       passed: found,
-      reasoning,
+      reasoning: found
+        ? `Expected tool(s) called: ${expectedTools.join(', ')}`
+        : `Expected tool(s) NOT called: ${expectedTools.join(', ')}`,
       evidence,
     };
   }

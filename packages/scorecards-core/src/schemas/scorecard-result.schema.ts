@@ -15,6 +15,7 @@ export interface CriteriaResult {
   passed: boolean;
   reasoning: string;
   evidence: string[];
+  notApplicable?: boolean;
 }
 
 export interface AnalysisMetadata {

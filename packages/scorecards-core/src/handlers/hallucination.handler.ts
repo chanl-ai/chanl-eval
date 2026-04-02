@@ -21,13 +21,14 @@ export class HallucinationHandler implements CriteriaHandler {
     const settings = criteria.settings as HallucinationCriteriaSettings;
     const evaluationType = settings?.evaluationType || 'boolean';
 
-    // No ground truth — nothing to check against, skip
+    // No ground truth — nothing to check against
     if (!context.groundTruth) {
       return {
         result: true,
         passed: true,
-        reasoning: 'No ground truth provided — skipped',
+        reasoning: 'No ground truth provided',
         evidence: [],
+        notApplicable: true,
       };
     }
 
