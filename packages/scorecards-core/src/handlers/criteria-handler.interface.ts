@@ -36,6 +36,9 @@ export interface EvaluationContext {
     function?: { name: string };
   }>;
 
+  /** Ground truth facts for hallucination detection */
+  groundTruth?: string;
+
   /** Optional LLM evaluation function for prompt-type criteria */
   llmEvaluate?: (params: {
     criterionName: string;

@@ -17,19 +17,29 @@ import {
 } from './schemas/scorecard-result.schema';
 import { CriteriaHandlerRegistry } from './handlers/criteria-handler-registry';
 import {
+  HallucinationHandler,
   KeywordHandler,
   PromptHandler,
+  RagFaithfulnessHandler,
   ResponseTimeHandler,
   ToolCallHandler,
+  KnowledgeRetentionHandler,
+  ConversationCompletenessHandler,
+  RoleAdherenceHandler,
 } from './handlers';
 import { EvaluationService } from './evaluation/evaluation.service';
 
 function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
   const registry = new CriteriaHandlerRegistry();
+  registry.register(new HallucinationHandler());
   registry.register(new KeywordHandler());
   registry.register(new PromptHandler());
   registry.register(new ResponseTimeHandler());
+  registry.register(new RagFaithfulnessHandler());
   registry.register(new ToolCallHandler());
+  registry.register(new KnowledgeRetentionHandler());
+  registry.register(new ConversationCompletenessHandler());
+  registry.register(new RoleAdherenceHandler());
   return registry;
 }
 

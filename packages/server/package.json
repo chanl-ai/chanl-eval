@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "license": "MIT",
   "scripts": {
-    "build": "tsc",
+    "build": "rm -f tsconfig.tsbuildinfo && tsc",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "test": "jest --passWithNoTests",

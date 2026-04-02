@@ -71,7 +71,6 @@ export function CreateScenarioDialog({ open, onOpenChange }: CreateScenarioDialo
         category: values.category || undefined,
         status: 'active',
         personaIds: [],
-        agentIds: [],
       });
       toast.success(`Scenario "${values.name}" created`);
       void queryClient.invalidateQueries({ queryKey: ['scenarios'] });

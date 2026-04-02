@@ -15,7 +15,7 @@ export class ChatController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async createSession(@Body() dto: { promptId: string }) {
+  async createSession(@Body() dto: { promptId: string; toolFixtureIds?: string[] }) {
     const session = await this.chatService.createSession(dto);
     return { session };
   }

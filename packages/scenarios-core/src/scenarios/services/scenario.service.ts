@@ -49,15 +49,6 @@ export class ScenarioService {
             'personaIds array is required and must contain at least one persona ID',
           );
         }
-
-        if (
-          !createScenarioDto.agentIds ||
-          createScenarioDto.agentIds.length === 0
-        ) {
-          throw new BadRequestException(
-            'agentIds array is required and must contain at least one agent ID',
-          );
-        }
       }
 
       // Convert IDs to ObjectIds
@@ -65,15 +56,10 @@ export class ScenarioService {
         ? createScenarioDto.personaIds.map((id) => new Types.ObjectId(id))
         : [];
 
-      const agentIds = createScenarioDto.agentIds
-        ? createScenarioDto.agentIds.map((id) => new Types.ObjectId(id))
-        : [];
-
       const scenarioData: any = {
         ...createScenarioDto,
         status: createScenarioDto.status || 'active',
         personaIds,
-        agentIds,
         createdBy: createdBy || 'local',
       };
 
@@ -105,7 +91,6 @@ export class ScenarioService {
    */
   async findAll(
     filters?: {
-      agentId?: string;
       status?: string;
       category?: string;
       difficulty?: string;
@@ -123,9 +108,6 @@ export class ScenarioService {
       const query: any = {};
 
       if (filters) {
-        if (filters.agentId) {
-          query['agentIds'] = new Types.ObjectId(filters.agentId);
-        }
         if (filters.status) query.status = filters.status;
         if (filters.category) query.category = filters.category;
         if (filters.difficulty) query.difficulty = filters.difficulty;
@@ -208,17 +190,6 @@ export class ScenarioService {
         );
       } else {
         delete updateQuery.personaIds;
-      }
-
-      if (
-        updateScenarioDto.agentIds &&
-        updateScenarioDto.agentIds.length > 0
-      ) {
-        updateQuery.agentIds = updateScenarioDto.agentIds.map(
-          (aid) => new Types.ObjectId(aid),
-        );
-      } else {
-        delete updateQuery.agentIds;
       }
 
       if (updateScenarioDto.scorecardId) {
@@ -348,10 +319,6 @@ export class ScenarioService {
 
       if (!scenario.personaIds || scenario.personaIds.length === 0) {
         errors.push('At least one persona is required');
-      }
-
-      if (!scenario.agentIds || scenario.agentIds.length === 0) {
-        errors.push('At least one agent is required');
       }
 
       // Validate personas exist if a lookup function is provided
@@ -608,9 +575,7 @@ export class ScenarioService {
         difficulty: parsed.difficulty || 'medium',
         tags: parsed.tags,
         personaIds: parsed.personaIds || [],
-        agentIds: parsed.agentIds || [],
         scorecardId: parsed.scorecardId,
-        agentOverrides: parsed.agentOverrides,
         phoneNumber: parsed.phoneNumber,
         simulationMode: parsed.simulationMode,
         createdBy: parsed.createdBy,
@@ -707,7 +672,6 @@ export class ScenarioService {
           tags: def.tags,
           status: 'active',
           personaIds,
-          agentIds: [],
           createdBy: 'system',
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -748,7 +712,6 @@ export class ScenarioService {
       difficulty: doc.difficulty,
       tags: doc.tags,
       personaIds: (doc.personaIds || []).map((id: any) => id.toString()),
-      agentIds: (doc.agentIds || []).map((id: any) => id.toString()),
     };
 
     if (doc.context) {
@@ -769,10 +732,6 @@ export class ScenarioService {
 
     if (doc.phoneNumber) {
       exportData.phoneNumber = doc.phoneNumber;
-    }
-
-    if (doc.agentOverrides) {
-      exportData.agentOverrides = doc.agentOverrides;
     }
 
     return yaml.dump(exportData, {

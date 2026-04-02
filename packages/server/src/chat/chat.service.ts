@@ -5,22 +5,19 @@ import { randomUUID } from 'crypto';
 import {
   ScenarioExecution,
   ScenarioExecutionDocument,
-  ToolFixtureService,
-  MockResolver,
 } from '@chanl/scenarios-core';
 import {
   AgentAdapter,
+  AgentAdapterConfig,
   AgentMessage,
   AgentResponse,
+  AgentConfigResolver,
   OpenAIAdapter,
   AnthropicAdapter,
   HttpAdapter,
 } from '@chanl/scenarios-core';
-import { resolveLlmConfig } from '@chanl/scenarios-core';
 import { PromptsService } from '../prompts/prompts.service';
 import { SettingsService } from '../settings/settings.service';
-
-const MAX_TOOL_CALLS_PER_TURN = 5;
 
 @Injectable()
 export class ChatService {
@@ -31,55 +28,26 @@ export class ChatService {
     private readonly executionModel: Model<ScenarioExecutionDocument>,
     private readonly promptsService: PromptsService,
     private readonly settingsService: SettingsService,
-    private readonly toolFixtureService: ToolFixtureService,
-    private readonly mockResolver: MockResolver,
+    private readonly agentConfigResolver: AgentConfigResolver,
   ) {}
 
-  async createSession(dto: {
-    promptId: string;
-    toolFixtureIds?: string[];
-  }): Promise<{
+  private async resolveAgentConfig(promptId: string) {
+    const prompt = await this.promptsService.findById(promptId);
+    return this.agentConfigResolver.resolve({
+      prompt: { content: (prompt as any).content, adapterConfig: (prompt as any).adapterConfig },
+      settingsLookup: (provider) => this.settingsService.getApiKey(provider),
+    });
+  }
+
+  async createSession(dto: { promptId: string }): Promise<{
     sessionId: string;
     executionId: string;
   }> {
-    // Validate prompt and settings exist
-    const prompt = await this.promptsService.findById(dto.promptId);
-    const promptAny = prompt as any;
-    const adapterConfig = promptAny.adapterConfig || {};
-    const adapterType = adapterConfig.adapterType || 'openai';
-
-    // Resolve API key via central 4-tier chain (config → legacy → env → settings DB)
-    const settingsLookup = async (provider: string) => this.settingsService.getApiKey(provider);
-    const resolvedConfig = await resolveLlmConfig(adapterType, adapterConfig, settingsLookup);
-    if (!resolvedConfig) {
-      throw new BadRequestException(
-        `No API key configured for provider "${adapterType}". Set it in Settings or CHANL_OPENAI_API_KEY env var.`,
-      );
-    }
-    const apiKey = resolvedConfig.apiKey;
-
-    // Load tool fixtures if provided
-    const toolFixtureIds = dto.toolFixtureIds || [];
-    let toolDefs: any[] = [];
-    if (toolFixtureIds.length > 0) {
-      const fixtures = await this.toolFixtureService.findByIds(toolFixtureIds);
-      toolDefs = fixtures.map((tf: any) => ({
-        name: tf.name,
-        description: tf.description,
-        parameters: tf.parameters || { type: 'object', properties: {} },
-      }));
-    }
+    const resolved = await this.resolveAgentConfig(dto.promptId);
 
     // Verify adapter connects (fail fast)
-    const adapter = this.createAdapter(adapterType);
-    await adapter.connect({
-      apiKey,
-      model: adapterConfig.model,
-      temperature: adapterConfig.temperature,
-      maxTokens: adapterConfig.maxTokens,
-      systemPrompt: promptAny.content,
-      ...(toolDefs.length > 0 ? { tools: toolDefs } : {}),
-    });
+    const adapter = this.createAdapter(resolved.adapterType);
+    await adapter.connect(resolved.config);
     await adapter.disconnect();
 
     // executionId doubles as sessionId
@@ -91,12 +59,11 @@ export class ChatService {
       promptId: new Types.ObjectId(dto.promptId),
       status: 'running',
       startTime: new Date(),
-      triggeredBy: `Manual Chat: ${promptAny.name || 'Untitled'}`,
+      triggeredBy: 'playground',
       stepResults: [],
       parameters: {
-        adapterType,
-        model: adapterConfig.model,
-        toolFixtureIds,
+        adapterType: resolved.adapterType,
+        model: resolved.config.model,
       },
     });
 
@@ -126,47 +93,16 @@ export class ChatService {
       throw new BadRequestException(`Chat session ${sessionId} has already ended`);
     }
 
-    // Load prompt + settings to reconnect adapter
+    // Resolve adapter config from prompt + settings (single source of truth)
     const promptId = execution.promptId?.toString();
     if (!promptId) {
       throw new BadRequestException('Session has no linked prompt');
     }
-    const prompt = await this.promptsService.findById(promptId);
-    const promptAny = prompt as any;
-    const adapterConfig = promptAny.adapterConfig || {};
-    const adapterType = adapterConfig.adapterType || 'openai';
-
-    // Resolve API key via central 4-tier chain
-    const settingsLookup = async (provider: string) => this.settingsService.getApiKey(provider);
-    const resolvedCfg = await resolveLlmConfig(adapterType, adapterConfig, settingsLookup);
-    if (!resolvedCfg) {
-      throw new BadRequestException(`No API key for "${adapterType}". Set it in Settings or CHANL_OPENAI_API_KEY env var.`);
-    }
-    const apiKey = resolvedCfg.apiKey;
-
-    // Load tool fixtures if session has them
-    const toolFixtureIds = (execution.parameters as any)?.toolFixtureIds || [];
-    let toolFixtures: any[] = [];
-    let toolDefs: any[] = [];
-    if (toolFixtureIds.length > 0) {
-      toolFixtures = await this.toolFixtureService.findByIds(toolFixtureIds);
-      toolDefs = toolFixtures.map((tf: any) => ({
-        name: tf.name,
-        description: tf.description,
-        parameters: tf.parameters || { type: 'object', properties: {} },
-      }));
-    }
+    const resolved = await this.resolveAgentConfig(promptId);
 
     // Create adapter, connect, rebuild history from stepResults
-    const adapter = this.createAdapter(adapterType);
-    await adapter.connect({
-      apiKey,
-      model: adapterConfig.model,
-      temperature: adapterConfig.temperature,
-      maxTokens: adapterConfig.maxTokens,
-      systemPrompt: promptAny.content,
-      ...(toolDefs.length > 0 ? { tools: toolDefs } : {}),
-    });
+    const adapter = this.createAdapter(resolved.adapterType);
+    await adapter.connect(resolved.config);
 
     const history: AgentMessage[] = [];
     for (const step of execution.stepResults || []) {
@@ -178,67 +114,34 @@ export class ChatService {
     }
 
     const now = new Date();
-    const newSteps: any[] = [];
 
     try {
       // Send message with full history
-      let response = await adapter.sendMessage(trimmed, history);
-
-      // Handle tool calls if fixtures are configured
-      if (response.toolCalls?.length && toolFixtures.length > 0) {
-        history.push({ role: 'user', content: trimmed });
-
-        let iteration = 0;
-        while (response.toolCalls?.length && iteration < MAX_TOOL_CALLS_PER_TURN) {
-          iteration++;
-          const resolvedCalls = this.mockResolver.resolveAll(response.toolCalls, toolFixtures);
-
-          // Record tool calls in steps
-          for (const call of resolvedCalls) {
-            newSteps.push({
-              stepId: `tool-${randomUUID().slice(0, 8)}`,
-              status: 'completed',
-              role: 'tool',
-              actualResponse: JSON.stringify({ name: call.name, arguments: call.arguments, result: call.result }),
-              duration: 0,
-              startTime: now,
-              endTime: now,
-              toolCalls: [{ name: call.name, arguments: call.arguments, result: call.result }],
-            });
-          }
-
-          const historyMessages = adapter.buildToolCallHistory(response, resolvedCalls);
-          history.push(...historyMessages);
-          response = await adapter.sendMessage('', history);
-        }
-
-        history.push({ role: 'assistant', content: response.content });
-      } else {
-        history.push({ role: 'user', content: trimmed });
-        history.push({ role: 'assistant', content: response.content });
-      }
+      const response = await adapter.sendMessage(trimmed, history);
 
       // Build step results for this turn
-      const turnIndex = Math.floor(history.length / 2) - 1;
-      newSteps.unshift({
-        stepId: `turn-${turnIndex}-persona`,
-        status: 'completed',
-        role: 'persona',
-        actualResponse: trimmed,
-        duration: 0,
-        startTime: now,
-        endTime: now,
-      });
-      newSteps.push({
-        stepId: `turn-${turnIndex}-agent`,
-        status: 'completed',
-        role: 'agent',
-        actualResponse: response.content,
-        duration: response.latencyMs || 0,
-        startTime: now,
-        endTime: new Date(),
-        ...(response.toolCalls?.length ? { toolCalls: response.toolCalls } : {}),
-      });
+      const turnIndex = Math.floor((history.length + 2) / 2) - 1;
+      const newSteps = [
+        {
+          stepId: `turn-${turnIndex}-persona`,
+          status: 'completed' as const,
+          role: 'persona' as const,
+          actualResponse: trimmed,
+          duration: 0,
+          startTime: now,
+          endTime: now,
+        },
+        {
+          stepId: `turn-${turnIndex}-agent`,
+          status: 'completed' as const,
+          role: 'agent' as const,
+          actualResponse: response.content,
+          duration: response.latencyMs || 0,
+          startTime: now,
+          endTime: new Date(),
+          ...(response.toolCalls?.length ? { toolCalls: response.toolCalls } : {}),
+        },
+      ];
 
       // Append to execution stepResults
       await this.executionModel.findOneAndUpdate(
@@ -272,12 +175,14 @@ export class ChatService {
   }
 
   async getActiveSession(): Promise<{ sessionId: string; execution: any } | null> {
+    // Find the last manual execution that's still running
     const execution = await this.executionModel.findOne(
       { mode: 'manual', status: 'running' },
       null,
       { sort: { createdAt: -1 } },
     );
     if (!execution) return null;
+
     return { sessionId: execution.executionId, execution };
   }
 

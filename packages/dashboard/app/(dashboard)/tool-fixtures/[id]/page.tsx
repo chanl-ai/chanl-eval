@@ -3,7 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Plus, Shield, Trash2, Wrench } from 'lucide-react';
+import { ChevronDown, Code2, Plus, Shield, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,15 +48,173 @@ function parseJson(text: string): { valid: boolean; value: any } {
   }
 }
 
-/** Extract parameter names/types from a JSON Schema for the preview. */
-function getSchemaFields(schema: Record<string, any> | undefined): Array<{ name: string; type: string; required: boolean }> {
-  if (!schema || !schema.properties) return [];
-  const required = new Set<string>(schema.required ?? []);
+
+// ---------------------------------------------------------------------------
+// Parameter Builder — replaces raw JSON Schema textarea
+// ---------------------------------------------------------------------------
+
+interface ParamField {
+  name: string;
+  type: string;
+  description: string;
+  required: boolean;
+}
+
+function schemaToFields(schema: Record<string, any> | undefined): ParamField[] {
+  if (!schema?.properties) return [];
+  const req = new Set<string>(schema.required ?? []);
   return Object.entries(schema.properties).map(([name, prop]: [string, any]) => ({
     name,
-    type: prop.type ?? 'any',
-    required: required.has(name),
+    type: prop.type ?? 'string',
+    description: prop.description ?? '',
+    required: req.has(name),
   }));
+}
+
+function fieldsToSchema(fields: ParamField[]): Record<string, any> | undefined {
+  if (fields.length === 0) return undefined;
+  const properties: Record<string, any> = {};
+  const required: string[] = [];
+  for (const f of fields) {
+    properties[f.name] = { type: f.type };
+    if (f.description) properties[f.name].description = f.description;
+    if (f.required) required.push(f.name);
+  }
+  return { type: 'object', properties, ...(required.length ? { required } : {}) };
+}
+
+function ParameterBuilder({
+  fields,
+  onChange,
+}: {
+  fields: ParamField[];
+  onChange: (fields: ParamField[]) => void;
+}) {
+  const updateField = (index: number, key: keyof ParamField, value: string | boolean) => {
+    const next = [...fields];
+    next[index] = { ...next[index], [key]: value };
+    onChange(next);
+  };
+  const removeField = (index: number) => onChange(fields.filter((_, i) => i !== index));
+  const addField = () => onChange([...fields, { name: '', type: 'string', description: '', required: false }]);
+
+  return (
+    <div className="space-y-3">
+      {fields.map((f, i) => (
+        <div key={i} className="grid grid-cols-12 gap-2 items-start" data-testid={`param-field-${i}`}>
+          <div className="col-span-3 space-y-1">
+            <Input
+              value={f.name}
+              onChange={(e) => updateField(i, 'name', e.target.value)}
+              placeholder="name"
+              className="text-sm"
+              data-testid={`param-name-${i}`}
+            />
+          </div>
+          <div className="col-span-2">
+            <Select value={f.type} onValueChange={(v) => updateField(i, 'type', v)}>
+              <SelectTrigger className="text-sm" data-testid={`param-type-${i}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="string">string</SelectItem>
+                <SelectItem value="number">number</SelectItem>
+                <SelectItem value="boolean">boolean</SelectItem>
+                <SelectItem value="object">object</SelectItem>
+                <SelectItem value="array">array</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-5">
+            <Input
+              value={f.description}
+              onChange={(e) => updateField(i, 'description', e.target.value)}
+              placeholder="description"
+              className="text-sm"
+              data-testid={`param-desc-${i}`}
+            />
+          </div>
+          <div className="col-span-1 flex items-center justify-center pt-1.5">
+            <input
+              type="checkbox"
+              checked={f.required}
+              onChange={(e) => updateField(i, 'required', e.target.checked)}
+              className="h-4 w-4 rounded border-input"
+              title="Required"
+              data-testid={`param-required-${i}`}
+            />
+          </div>
+          <div className="col-span-1 flex items-center justify-end">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+              onClick={() => removeField(i)}
+              data-testid={`param-remove-${i}`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      ))}
+      {fields.length > 0 && (
+        <div className="grid grid-cols-12 gap-2 text-[10px] text-muted-foreground uppercase tracking-wider -mt-1 px-0.5">
+          <div className="col-span-3">Name</div>
+          <div className="col-span-2">Type</div>
+          <div className="col-span-5">Description</div>
+          <div className="col-span-1 text-center">Req</div>
+          <div className="col-span-1" />
+        </div>
+      )}
+      <Button size="sm" variant="outline" onClick={addField} data-testid="add-parameter">
+        <Plus className="mr-2 h-3.5 w-3.5" />
+        Add Parameter
+      </Button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Collapsible JSON — hides raw JSON behind toggle
+// ---------------------------------------------------------------------------
+
+function CollapsibleJson({ label, value }: { label: string; value: any }) {
+  const [open, setOpen] = useState(false);
+  if (value == null || (typeof value === 'object' && Object.keys(value).length === 0)) return null;
+
+  // Show key-value preview pills
+  const entries = typeof value === 'object' && !Array.isArray(value)
+    ? Object.entries(value)
+    : [];
+
+  return (
+    <div className="space-y-1">
+      <div
+        className="flex items-center gap-1.5 cursor-pointer select-none"
+        onClick={() => setOpen(!open)}
+      >
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+          {label}
+        </p>
+        <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+      </div>
+      {!open && entries.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {entries.map(([k, v]) => (
+            <span key={k} className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono">
+              <span className="text-muted-foreground">{k}:</span>
+              <span className="truncate max-w-[120px]">{typeof v === 'string' ? v : JSON.stringify(v)}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {open && (
+        <pre className="text-xs font-mono bg-muted rounded-md p-2 overflow-x-auto">
+          {formatJson(value)}
+        </pre>
+      )}
+    </div>
+  );
 }
 
 export default function ToolFixtureDetailPage() {
@@ -79,6 +237,8 @@ export default function ToolFixtureDetailPage() {
   const [isActive, setIsActive] = useState('true');
   const [parametersText, setParametersText] = useState('');
   const [parametersError, setParametersError] = useState('');
+  const [paramFields, setParamFields] = useState<ParamField[]>([]);
+  const [showRawJson, setShowRawJson] = useState(false);
   const [mockResponses, setMockResponses] = useState<MockResponse[]>([]);
 
   // --- Delete state ---
@@ -100,6 +260,7 @@ export default function ToolFixtureDetailPage() {
       setTags((q.data.tags ?? []).join(', '));
       setIsActive(q.data.isActive ? 'true' : 'false');
       setParametersText(q.data.parameters ? formatJson(q.data.parameters) : '');
+      setParamFields(schemaToFields(q.data.parameters));
       setParametersError('');
       setMockResponses(q.data.mockResponses ?? []);
     }
@@ -118,15 +279,17 @@ export default function ToolFixtureDetailPage() {
   // --- Save ---
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const paramsParsed = parseJson(parametersText);
-      if (!paramsParsed.valid) throw new Error('Parameters JSON is invalid');
+      // Use visual builder fields as source of truth (unless raw JSON mode)
+      const parameters = showRawJson
+        ? (() => { const p = parseJson(parametersText); if (!p.valid) throw new Error('Parameters JSON is invalid'); return p.value; })()
+        : fieldsToSchema(paramFields);
 
       await client.toolFixtures.update(id, {
         name,
         description: description || undefined,
         tags: tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
         isActive: isActive === 'true',
-        parameters: paramsParsed.value,
+        parameters,
         mockResponses,
       });
     },
@@ -195,9 +358,6 @@ export default function ToolFixtureDetailPage() {
       })),
     );
   }
-
-  // Schema preview
-  const schemaFields = getSchemaFields(parseJson(parametersText).value);
 
   return (
     <PageLayout
@@ -293,50 +453,57 @@ export default function ToolFixtureDetailPage() {
           {/* Section 2: Parameters */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-medium">Parameters (JSON Schema)</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-medium">Parameters</CardTitle>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs gap-1.5"
+                  onClick={() => {
+                    if (!showRawJson) {
+                      // Sync fields → JSON
+                      const schema = fieldsToSchema(paramFields);
+                      setParametersText(schema ? formatJson(schema) : '');
+                    } else {
+                      // Sync JSON → fields
+                      const parsed = parseJson(parametersText);
+                      if (parsed.valid && parsed.value) setParamFields(schemaToFields(parsed.value));
+                    }
+                    setShowRawJson(!showRawJson);
+                  }}
+                  data-testid="toggle-raw-json"
+                >
+                  <Code2 className="h-3.5 w-3.5" />
+                  {showRawJson ? 'Visual Editor' : 'Raw JSON'}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea
-                value={parametersText}
-                onChange={(e) => setParametersText(e.target.value)}
-                placeholder={`{
+              {showRawJson ? (
+                <>
+                  <Textarea
+                    value={parametersText}
+                    onChange={(e) => setParametersText(e.target.value)}
+                    placeholder={`{
   "type": "object",
   "properties": {
     "order_id": { "type": "string", "description": "The order ID to look up" }
   },
   "required": ["order_id"]
 }`}
-                className="font-mono text-sm min-h-[160px]"
-                rows={10}
-                data-testid="tool-fixture-parameters"
-              />
-              {parametersError && (
-                <p className="text-xs text-destructive">{parametersError}</p>
-              )}
-
-              {/* Parameter preview */}
-              {schemaFields.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Parameter Preview
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {schemaFields.map((f) => (
-                      <div
-                        key={f.name}
-                        className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs"
-                      >
-                        <span className="font-medium">{f.name}</span>
-                        <span className="text-muted-foreground">{f.type}</span>
-                        {f.required && (
-                          <Badge variant="default" className="text-[9px] px-1 py-0 leading-tight">
-                            required
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                    className="font-mono text-sm min-h-[160px]"
+                    rows={10}
+                    data-testid="tool-fixture-parameters"
+                  />
+                  {parametersError && (
+                    <p className="text-xs text-destructive">{parametersError}</p>
+                  )}
+                </>
+              ) : (
+                <ParameterBuilder
+                  fields={paramFields}
+                  onChange={setParamFields}
+                />
               )}
             </CardContent>
           </Card>
@@ -406,25 +573,8 @@ export default function ToolFixtureDetailPage() {
                     </Button>
                   </div>
 
-                  {mock.when && Object.keys(mock.when).length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                        When
-                      </p>
-                      <pre className="text-xs font-mono bg-muted rounded-md p-2 overflow-x-auto">
-                        {formatJson(mock.when)}
-                      </pre>
-                    </div>
-                  )}
-
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                      Return
-                    </p>
-                    <pre className="text-xs font-mono bg-muted rounded-md p-2 overflow-x-auto">
-                      {formatJson(mock.return)}
-                    </pre>
-                  </div>
+                  <CollapsibleJson label="When" value={mock.when} />
+                  <CollapsibleJson label="Return" value={mock.return} />
                 </div>
               ))}
 

@@ -2,6 +2,23 @@
 
 Agent adapters connect chanl-eval to the AI agents you want to test. Each adapter translates the generic `AgentAdapter` interface into provider-specific API calls.
 
+## How Adapters Receive Config
+
+Adapters do not receive config from the execute request. The `AgentConfigResolver` builds a complete `AgentAdapterConfig` from the **Prompt entity** (system prompt, model, temperature) and **Settings DB** (API keys). Both `ExecutionProcessor` and `ChatService` use the resolver -- there is no other path.
+
+```
+Prompt (DB) + Settings (DB)
+        │
+  AgentConfigResolver.resolve()
+        │
+  { adapterType: "openai", config: AgentAdapterConfig }
+        │
+  adapter = registry.getOrThrow(adapterType)
+  adapter.connect(config)
+```
+
+See [api-key-resolution.md](./api-key-resolution.md) for the full key resolution chain.
+
 ## AgentAdapter Interface
 
 Every adapter implements three methods:
@@ -329,19 +346,29 @@ describe('MyPlatformAdapter', () => {
 });
 ```
 
-### Step 4: Use in a Scenario
+### Step 4: Use via a Prompt
 
-Once registered, reference the adapter type in your scenario's agent configuration:
+Once registered, create a Prompt entity with `adapterConfig.adapterType` set to your adapter's type string. The `AgentConfigResolver` will look up the adapter by type at execution time.
 
-```yaml
-agent:
-  type: my-platform
-  config:
-    apiKey: ${MY_PLATFORM_API_KEY}
-    endpoint: https://api.myplatform.com/v1/chat
-    model: my-platform-pro
-    systemPrompt: "You are a helpful customer support agent."
+```json
+{
+  "name": "My Platform Agent",
+  "content": "You are a helpful customer support agent.",
+  "adapterConfig": {
+    "adapterType": "my-platform",
+    "model": "my-platform-pro",
+    "endpoint": "https://api.myplatform.com/v1/chat"
+  }
+}
 ```
+
+Then execute a scenario against it:
+
+```
+POST /scenarios/:id/execute { "promptId": "<prompt-id>" }
+```
+
+API keys are resolved automatically by the `AgentConfigResolver` (env vars or Settings DB). They are never passed in the execute request.
 
 ## Configuration Options
 

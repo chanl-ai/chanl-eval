@@ -23,6 +23,11 @@ export class OpenAIAdapter implements AgentAdapter {
       endpoint: 'https://api.openai.com/v1/chat/completions',
       ...config,
     };
+    // Defense-in-depth: AgentConfigResolver strips undefined values, but
+    // guard against endpoint being wiped if config is assembled elsewhere.
+    if (!this.config.endpoint) {
+      this.config.endpoint = 'https://api.openai.com/v1/chat/completions';
+    }
     this.connected = true;
   }
 

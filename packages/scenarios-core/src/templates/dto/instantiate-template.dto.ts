@@ -15,11 +15,6 @@ export class InstantiateTemplateDto {
   personaIds?: string[];
 
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  agentIds?: string[];
-
-  @IsOptional()
   @IsString()
   scorecardId?: string;
 }

@@ -26,6 +26,11 @@ export class CreateScorecardCriteriaDto {
     'keyword',
     'response_time',
     'tool_call',
+    'hallucination',
+    'knowledge_retention',
+    'conversation_completeness',
+    'role_adherence',
+    'rag_faithfulness',
   ])
   type!: string;
 

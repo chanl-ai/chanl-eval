@@ -235,7 +235,6 @@ describe('ScenarioTemplateService', () => {
       const result = await service.instantiate(tmpl._id!.toString(), {
         variableValues: { name: 'Alice', order_id: 'ORD-123' },
         personaIds: ['p1'],
-        agentIds: ['a1'],
       });
 
       expect(result.prompt).toBe(
@@ -243,7 +242,6 @@ describe('ScenarioTemplateService', () => {
       );
       expect(result.name).toBe('Greeting Template');
       expect(result.personaIds).toEqual(['p1']);
-      expect(result.agentIds).toEqual(['a1']);
       expect(result.status).toBe('draft');
     });
 
@@ -486,7 +484,6 @@ describe('ScenarioTemplateService', () => {
           issue_description: 'broken left earpiece',
           resolution_type: 'replacement',
         },
-        agentIds: ['agent-1'],
         personaIds: ['persona-1'],
       });
 

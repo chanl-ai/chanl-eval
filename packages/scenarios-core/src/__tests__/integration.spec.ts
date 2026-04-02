@@ -47,6 +47,8 @@ import { QUEUE_NAMES } from '../execution/queues.config';
 import { ToolFixtureService } from '../tool-fixtures/tool-fixture.service';
 import { MockResolver } from '../tool-fixtures/mock-resolver.service';
 import { ToolFixture, ToolFixtureSchema } from '../tool-fixtures/schemas/tool-fixture.schema';
+import { AgentConfigResolver } from '../execution/agent-config-resolver';
+import { PersonaStrategyRegistry } from '../execution/persona-strategy-registry';
 
 // scorecards-core imports
 import {
@@ -177,6 +179,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
   let personaId: string;
   let scenarioId: string;
   let scorecardId: string;
+  const testPromptId = new Types.ObjectId().toString();
 
   beforeEach(async () => {
     // Build handler registry
@@ -209,6 +212,8 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       providers: [
         ExecutionService,
         ExecutionProcessor,
+        AgentConfigResolver,
+        PersonaStrategyRegistry,
         PersonaSimulatorService,
         EvaluationService,
         ToolFixtureService,
@@ -221,6 +226,10 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
         },
       ],
     }).compile();
+
+    // Manually init persona strategies (module.init() would overwrite our mock adapters)
+    const strategyRegistry = module.get(PersonaStrategyRegistry);
+    strategyRegistry.onModuleInit();
 
     executionService = module.get(ExecutionService);
     evaluationService = module.get(EvaluationService);
@@ -280,11 +289,23 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       status: 'active',
       category: 'support',
       personaIds: [persona._id],
-      agentIds: [new Types.ObjectId()],
       simulationMode: 'text',
       createdBy: 'integration-test',
     });
     scenarioId = scenario._id.toString();
+
+    // 2b. Seed a Prompt document (the agent under test)
+    const db = module.get<import('mongoose').Connection>('DatabaseConnection').db!;
+    await db.collection('prompts').insertOne({
+      _id: new Types.ObjectId(testPromptId),
+      name: 'Test Support Agent',
+      content: 'You are a helpful customer support agent. Assist the customer with their issue.',
+      status: 'active',
+      tags: [],
+      adapterConfig: { adapterType: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 512 },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     // 3. Scorecard with keyword + response_time criteria
     const scorecard = await scorecardModel.create({
@@ -378,7 +399,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
   it('should execute scenario and produce transcript with alternating user/agent messages', async () => {
     // Create execution via service (queues job)
     const executionId = await executionService.execute(scenarioId, {
-      adapterType: 'openai',
+      promptId: testPromptId,
       personaId,
       maxTurns: 5,
     });
@@ -391,7 +412,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       data: {
         executionId,
         scenarioId,
-        adapterType: 'openai',
+        promptId: testPromptId,
         personaId,
         maxTurns: 5,
       },
@@ -431,7 +452,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
 
   it('should update execution status from queued → running → completed', async () => {
     const executionId = await executionService.execute(scenarioId, {
-      adapterType: 'openai',
+      promptId: testPromptId,
       personaId,
       maxTurns: 3,
     });
@@ -445,7 +466,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       data: {
         executionId,
         scenarioId,
-        adapterType: 'openai',
+        promptId: testPromptId,
         personaId,
         maxTurns: 3,
       },
@@ -505,7 +526,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
   it('should evaluate transcript against scorecard and return scores', async () => {
     // Run execution to get transcript
     const executionId = await executionService.execute(scenarioId, {
-      adapterType: 'openai',
+      promptId: testPromptId,
       personaId,
       maxTurns: 5,
     });
@@ -514,7 +535,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       data: {
         executionId,
         scenarioId,
-        adapterType: 'openai',
+        promptId: testPromptId,
         personaId,
         maxTurns: 5,
       },
@@ -603,7 +624,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
   it('should store scorecard result in database with analysis metadata', async () => {
     // Quick execution
     const executionId = await executionService.execute(scenarioId, {
-      adapterType: 'openai',
+      promptId: testPromptId,
       personaId,
       maxTurns: 3,
     });
@@ -612,7 +633,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       data: {
         executionId,
         scenarioId,
-        adapterType: 'openai',
+        promptId: testPromptId,
         personaId,
         maxTurns: 3,
       },
@@ -656,7 +677,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
 
   it('should cancel a queued execution', async () => {
     const executionId = await executionService.execute(scenarioId, {
-      adapterType: 'openai',
+      promptId: testPromptId,
       personaId,
     });
 
@@ -671,11 +692,11 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
   it('should list executions by status filter', async () => {
     // Create two executions
     const id1 = await executionService.execute(scenarioId, {
-      adapterType: 'openai',
+      promptId: testPromptId,
       personaId,
     });
     const id2 = await executionService.execute(scenarioId, {
-      adapterType: 'openai',
+      promptId: testPromptId,
       personaId,
     });
 
@@ -740,7 +761,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
 
     // Run execution
     const executionId = await executionService.execute(scenarioId, {
-      adapterType: 'openai',
+      promptId: testPromptId,
       personaId,
       maxTurns: 3,
     });
@@ -749,7 +770,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       data: {
         executionId,
         scenarioId,
-        adapterType: 'openai',
+        promptId: testPromptId,
         personaId,
         maxTurns: 3,
       },
@@ -788,8 +809,22 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
   // ─── Test 9: Execution with different adapter type ─────────────────
 
   it('should throw when adapter type is not registered', async () => {
+    // Create a prompt with a non-existent adapter type
+    const badPromptId = new Types.ObjectId();
+    const db = module.get<import('mongoose').Connection>('DatabaseConnection').db!;
+    await db.collection('prompts').insertOne({
+      _id: badPromptId,
+      name: 'Bad Adapter Prompt',
+      content: 'Test prompt',
+      status: 'active',
+      tags: [],
+      adapterConfig: { adapterType: 'nonexistent', model: 'test' },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
     const executionId = await executionService.execute(scenarioId, {
-      adapterType: 'nonexistent',
+      promptId: badPromptId.toString(),
       personaId,
     });
 
@@ -797,7 +832,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       data: {
         executionId,
         scenarioId,
-        adapterType: 'nonexistent',
+        promptId: badPromptId.toString(),
         personaId,
         maxTurns: 3,
       },
@@ -818,7 +853,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
   it('should produce consistent execution + evaluation results (end-to-end)', async () => {
     // 1. Execute
     const executionId = await executionService.execute(scenarioId, {
-      adapterType: 'openai',
+      promptId: testPromptId,
       personaId,
       maxTurns: 4,
     });
@@ -827,7 +862,7 @@ describe('Integration: Full Scenario Execution Pipeline', () => {
       data: {
         executionId,
         scenarioId,
-        adapterType: 'openai',
+        promptId: testPromptId,
         personaId,
         maxTurns: 4,
       },

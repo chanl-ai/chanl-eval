@@ -24,9 +24,8 @@ export class QueueProducerService {
   async enqueueExecution(
     executionId: string,
     scenarioId: string,
-    options?: Partial<
-      Omit<ScenarioExecutionJobData, 'executionId' | 'scenarioId'>
-    >,
+    options: Pick<ScenarioExecutionJobData, 'promptId'> &
+      Partial<Omit<ScenarioExecutionJobData, 'executionId' | 'scenarioId' | 'promptId'>>,
   ) {
     const jobData: ScenarioExecutionJobData = {
       executionId,

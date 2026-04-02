@@ -36,13 +36,15 @@ import {
 import { ToolFixtureService } from '../../tool-fixtures/tool-fixture.service';
 import { MockResolver } from '../../tool-fixtures/mock-resolver.service';
 import { ToolFixture, ToolFixtureSchema } from '../../tool-fixtures/schemas/tool-fixture.schema';
+import { AgentConfigResolver } from '../agent-config-resolver';
+import { PersonaStrategyRegistry } from '../persona-strategy-registry';
 
 // ──────────────────────────────────────────────────────────────────────
 // Mock adapter for testing the conversation loop
 // ──────────────────────────────────────────────────────────────────────
 class MockAdapter implements AgentAdapter {
-  readonly name = 'Mock';
-  readonly type = 'mock';
+  readonly name = 'Mock OpenAI';
+  readonly type = 'openai';
 
   private connected = false;
   private callCount = 0;
@@ -127,7 +129,7 @@ describe('ExecutionService', () => {
   // Test data
   let scenarioId: string;
   let personaId: string;
-  const agentId = new Types.ObjectId().toString();
+  const testPromptId = new Types.ObjectId().toString();
 
   beforeAll(async () => {
     mongod = await MongoMemoryServer.create();
@@ -184,6 +186,19 @@ describe('ExecutionService', () => {
     });
     personaId = persona._id.toString();
 
+    // Create test prompt (the agent under test)
+    const connection = module.get<import('mongoose').Connection>('DatabaseConnection');
+    await connection.db!.collection('prompts').insertOne({
+      _id: new Types.ObjectId(testPromptId),
+      name: 'Test Prompt',
+      content: 'You are a test support agent.',
+      status: 'active',
+      tags: [],
+      adapterConfig: { adapterType: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 512 },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
     // Create test scenario (active)
     const scenario = await scenarioModel.create({
       name: 'Test Scenario',
@@ -192,7 +207,6 @@ describe('ExecutionService', () => {
       difficulty: 'medium',
       status: 'active',
       personaIds: [new Types.ObjectId(personaId)],
-      agentIds: [new Types.ObjectId(agentId)],
       createdBy: 'test',
       tags: ['test'],
     });
@@ -213,7 +227,7 @@ describe('ExecutionService', () => {
 
   describe('execute()', () => {
     it('should create an execution doc with status queued and enqueue a job', async () => {
-      const executionId = await service.execute(scenarioId);
+      const executionId = await service.execute(scenarioId, { promptId: testPromptId });
 
       expect(executionId).toBeDefined();
       expect(executionId).toMatch(/^exec_/);
@@ -232,15 +246,14 @@ describe('ExecutionService', () => {
         scenarioId,
         expect.objectContaining({
           personaId,
-          agentId,
+          promptId: testPromptId,
         }),
       );
     });
 
-    it('should pass adapter options to the enqueue call', async () => {
+    it('should pass options to the enqueue call', async () => {
       const executionId = await service.execute(scenarioId, {
-        adapterType: 'openai',
-        adapterConfig: { apiKey: 'test-key', model: 'gpt-4o' },
+        promptId: testPromptId,
         maxTurns: 5,
       });
 
@@ -248,39 +261,35 @@ describe('ExecutionService', () => {
         executionId,
         scenarioId,
         expect.objectContaining({
-          adapterType: 'openai',
-          adapterConfig: { apiKey: 'test-key', model: 'gpt-4o' },
+          promptId: testPromptId,
           maxTurns: 5,
         }),
       );
     });
 
-    it('should use custom personaId and agentId when provided', async () => {
+    it('should use custom personaId when provided', async () => {
       const customPersonaId = personaId;
-      const customAgentId = new Types.ObjectId().toString();
 
       const executionId = await service.execute(scenarioId, {
+        promptId: testPromptId,
         personaId: customPersonaId,
-        agentId: customAgentId,
       });
 
       const doc = await executionModel.findOne({ executionId });
       expect(doc!.personaId!.toString()).toBe(customPersonaId);
-      expect(doc!.agentId!.toString()).toBe(customAgentId);
 
       expect(mockEnqueueExecution).toHaveBeenCalledWith(
         executionId,
         scenarioId,
         expect.objectContaining({
           personaId: customPersonaId,
-          agentId: customAgentId,
         }),
       );
     });
 
     it('should throw NotFoundException for non-existent scenario', async () => {
       const fakeId = new Types.ObjectId().toString();
-      await expect(service.execute(fakeId)).rejects.toThrow(
+      await expect(service.execute(fakeId, { promptId: testPromptId })).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -293,18 +302,18 @@ describe('ExecutionService', () => {
         difficulty: 'easy',
         status: 'draft',
         personaIds: [new Types.ObjectId(personaId)],
-        agentIds: [new Types.ObjectId(agentId)],
         createdBy: 'test',
         tags: [],
       });
 
       await expect(
-        service.execute(draftScenario._id.toString()),
+        service.execute(draftScenario._id.toString(), { promptId: testPromptId }),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('should set triggeredBy from options', async () => {
       const executionId = await service.execute(scenarioId, {
+        promptId: testPromptId,
         triggeredBy: 'user123',
       });
 
@@ -317,7 +326,7 @@ describe('ExecutionService', () => {
 
   describe('getExecution()', () => {
     it('should return an execution by executionId', async () => {
-      const executionId = await service.execute(scenarioId);
+      const executionId = await service.execute(scenarioId, { promptId: testPromptId });
 
       const result = (await service.getExecution(executionId)) as ExecutionJson;
 
@@ -339,9 +348,9 @@ describe('ExecutionService', () => {
 
   describe('listExecutions()', () => {
     it('should return all executions with total count', async () => {
-      await service.execute(scenarioId);
-      await service.execute(scenarioId);
-      await service.execute(scenarioId);
+      await service.execute(scenarioId, { promptId: testPromptId });
+      await service.execute(scenarioId, { promptId: testPromptId });
+      await service.execute(scenarioId, { promptId: testPromptId });
 
       const result = await service.listExecutions();
 
@@ -350,8 +359,8 @@ describe('ExecutionService', () => {
     });
 
     it('should filter by status', async () => {
-      const execId1 = await service.execute(scenarioId);
-      await service.execute(scenarioId);
+      const execId1 = await service.execute(scenarioId, { promptId: testPromptId });
+      await service.execute(scenarioId, { promptId: testPromptId });
 
       // Manually update one execution to 'completed'
       await executionModel.findOneAndUpdate(
@@ -374,13 +383,12 @@ describe('ExecutionService', () => {
         difficulty: 'easy',
         status: 'active',
         personaIds: [new Types.ObjectId(personaId)],
-        agentIds: [new Types.ObjectId(agentId)],
         createdBy: 'test',
         tags: [],
       });
 
-      await service.execute(scenarioId);
-      await service.execute(otherScenario._id.toString());
+      await service.execute(scenarioId, { promptId: testPromptId });
+      await service.execute(otherScenario._id.toString(), { promptId: testPromptId });
 
       const result = await service.listExecutions({
         scenarioId,
@@ -390,13 +398,13 @@ describe('ExecutionService', () => {
       expect(result.total).toBe(1);
     });
 
-    it('should filter by agentId', async () => {
-      const customAgentId = new Types.ObjectId().toString();
-      await service.execute(scenarioId, { agentId: customAgentId });
-      await service.execute(scenarioId);
+    it('should filter by personaId', async () => {
+      const customPersonaId = new Types.ObjectId().toString();
+      await service.execute(scenarioId, { promptId: testPromptId, personaId: customPersonaId });
+      await service.execute(scenarioId, { promptId: testPromptId });
 
       const result = await service.listExecutions({
-        agentId: customAgentId,
+        personaId: customPersonaId,
       });
 
       expect(result.executions).toHaveLength(1);
@@ -405,7 +413,7 @@ describe('ExecutionService', () => {
 
     it('should apply pagination with limit', async () => {
       for (let i = 0; i < 5; i++) {
-        await service.execute(scenarioId);
+        await service.execute(scenarioId, { promptId: testPromptId });
       }
 
       const result = await service.listExecutions(
@@ -419,7 +427,7 @@ describe('ExecutionService', () => {
 
     it('should apply pagination with offset', async () => {
       for (let i = 0; i < 5; i++) {
-        await service.execute(scenarioId);
+        await service.execute(scenarioId, { promptId: testPromptId });
       }
 
       const result = await service.listExecutions(
@@ -443,7 +451,7 @@ describe('ExecutionService', () => {
 
   describe('cancelExecution()', () => {
     it('should cancel a queued execution', async () => {
-      const executionId = await service.execute(scenarioId);
+      const executionId = await service.execute(scenarioId, { promptId: testPromptId });
 
       await service.cancelExecution(executionId);
 
@@ -453,7 +461,7 @@ describe('ExecutionService', () => {
     });
 
     it('should cancel a running execution', async () => {
-      const executionId = await service.execute(scenarioId);
+      const executionId = await service.execute(scenarioId, { promptId: testPromptId });
 
       // Manually set to running
       await executionModel.findOneAndUpdate(
@@ -474,7 +482,7 @@ describe('ExecutionService', () => {
     });
 
     it('should throw BadRequestException for completed execution', async () => {
-      const executionId = await service.execute(scenarioId);
+      const executionId = await service.execute(scenarioId, { promptId: testPromptId });
 
       // Manually set to completed
       await executionModel.findOneAndUpdate(
@@ -488,7 +496,7 @@ describe('ExecutionService', () => {
     });
 
     it('should throw BadRequestException for failed execution', async () => {
-      const executionId = await service.execute(scenarioId);
+      const executionId = await service.execute(scenarioId, { promptId: testPromptId });
 
       await executionModel.findOneAndUpdate(
         { executionId },
@@ -501,7 +509,7 @@ describe('ExecutionService', () => {
     });
 
     it('should throw BadRequestException for already cancelled execution', async () => {
-      const executionId = await service.execute(scenarioId);
+      const executionId = await service.execute(scenarioId, { promptId: testPromptId });
 
       await service.cancelExecution(executionId);
 
@@ -530,7 +538,7 @@ describe('ExecutionProcessor', () => {
 
   let scenarioId: string;
   let personaId: string;
-  const agentId = new Types.ObjectId().toString();
+  const processorPromptId = new Types.ObjectId().toString();
 
   beforeAll(async () => {
     mongod = await MongoMemoryServer.create();
@@ -549,6 +557,8 @@ describe('ExecutionProcessor', () => {
       providers: [
         ExecutionProcessor,
         AdapterRegistry,
+        AgentConfigResolver,
+        PersonaStrategyRegistry,
         PersonaSimulatorService,
         ToolFixtureService,
         MockResolver,
@@ -568,6 +578,7 @@ describe('ExecutionProcessor', () => {
         },
       ],
     }).compile();
+    await module.init();
 
     processor = module.get<ExecutionProcessor>(ExecutionProcessor);
     scenarioModel = module.get<Model<ScenarioDocument>>(
@@ -581,7 +592,7 @@ describe('ExecutionProcessor', () => {
     );
     adapterRegistry = module.get<AdapterRegistry>(AdapterRegistry);
 
-    // Register mock adapter
+    // Register mock adapter (overrides the default openai adapter)
     mockAdapter = new MockAdapter();
     adapterRegistry.register(mockAdapter);
 
@@ -612,11 +623,23 @@ describe('ExecutionProcessor', () => {
       difficulty: 'medium',
       status: 'active',
       personaIds: [new Types.ObjectId(personaId)],
-      agentIds: [new Types.ObjectId(agentId)],
       createdBy: 'test',
       tags: ['test'],
     });
     scenarioId = scenario._id.toString();
+
+    // Create test prompt (the agent under test)
+    const connection = module.get<import('mongoose').Connection>('DatabaseConnection');
+    await connection.db!.collection('prompts').insertOne({
+      _id: new Types.ObjectId(processorPromptId),
+      name: 'Processor Test Prompt',
+      content: 'You are a test support agent. Help with customer issues.',
+      status: 'active',
+      tags: [],
+      adapterConfig: { adapterType: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 512 },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   });
 
   afterAll(async () => {
@@ -648,7 +671,7 @@ describe('ExecutionProcessor', () => {
       executionId,
       scenarioId: new Types.ObjectId(scenarioId),
       personaId: new Types.ObjectId(personaId),
-      agentId: new Types.ObjectId(agentId),
+
       status: 'queued',
       startTime: new Date(),
       triggeredBy: 'test',
@@ -659,6 +682,7 @@ describe('ExecutionProcessor', () => {
       executionId,
       scenarioId,
       personaId,
+      promptId: processorPromptId,
       adapterType: 'mock',
       maxTurns: 5,
     });
@@ -703,7 +727,7 @@ describe('ExecutionProcessor', () => {
       executionId,
       scenarioId: new Types.ObjectId(scenarioId),
       personaId: new Types.ObjectId(personaId),
-      agentId: new Types.ObjectId(agentId),
+
       status: 'queued',
       startTime: new Date(),
       triggeredBy: 'test',
@@ -728,6 +752,7 @@ describe('ExecutionProcessor', () => {
       executionId,
       scenarioId,
       personaId,
+      promptId: processorPromptId,
       adapterType: 'mock',
       maxTurns: 2,
     });
@@ -758,7 +783,7 @@ describe('ExecutionProcessor', () => {
     const job = createMockJob({
       executionId,
       scenarioId: fakeScenarioId,
-      adapterType: 'mock',
+      promptId: processorPromptId,
     });
 
     await expect(processor.processExecution(job)).rejects.toThrow(
@@ -773,11 +798,24 @@ describe('ExecutionProcessor', () => {
   it('should update status to failed when adapter type is not registered', async () => {
     const executionId = `exec_adapter_${Date.now()}`;
 
+    // Create a prompt with a non-existent adapter type
+    const badPromptId = new Types.ObjectId();
+    const connection = module.get<import('mongoose').Connection>('DatabaseConnection');
+    await connection.db!.collection('prompts').insertOne({
+      _id: badPromptId,
+      name: 'Bad Adapter Prompt',
+      content: 'Test prompt',
+      status: 'active',
+      tags: [],
+      adapterConfig: { adapterType: 'nonexistent-adapter' },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
     await executionModel.create({
       executionId,
       scenarioId: new Types.ObjectId(scenarioId),
       personaId: new Types.ObjectId(personaId),
-      agentId: new Types.ObjectId(agentId),
       status: 'queued',
       startTime: new Date(),
       triggeredBy: 'test',
@@ -787,7 +825,7 @@ describe('ExecutionProcessor', () => {
     const job = createMockJob({
       executionId,
       scenarioId,
-      adapterType: 'nonexistent-adapter',
+      promptId: badPromptId.toString(),
     });
 
     await expect(processor.processExecution(job)).rejects.toThrow(
@@ -805,7 +843,7 @@ describe('ExecutionProcessor', () => {
       executionId,
       scenarioId: new Types.ObjectId(scenarioId),
       personaId: new Types.ObjectId(personaId),
-      agentId: new Types.ObjectId(agentId),
+
       status: 'queued',
       startTime: new Date(),
       triggeredBy: 'test',
@@ -818,6 +856,7 @@ describe('ExecutionProcessor', () => {
       executionId,
       scenarioId,
       personaId,
+      promptId: processorPromptId,
       adapterType: 'mock',
       maxTurns: 10,
     });
@@ -836,7 +875,7 @@ describe('ExecutionProcessor', () => {
     await executionModel.create({
       executionId,
       scenarioId: new Types.ObjectId(scenarioId),
-      agentId: new Types.ObjectId(agentId),
+
       status: 'queued',
       startTime: new Date(),
       triggeredBy: 'test',
@@ -847,6 +886,7 @@ describe('ExecutionProcessor', () => {
       executionId,
       scenarioId,
       // No personaId -- should use scenario default or prompt directly
+      promptId: processorPromptId,
       adapterType: 'mock',
       maxTurns: 3,
     });
@@ -865,7 +905,7 @@ describe('ExecutionProcessor', () => {
       executionId,
       scenarioId: new Types.ObjectId(scenarioId),
       personaId: new Types.ObjectId(personaId),
-      agentId: new Types.ObjectId(agentId),
+
       status: 'queued',
       startTime: new Date(),
       triggeredBy: 'test',
@@ -876,6 +916,7 @@ describe('ExecutionProcessor', () => {
       executionId,
       scenarioId,
       personaId,
+      promptId: processorPromptId,
       adapterType: 'mock',
       maxTurns: 3,
     });
@@ -908,8 +949,9 @@ describe('QueueProducerService', () => {
     // Instantiate with mock queue via constructor injection hack
     const producer = new QueueProducerService(mockQueue as any);
 
+    const queuePromptId = new Types.ObjectId().toString();
     const job = await producer.enqueueExecution('exec_123', 'scenario_456', {
-      adapterType: 'openai',
+      promptId: queuePromptId,
       maxTurns: 5,
     });
 
@@ -920,7 +962,7 @@ describe('QueueProducerService', () => {
       {
         executionId: 'exec_123',
         scenarioId: 'scenario_456',
-        adapterType: 'openai',
+        promptId: queuePromptId,
         maxTurns: 5,
       },
       expect.objectContaining({

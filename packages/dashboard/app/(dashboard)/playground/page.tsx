@@ -221,7 +221,7 @@ function ToolCallBlock({ message }: { message: TranscriptMessage }) {
 // ---------------------------------------------------------------------------
 
 export default function PlaygroundPage() {
-  const { client, adapterType, setAdapterType, simApiKey, simModel } = useEvalConfig();
+  const { client, adapterType, setAdapterType } = useEvalConfig();
   const queryClient = useQueryClient();
 
   const DEFAULT_PROMPT = 'You are a helpful customer support agent. Be friendly, concise, and professional.';
@@ -488,25 +488,23 @@ export default function PlaygroundPage() {
 
   const handleRun = useCallback(async () => {
     if (!selectedScenarioId) { toast.error('Select a scenario to run'); return; }
+    if (!savedPromptId) { toast.error('Save your prompt first before running a test'); return; }
 
     setIsRunning(true); setTranscript([]); setCompletedExecution(null);
 
     try {
-      // Fetch API key from server-side Settings
-      let apiKey: string;
-      try {
-        apiKey = await client.settings.getApiKey(adapterType);
-      } catch {
-        toast.error(`No API key configured for ${adapterType}. Set it via PUT /settings.`);
-        setIsRunning(false);
-        return;
-      }
+      // Save prompt with current adapter config before executing
+      await client.prompts.update(savedPromptId, {
+        content: systemPrompt,
+        adapterConfig: { adapterType, model, temperature, maxTokens },
+      } as any);
 
+      // Execute with promptId only — server resolves adapter config + API key from Prompt + Settings
       const execution = await client.scenarios.execute(selectedScenarioId, {
-        mode: 'text', personaId: selectedPersonaId || undefined, adapterType,
-        adapterConfig: { apiKey, model, systemPrompt, temperature, maxTokens, simulationApiKey: simApiKey || undefined, simulationModel: simModel || undefined },
+        promptId: savedPromptId,
+        personaId: selectedPersonaId || undefined,
         toolFixtureIds: selectedToolIds.length > 0 ? selectedToolIds : undefined,
-      } as never);
+      });
 
       const execAny = execution as unknown as { executionId?: string; id: string };
       const execRef = execAny.executionId || execAny.id;
@@ -523,7 +521,7 @@ export default function PlaygroundPage() {
       } else { toast.error(`Test ${completed.status}`); }
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Execution failed'); }
     finally { setIsRunning(false); }
-  }, [selectedScenarioId, selectedPersonaId, selectedToolIds, adapterType, model, systemPrompt, temperature, maxTokens, client, queryClient]);
+  }, [selectedScenarioId, savedPromptId, selectedPersonaId, selectedToolIds, adapterType, model, systemPrompt, temperature, maxTokens, client, queryClient]);
 
   const hasResults = transcript.length > 0 || completedExecution != null;
 

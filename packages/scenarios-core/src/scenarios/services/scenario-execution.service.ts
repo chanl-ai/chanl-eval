@@ -64,9 +64,7 @@ export class ScenarioExecutionService {
       const executionData: any = {
         executionId,
         scenarioId: new Types.ObjectId(scenarioId),
-        agentId: executeDto.agentId
-          ? new Types.ObjectId(executeDto.agentId)
-          : scenario.agentIds?.[0],
+        promptId: new Types.ObjectId(executeDto.promptId),
         personaId: executeDto.personaId
           ? new Types.ObjectId(executeDto.personaId)
           : scenario.personaIds?.[0],
@@ -91,11 +89,9 @@ export class ScenarioExecutionService {
 
       // Enqueue the BullMQ job for the execution processor
       await this.queueProducer.enqueueExecution(executionId, scenarioId, {
-        adapterType: executeDto.adapterType,
-        adapterConfig: executeDto.adapterConfig,
+        promptId: executeDto.promptId,
         personaId:
           executeDto.personaId || scenario.personaIds?.[0]?.toString(),
-        agentId: executeDto.agentId || scenario.agentIds?.[0]?.toString(),
         parameters: executeDto.parameters,
         toolFixtureIds: executeDto.toolFixtureIds,
       });
@@ -553,9 +549,20 @@ export class ScenarioExecutionService {
         ? { _id: executionId }
         : { executionId };
 
+      // Generate critical summary
+      let scorecardSummary: string | undefined;
+      try {
+        const summaryConfig = resolveLlmConfigSync(undefined, dto.apiKey ? { apiKey: dto.apiKey } : undefined);
+        if (summaryConfig) {
+          scorecardSummary = await this.generateEvalSummary(evalResult, summaryConfig);
+        }
+      } catch {
+        // Non-fatal — summary is optional
+      }
+
       const updated = await this.executionModel.findOneAndUpdate(
         filter,
-        { $set: { scorecardResults } },
+        { $set: { scorecardResults, ...(scorecardSummary ? { scorecardSummary } : {}) } },
         { new: true },
       );
 
@@ -585,5 +592,60 @@ export class ScenarioExecutionService {
         `Evaluation failed: ${error.message}`,
       );
     }
+  }
+
+  private async generateEvalSummary(
+    evalResult: { overallScore: number; passed: boolean; criteriaResults: Array<{ criteriaName?: string; categoryName?: string; passed: boolean; reasoning?: string }> },
+    llmConfig: { kind: string; apiKey: string; model?: string },
+  ): Promise<string | undefined> {
+    const failed = evalResult.criteriaResults.filter((c) => !c.passed);
+    const passed = evalResult.criteriaResults.filter((c) => c.passed);
+    const scorePercent = Math.round(evalResult.overallScore * 10);
+
+    const prompt = `You are a QA analyst summarizing an AI agent evaluation.
+
+Score: ${scorePercent}% (${passed.length}/${evalResult.criteriaResults.length} criteria passed)
+
+Failed criteria:
+${failed.length === 0 ? 'None — all criteria passed.' : failed.map((c) => `- ${c.criteriaName} (${c.categoryName}): ${c.reasoning || 'No reasoning'}`).join('\n')}
+
+Passed criteria:
+${passed.map((c) => `- ${c.criteriaName} (${c.categoryName})`).join('\n')}
+
+Write a critical 2-3 sentence summary. Focus on what went wrong (if anything) and the most important strengths. Be specific — name the criteria. No filler.`;
+
+    if (llmConfig.kind === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${llmConfig.apiKey}` },
+        body: JSON.stringify({
+          model: llmConfig.model || 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 150,
+          temperature: 0.3,
+        }),
+      });
+      if (!res.ok) return undefined;
+      const data: any = await res.json();
+      return data.choices?.[0]?.message?.content?.trim() || undefined;
+    } else if (llmConfig.kind === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': llmConfig.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: llmConfig.model || 'claude-3-5-haiku-20241022',
+          max_tokens: 150,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      if (!res.ok) return undefined;
+      const data: any = await res.json();
+      return data.content?.[0]?.text?.trim() || undefined;
+    }
+    return undefined;
   }
 }

@@ -1,7 +1,7 @@
 import { Processor, Process, OnQueueActive, OnQueueCompleted, OnQueueFailed } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Job } from 'bull';
 import { QUEUE_NAMES, DEFAULT_MAX_TURNS } from './queues.config';
 import {
@@ -27,7 +27,8 @@ import {
   generatePersonaUtterance,
 } from './persona-llm';
 import { buildLlmJudge } from './judge-llm';
-import { resolveLlmConfig } from './llm-config-resolver';
+import { AgentConfigResolver, PromptConfig } from './agent-config-resolver';
+import { resolveLlmConfigSync } from './llm-config-resolver';
 import { buildTemplateVariables, renderPersonaTemplate } from './template-renderer';
 import { PersonaStrategyRegistry } from './persona-strategy-registry';
 import { PersonaStrategyContext } from './persona-strategy.interface';
@@ -46,6 +47,7 @@ export class ExecutionProcessor {
     @InjectModel(Persona.name)
     private personaModel: Model<PersonaDocument>,
     private readonly adapterRegistry: AdapterRegistry,
+    private readonly agentConfigResolver: AgentConfigResolver,
     private readonly personaSimulator: PersonaSimulatorService,
     private readonly evaluationService: EvaluationService,
     private readonly toolFixtureService: ToolFixtureService,
@@ -146,11 +148,7 @@ export class ExecutionProcessor {
 
       await job.progress(40);
 
-      // 5. Get adapter
-      const adapterType = data.adapterType || 'http';
-      const adapter = this.adapterRegistry.getOrThrow(adapterType);
-
-      // 6. Connect adapter — resolve API key via central 4-tier chain
+      // 5. Resolve agent config from Prompt entity (or inline fallback)
       const settingsLookup = async (provider: string): Promise<string | undefined> => {
         try {
           const settingsDoc = await this.scenarioModel.db
@@ -163,47 +161,31 @@ export class ExecutionProcessor {
         }
       };
 
-      const resolvedConfig = await resolveLlmConfig(adapterType, data.adapterConfig, settingsLookup);
-
-      const adapterConfig: Record<string, any> = {
-        ...data.adapterConfig,
-      };
-      if (resolvedConfig && !adapterConfig.apiKey) {
-        adapterConfig.apiKey = resolvedConfig.apiKey;
-        this.logger.debug(`Resolved API key via central resolver (${resolvedConfig.kind})`);
+      // Load Prompt entity — the agent under test
+      if (!data.promptId) {
+        throw new Error('No agent configured — promptId is required in the execute request');
       }
 
-      // Load agent system prompt from linked Prompt entity if no systemPrompt in request
-      if (!adapterConfig.systemPrompt && scenario.promptId) {
-        try {
-          const promptDoc = await this.scenarioModel.db
-            .collection('prompts')
-            .findOne({ _id: scenario.promptId });
-          if (promptDoc) {
-            adapterConfig.systemPrompt = promptDoc.content;
-            // Merge adapter config from prompt (model, temperature, etc.) as defaults
-            const promptAdapter = (promptDoc as any).adapterConfig || {};
-            if (!data.adapterType && promptAdapter.adapterType) {
-              // Update adapter type if not explicitly set
-              this.logger.debug(`Using adapter type from prompt: ${promptAdapter.adapterType}`);
-            }
-            if (promptAdapter.model && !adapterConfig.model) adapterConfig.model = promptAdapter.model;
-            if (promptAdapter.temperature != null && adapterConfig.temperature == null) adapterConfig.temperature = promptAdapter.temperature;
-            if (promptAdapter.maxTokens != null && adapterConfig.maxTokens == null) adapterConfig.maxTokens = promptAdapter.maxTokens;
-            this.logger.debug(`Loaded system prompt from linked Prompt "${promptDoc.name}"`);
-          }
-        } catch (err) {
-          this.logger.warn(`Failed to load prompt ${scenario.promptId}: ${err}`);
-        }
+      const promptDoc = await this.scenarioModel.db
+        .collection('prompts')
+        .findOne({ _id: new Types.ObjectId(data.promptId) });
+      if (!promptDoc) {
+        throw new Error(`Prompt ${data.promptId} not found`);
       }
 
-      if (toolFixtures.length > 0) {
-        adapterConfig.tools = toolFixtures.map((tf) => ({
-          name: tf.name,
-          description: tf.description,
-          parameters: tf.parameters || { type: 'object', properties: {} },
-        }));
-      }
+      const toolDefs = toolFixtures.map((tf) => ({
+        name: tf.name,
+        description: tf.description,
+        parameters: tf.parameters || { type: 'object', properties: {} },
+      }));
+
+      const { adapterType, config: adapterConfig } = await this.agentConfigResolver.resolve({
+        prompt: promptDoc as unknown as PromptConfig,
+        settingsLookup,
+        tools: toolDefs,
+      });
+
+      const adapter = this.adapterRegistry.getOrThrow(adapterType);
       await adapter.connect(adapterConfig);
 
       await job.progress(50);
@@ -227,7 +209,7 @@ export class ExecutionProcessor {
         turn,
         transcript,
         scenarioPrompt: scenario.prompt,
-        adapterType: data.adapterType,
+        adapterType,
         adapterConfig,
       });
 
@@ -324,6 +306,7 @@ export class ExecutionProcessor {
         .join('\n');
 
       this.logger.debug(`Scorecard check: scorecardId=${scenario.scorecardId}, evaluationService=${!!this.evaluationService}`);
+      let scorecardSummary: string | undefined;
       if (scenario.scorecardId && this.evaluationService) {
         try {
           // Extract tool calls from transcript for RAG faithfulness evaluation
@@ -346,7 +329,11 @@ export class ExecutionProcessor {
               },
               toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
               groundTruth: scenario.groundTruth || undefined,
-              llmEvaluate: buildLlmJudge(resolvedConfig || undefined),
+              llmEvaluate: buildLlmJudge(
+                adapterConfig.apiKey
+                  ? { kind: (adapterType === 'anthropic' ? 'anthropic' : 'openai') as 'openai' | 'anthropic', apiKey: adapterConfig.apiKey, model: adapterConfig.model }
+                  : undefined,
+              ),
             },
             { scenarioExecutionId: data.executionId },
           );
@@ -354,6 +341,15 @@ export class ExecutionProcessor {
             100,
             Math.round((evalResult.overallScore || 0) * 10),
           );
+
+          // Generate critical summary from eval results
+          this.logger.debug(`Generating eval summary: apiKey=${!!adapterConfig.apiKey}, adapterType=${adapterType}`);
+          scorecardSummary = await this.generateEvalSummary(
+            evalResult,
+            adapterConfig.apiKey,
+            adapterType,
+          );
+          this.logger.debug(`Eval summary: ${scorecardSummary ? scorecardSummary.substring(0, 80) + '...' : 'NONE'}`);
         } catch (err: any) {
           this.logger.warn(
             `Scorecard evaluation skipped or failed: ${err?.message || err}`,
@@ -400,6 +396,7 @@ export class ExecutionProcessor {
             'metrics.responseTime': result.metrics?.avgLatencyMs || 0,
             'metrics.completion': 100,
             'metrics.accuracy': result.score,
+            ...(scorecardSummary ? { scorecardSummary } : {}),
           },
         },
       );
@@ -563,6 +560,77 @@ export class ExecutionProcessor {
     ];
     const lower = agentResponse.toLowerCase();
     return endPhrases.some((phrase) => lower.includes(phrase));
+  }
+
+  /**
+   * Generate a critical 2-3 sentence summary of scorecard results.
+   * Uses one LLM call after evaluation to distill findings.
+   */
+  private async generateEvalSummary(
+    evalResult: { overallScore: number; passed: boolean; criteriaResults: Array<{ criteriaName?: string; categoryName?: string; passed: boolean; reasoning?: string }> },
+    apiKey: string | undefined,
+    adapterType: string,
+  ): Promise<string | undefined> {
+    try {
+      const llmConfig = resolveLlmConfigSync(
+        apiKey ? (adapterType === 'anthropic' ? 'anthropic' : 'openai') : undefined,
+        apiKey ? { apiKey } : undefined,
+      );
+      if (!llmConfig) return undefined;
+
+      const failed = evalResult.criteriaResults.filter((c) => !c.passed);
+      const passed = evalResult.criteriaResults.filter((c) => c.passed);
+      const scorePercent = Math.round(evalResult.overallScore * 10);
+
+      const prompt = `You are a QA analyst summarizing an AI agent evaluation.
+
+Score: ${scorePercent}% (${passed.length}/${evalResult.criteriaResults.length} criteria passed)
+
+Failed criteria:
+${failed.length === 0 ? 'None — all criteria passed.' : failed.map((c) => `- ${c.criteriaName} (${c.categoryName}): ${c.reasoning || 'No reasoning'}`).join('\n')}
+
+Passed criteria:
+${passed.map((c) => `- ${c.criteriaName} (${c.categoryName})`).join('\n')}
+
+Write a critical 2-3 sentence summary. Focus on what went wrong (if anything) and the most important strengths. Be specific — name the criteria. No filler.`;
+
+      if (llmConfig.kind === 'openai') {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${llmConfig.apiKey}` },
+          body: JSON.stringify({
+            model: llmConfig.model || 'gpt-4o-mini',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 150,
+            temperature: 0.3,
+          }),
+        });
+        if (!res.ok) return undefined;
+        const data: any = await res.json();
+        return data.choices?.[0]?.message?.content?.trim() || undefined;
+      } else if (llmConfig.kind === 'anthropic') {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': llmConfig.apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: llmConfig.model || 'claude-3-5-haiku-20241022',
+            max_tokens: 150,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+        if (!res.ok) return undefined;
+        const data: any = await res.json();
+        return data.content?.[0]?.text?.trim() || undefined;
+      }
+      return undefined;
+    } catch (err: any) {
+      this.logger.warn(`Summary generation failed: ${err?.message || err}`);
+      return undefined;
+    }
   }
 
   /**

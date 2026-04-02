@@ -224,6 +224,7 @@ describe('chanl test command', () => {
         'pass.yaml',
         [
           'scenario: "507f1f77bcf86cd799439011"', // ObjectId so no slug lookup
+          'promptId: "507f1f77bcf86cd799439099"',
           'assertions:',
           '  - type: keyword',
           '    must_include: ["refund"]',
@@ -273,6 +274,7 @@ describe('chanl test command', () => {
         'test-a.yaml',
         [
           'scenario: "507f1f77bcf86cd799439011"',
+          'promptId: "507f1f77bcf86cd799439099"',
           'assertions:',
           '  - type: keyword',
           '    must_include: ["refund"]',
@@ -282,6 +284,7 @@ describe('chanl test command', () => {
         'test-b.yaml',
         [
           'scenario: "507f1f77bcf86cd799439011"',
+          'promptId: "507f1f77bcf86cd799439099"',
           'assertions:',
           '  - type: score',
           '    min_score: 70',
@@ -323,6 +326,7 @@ describe('chanl test command', () => {
         'json-test.yaml',
         [
           'scenario: "507f1f77bcf86cd799439011"',
+          'promptId: "507f1f77bcf86cd799439099"',
           'assertions:',
           '  - type: keyword',
           '    must_include: ["refund"]',
@@ -373,6 +377,7 @@ describe('chanl test command', () => {
         'slug-test.yaml',
         [
           'scenario: angry-customer-refund',
+          'promptId: "507f1f77bcf86cd799439099"',
           'assertions:',
           '  - type: keyword',
           '    must_include: ["help"]',
@@ -429,10 +434,10 @@ describe('chanl test command', () => {
         path.join(testsDir, 'slug-test.yaml'),
       ]);
 
-      // Should have posted to the resolved scenario ID
+      // Should have posted to the resolved scenario ID with promptId
       expect(mockedAxios.__mockInstance.post).toHaveBeenCalledWith(
         '/scenarios/abc123abc123abc123abc123/execute',
-        expect.objectContaining({ adapterType: 'openai' }),
+        expect.objectContaining({ promptId: '507f1f77bcf86cd799439099' }),
       );
 
       consoleSpy.mockRestore();

@@ -19,7 +19,7 @@ export interface ChatResponse {
 export class ChatModule {
   constructor(private readonly http: AxiosInstance) {}
 
-  async createSession(dto: { promptId: string }): Promise<ChatSession> {
+  async createSession(dto: { promptId: string; toolFixtureIds?: string[] }): Promise<ChatSession> {
     const response = await this.http.post('/chat/sessions', dto);
     const body = response.data;
     return body?.session ?? body?.data?.session ?? body;

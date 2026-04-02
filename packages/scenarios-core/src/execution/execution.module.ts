@@ -17,9 +17,11 @@ import {
 import { ToolFixtureModule } from '../tool-fixtures/tool-fixture.module';
 import { AdapterRegistry } from '../adapters/adapter-registry';
 import { PersonaSimulatorService } from '../simulator/persona-simulator.service';
+import { PersonaStrategyRegistry } from './persona-strategy-registry';
 import { QueueProducerService } from './queue-producer.service';
 import { ExecutionProcessor } from './execution-processor';
 import { ExecutionService } from './execution.service';
+import { AgentConfigResolver } from './agent-config-resolver';
 import { QUEUE_NAMES, defaultJobOptions } from './queues.config';
 
 @Module({
@@ -38,11 +40,13 @@ import { QUEUE_NAMES, defaultJobOptions } from './queues.config';
   ],
   providers: [
     AdapterRegistry,
+    AgentConfigResolver,
     PersonaSimulatorService,
+    PersonaStrategyRegistry,
     QueueProducerService,
     ExecutionProcessor,
     ExecutionService,
   ],
-  exports: [ExecutionService, QueueProducerService, AdapterRegistry],
+  exports: [ExecutionService, QueueProducerService, AdapterRegistry, AgentConfigResolver, PersonaStrategyRegistry],
 })
 export class ExecutionModule {}

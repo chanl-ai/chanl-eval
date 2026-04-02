@@ -9,6 +9,11 @@ export enum CriteriaType {
   KEYWORD = 'keyword',
   RESPONSE_TIME = 'response_time',
   TOOL_CALL = 'tool_call',
+  HALLUCINATION = 'hallucination',
+  KNOWLEDGE_RETENTION = 'knowledge_retention',
+  CONVERSATION_COMPLETENESS = 'conversation_completeness',
+  ROLE_ADHERENCE = 'role_adherence',
+  RAG_FAITHFULNESS = 'rag_faithfulness',
 }
 
 // ========== SETTINGS INTERFACES ==========
@@ -33,11 +38,42 @@ export interface ToolCallCriteriaSettings {
   executionCondition?: string;
 }
 
+export interface HallucinationCriteriaSettings {
+  description?: string;
+  evaluationType?: 'boolean' | 'score';
+}
+
+export interface KnowledgeRetentionCriteriaSettings {
+  description?: string;
+  evaluationType?: 'boolean' | 'score';
+}
+
+export interface ConversationCompletenessCriteriaSettings {
+  description?: string;
+  evaluationType?: 'boolean' | 'score';
+}
+
+export interface RoleAdherenceCriteriaSettings {
+  description?: string;
+  evaluationType?: 'boolean' | 'score';
+}
+
+export interface RagFaithfulnessCriteriaSettings {
+  description?: string;
+  evaluationType?: 'boolean' | 'score';
+  retrievalToolNames?: string[];
+}
+
 export type CriteriaSettings =
   | PromptCriteriaSettings
   | KeywordCriteriaSettings
   | ResponseTimeCriteriaSettings
-  | ToolCallCriteriaSettings;
+  | ToolCallCriteriaSettings
+  | HallucinationCriteriaSettings
+  | KnowledgeRetentionCriteriaSettings
+  | ConversationCompletenessCriteriaSettings
+  | RoleAdherenceCriteriaSettings
+  | RagFaithfulnessCriteriaSettings;
 
 // ========== THRESHOLD INTERFACES ==========
 
@@ -90,7 +126,15 @@ export function isPercentageThreshold(t: any): t is PercentageThreshold {
 export function getEvaluationType(
   criteria: ScorecardCriteria,
 ): 'boolean' | 'score' | 'number' | 'percentage' {
-  if (criteria.type === CriteriaType.PROMPT) {
+  const llmJudgeTypes = [
+    CriteriaType.PROMPT,
+    CriteriaType.HALLUCINATION,
+    CriteriaType.KNOWLEDGE_RETENTION,
+    CriteriaType.CONVERSATION_COMPLETENESS,
+    CriteriaType.ROLE_ADHERENCE,
+    CriteriaType.RAG_FAITHFULNESS,
+  ];
+  if (llmJudgeTypes.includes(criteria.type as CriteriaType)) {
     const settings = criteria.settings as PromptCriteriaSettings;
     return settings?.evaluationType || 'boolean';
   }

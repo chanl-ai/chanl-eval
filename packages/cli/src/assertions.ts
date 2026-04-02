@@ -58,6 +58,9 @@ export interface AssertionResult {
 /** Shape of a parsed test YAML file. */
 export interface TestDefinition {
   scenario: string;
+  /** Prompt entity ID — defines the agent under test */
+  promptId?: string;
+  /** @deprecated Use promptId instead. Kept for backwards compat parsing. */
   agent?: string;
   assertions: Assertion[];
 }

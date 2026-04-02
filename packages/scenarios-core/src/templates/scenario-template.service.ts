@@ -163,7 +163,6 @@ export class ScenarioTemplateService {
       difficulty: template.difficulty,
       tags: [...(template.tags || []), `template:${template.name}`],
       personaIds: dto.personaIds || [],
-      agentIds: dto.agentIds || [],
       status: 'draft',
     };
 

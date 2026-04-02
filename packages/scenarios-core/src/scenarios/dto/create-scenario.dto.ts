@@ -62,32 +62,9 @@ export class CreateScenarioDto {
   @IsString({ each: true })
   personaIds!: string[];
 
-  @IsArray()
-  @ArrayMinSize(1)
-  @IsString({ each: true })
-  agentIds!: string[];
-
   @IsOptional()
   @IsString()
   scorecardId?: string;
-
-  @IsOptional()
-  @IsObject()
-  agentOverrides?: Record<
-    string,
-    {
-      promptOverride?: string;
-      promptVariables?: Record<string, string>;
-      temperature?: number;
-      maxTokens?: number;
-      tools?: string[];
-      voice?: {
-        voiceId?: string;
-        speed?: number;
-        stability?: number;
-      };
-    }
-  >;
 
   @ValidateIf((o) => o.simulationMode === 'phone')
   @IsNotEmpty({ message: 'phoneNumber is required when simulationMode is "phone"' })
@@ -98,6 +75,14 @@ export class CreateScenarioDto {
   @IsOptional()
   @IsEnum(['text', 'websocket', 'phone'])
   simulationMode?: 'text' | 'websocket' | 'phone';
+
+  @IsOptional()
+  @IsString()
+  groundTruth?: string;
+
+  @IsOptional()
+  @IsString()
+  personaStrategyType?: string;
 
   @IsOptional()
   @IsString()

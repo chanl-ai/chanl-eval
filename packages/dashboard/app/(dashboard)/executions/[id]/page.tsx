@@ -325,7 +325,7 @@ export default function RunDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = typeof params.id === 'string' ? params.id : '';
-  const { client, agentApiKey, simApiKey } = useEvalConfig();
+  const { client } = useEvalConfig();
   const qc = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -401,14 +401,14 @@ export default function RunDetailPage() {
       ? Math.round(scorecardResult.overallScore * 10)
       : execution?.overallScore ?? undefined;
 
+  const scorecardSummary = (execution as any)?.scorecardSummary as string | undefined;
+
   const messages = execution ? executionToMessages(execution) : [];
 
-  // Evaluate mutation — passes user's API key for the LLM judge
-  // Priority: simApiKey (dedicated judge key) > agentApiKey (fallback)
-  const judgeKey = simApiKey || agentApiKey || undefined;
+  // Evaluate mutation — server resolves API key from env vars
   const evaluateMutation = useMutation({
     mutationFn: (scorecardId: string) =>
-      client.executions.evaluate(id, { scorecardId, apiKey: judgeKey }),
+      client.executions.evaluate(id, { scorecardId }),
     onSuccess: () => {
       toast.success('Scorecard evaluation complete');
       void qc.invalidateQueries({ queryKey: ['execution', id] });
@@ -549,6 +549,7 @@ export default function RunDetailPage() {
                   <ScorecardWidget
                     metrics={metrics}
                     overallScorePercentage={displayScore}
+                    summary={scorecardSummary}
                   />
                 ) : (
                   /* State 1: No evaluation — show picker */
@@ -558,15 +559,7 @@ export default function RunDetailPage() {
                     <p className="text-xs text-muted-foreground mt-1 mb-4">
                       Select a scorecard to evaluate this conversation
                     </p>
-                    {!judgeKey && (
-                      <p className="text-xs text-destructive mb-3">
-                        No API key configured. Set one in{' '}
-                        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => router.push('/settings')}>
-                          Settings
-                        </Button>{' '}
-                        (Agent or Simulation key).
-                      </p>
-                    )}
+                    {/* Server resolves API key from environment — no client key needed */}
                     <div className="w-full max-w-[220px] space-y-3">
                       <Select value={selectedScorecardId} onValueChange={setSelectedScorecardId}>
                         <SelectTrigger data-testid="scorecard-picker">

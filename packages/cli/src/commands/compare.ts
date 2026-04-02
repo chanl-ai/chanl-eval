@@ -3,8 +3,6 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { get, post, formatError } from '../client';
 import { printError } from '../output';
-import { loadConfig } from '../config';
-import { loadAgentYaml, parseModelString, type AgentDefinition } from '../agent-loader';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -342,148 +340,16 @@ const POLL_INTERVAL = 2000;
 const MAX_POLLS = 150;
 
 /**
- * Build the adapter config portion of the execute DTO from an agent definition.
- */
-function buildAdapterConfig(
-  agentDef: AgentDefinition,
-  config: ReturnType<typeof loadConfig>,
-): { adapterType: string; adapterConfig: Record<string, any> } {
-  if (agentDef.provider === 'openai') {
-    if (!config.openaiApiKey) {
-      throw new Error(
-        `Agent "${agentDef.name}" uses OpenAI but no API key is configured. Set it with: chanl config set openaiApiKey sk-...`,
-      );
-    }
-    return {
-      adapterType: 'openai',
-      adapterConfig: {
-        apiKey: config.openaiApiKey,
-        model: agentDef.model,
-        systemPrompt: agentDef.systemPrompt,
-        ...(agentDef.temperature !== undefined
-          ? { temperature: agentDef.temperature }
-          : {}),
-        ...(agentDef.maxTokens !== undefined
-          ? { maxTokens: agentDef.maxTokens }
-          : {}),
-      },
-    };
-  }
-
-  if (agentDef.provider === 'anthropic') {
-    if (!config.anthropicApiKey) {
-      throw new Error(
-        `Agent "${agentDef.name}" uses Anthropic but no API key is configured. Set it with: chanl config set anthropicApiKey sk-ant-...`,
-      );
-    }
-    return {
-      adapterType: 'anthropic',
-      adapterConfig: {
-        apiKey: config.anthropicApiKey,
-        model: agentDef.model,
-        systemPrompt: agentDef.systemPrompt,
-        ...(agentDef.temperature !== undefined
-          ? { temperature: agentDef.temperature }
-          : {}),
-        ...(agentDef.maxTokens !== undefined
-          ? { maxTokens: agentDef.maxTokens }
-          : {}),
-      },
-    };
-  }
-
-  if (agentDef.provider === 'http') {
-    const endpoint = agentDef.httpEndpoint || config.httpEndpoint;
-    if (!endpoint) {
-      throw new Error(
-        `Agent "${agentDef.name}" uses HTTP provider but no endpoint is configured.`,
-      );
-    }
-    return {
-      adapterType: 'http',
-      adapterConfig: {
-        endpoint,
-        systemPrompt: agentDef.systemPrompt,
-        ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
-        ...(agentDef.temperature !== undefined
-          ? { temperature: agentDef.temperature }
-          : {}),
-        ...(agentDef.maxTokens !== undefined
-          ? { maxTokens: agentDef.maxTokens }
-          : {}),
-      },
-    };
-  }
-
-  throw new Error(`Unsupported provider "${agentDef.provider}" in agent YAML.`);
-}
-
-/**
- * Build adapter config from a model string and CLI config.
- */
-function buildAdapterConfigFromModel(
-  modelStr: string,
-  config: ReturnType<typeof loadConfig>,
-): { adapterType: string; adapterConfig: Record<string, any> } {
-  const parsed = parseModelString(modelStr, config.provider || undefined);
-
-  if (parsed.provider === 'openai') {
-    if (!config.openaiApiKey) {
-      throw new Error(
-        `Model "${modelStr}" uses OpenAI but no API key is configured. Set it with: chanl config set openaiApiKey sk-...`,
-      );
-    }
-    return {
-      adapterType: 'openai',
-      adapterConfig: { apiKey: config.openaiApiKey, model: parsed.model },
-    };
-  }
-
-  if (parsed.provider === 'anthropic') {
-    if (!config.anthropicApiKey) {
-      throw new Error(
-        `Model "${modelStr}" uses Anthropic but no API key is configured. Set it with: chanl config set anthropicApiKey sk-ant-...`,
-      );
-    }
-    return {
-      adapterType: 'anthropic',
-      adapterConfig: { apiKey: config.anthropicApiKey, model: parsed.model },
-    };
-  }
-
-  if (parsed.provider === 'http') {
-    const endpoint = parsed.httpEndpoint || config.httpEndpoint;
-    if (!endpoint) {
-      throw new Error(
-        `Model "${modelStr}" uses HTTP provider but no endpoint is configured.`,
-      );
-    }
-    return {
-      adapterType: 'http',
-      adapterConfig: {
-        endpoint,
-        ...(config.httpApiKey ? { apiKey: config.httpApiKey } : {}),
-      },
-    };
-  }
-
-  throw new Error(
-    `Could not determine provider for model "${modelStr}". Use "openai:model" or "anthropic:model" prefix.`,
-  );
-}
-
-/**
- * Execute a scenario and poll until completion. Returns the execution object.
+ * Execute a scenario with a given promptId and poll until completion.
+ * The server resolves adapter config from the Prompt entity + Settings DB.
  */
 async function executeAndWait(
   scenarioId: string,
-  adapterType: string,
-  adapterConfig: Record<string, any>,
+  promptId: string,
   label: string,
 ): Promise<any> {
   const executeDto: Record<string, any> = {
-    adapterType,
-    adapterConfig,
+    promptId,
   };
 
   const spinner = ora(`Running ${label}...`).start();
@@ -572,16 +438,14 @@ export function registerCompareCommand(program: Command): void {
   program
     .command('compare')
     .description(
-      'Run the same scenario against two agents/models and compare results',
+      'Run the same scenario against two prompts and compare results',
     )
     .requiredOption(
       '--scenario <scenario>',
       'Scenario name, slug, or ID to run',
     )
-    .option('--agent-a <path>', 'Path to agent A YAML file')
-    .option('--agent-b <path>', 'Path to agent B YAML file')
-    .option('--model-a <model>', 'Model A string (e.g. gpt-4o, anthropic:claude-sonnet-4-20250514)')
-    .option('--model-b <model>', 'Model B string (e.g. gpt-4o, anthropic:claude-sonnet-4-20250514)')
+    .requiredOption('--prompt-a <promptId>', 'Prompt A entity ID')
+    .requiredOption('--prompt-b <promptId>', 'Prompt B entity ID')
     .action(async (options) => {
       try {
         await runCompareAction(options, program.opts().format);
@@ -597,37 +461,16 @@ export function registerCompareCommand(program: Command): void {
  * Returns a descriptive error string if invalid, or null if valid.
  */
 export function validateCompareOptions(options: {
-  agentA?: string;
-  agentB?: string;
-  modelA?: string;
-  modelB?: string;
+  promptA?: string;
+  promptB?: string;
   scenario?: string;
 }): string | null {
   if (!options.scenario) {
     return 'Missing --scenario. Specify a scenario name, slug, or ID.';
   }
 
-  const hasAgents = options.agentA || options.agentB;
-  const hasModels = options.modelA || options.modelB;
-
-  if (hasAgents && hasModels) {
-    return 'Cannot mix --agent-a/b and --model-a/b. Use one pair or the other.';
-  }
-
-  if (!hasAgents && !hasModels) {
-    return 'Specify either --agent-a and --agent-b (YAML files) or --model-a and --model-b (model strings).';
-  }
-
-  if (hasAgents) {
-    if (!options.agentA || !options.agentB) {
-      return 'Both --agent-a and --agent-b are required when comparing agent YAML files.';
-    }
-  }
-
-  if (hasModels) {
-    if (!options.modelA || !options.modelB) {
-      return 'Both --model-a and --model-b are required when comparing models.';
-    }
+  if (!options.promptA || !options.promptB) {
+    return 'Both --prompt-a and --prompt-b are required. Each is a Prompt entity ID.';
   }
 
   return null;
@@ -635,10 +478,8 @@ export function validateCompareOptions(options: {
 
 async function runCompareAction(
   options: {
-    agentA?: string;
-    agentB?: string;
-    modelA?: string;
-    modelB?: string;
+    promptA: string;
+    promptB: string;
     scenario: string;
   },
   format?: string,
@@ -651,8 +492,6 @@ async function runCompareAction(
     return;
   }
 
-  const config = loadConfig();
-
   // Resolve scenario
   let scenarioId: string;
   try {
@@ -663,63 +502,15 @@ async function runCompareAction(
     return;
   }
 
-  // Build adapter configs for A and B
-  let labelA: string;
-  let labelB: string;
-  let modelA: string;
-  let modelB: string;
-  let adapterTypeA: string;
-  let adapterConfigA: Record<string, any>;
-  let adapterTypeB: string;
-  let adapterConfigB: Record<string, any>;
-
-  if (options.agentA && options.agentB) {
-    // Agent YAML mode
-    const agentDefA = loadAgentYaml(
-      options.agentA,
-      config.provider || undefined,
-    );
-    const agentDefB = loadAgentYaml(
-      options.agentB,
-      config.provider || undefined,
-    );
-
-    labelA = agentDefA.name;
-    labelB = agentDefB.name;
-    modelA = `${agentDefA.provider}:${agentDefA.model || agentDefA.httpEndpoint}`;
-    modelB = `${agentDefB.provider}:${agentDefB.model || agentDefB.httpEndpoint}`;
-
-    const configA = buildAdapterConfig(agentDefA, config);
-    const configB = buildAdapterConfig(agentDefB, config);
-    adapterTypeA = configA.adapterType;
-    adapterConfigA = configA.adapterConfig;
-    adapterTypeB = configB.adapterType;
-    adapterConfigB = configB.adapterConfig;
-  } else {
-    // Model string mode
-    const mA = options.modelA!;
-    const mB = options.modelB!;
-
-    const parsedA = parseModelString(mA, config.provider || undefined);
-    const parsedB = parseModelString(mB, config.provider || undefined);
-
-    labelA = `Model A`;
-    labelB = `Model B`;
-    modelA = parsedA.model || parsedA.httpEndpoint || mA;
-    modelB = parsedB.model || parsedB.httpEndpoint || mB;
-
-    const configA = buildAdapterConfigFromModel(mA, config);
-    const configB = buildAdapterConfigFromModel(mB, config);
-    adapterTypeA = configA.adapterType;
-    adapterConfigA = configA.adapterConfig;
-    adapterTypeB = configB.adapterType;
-    adapterConfigB = configB.adapterConfig;
-  }
+  const labelA = `Prompt A`;
+  const labelB = `Prompt B`;
+  const modelA = options.promptA;
+  const modelB = options.promptB;
 
   console.log('');
   console.log(
     chalk.bold('chanl compare') +
-      chalk.dim(` \u2014 running ${options.scenario} against two models`),
+      chalk.dim(` \u2014 running ${options.scenario} against two prompts`),
   );
   console.log('');
 
@@ -729,13 +520,12 @@ async function runCompareAction(
   try {
     executionA = await executeAndWait(
       scenarioId,
-      adapterTypeA,
-      adapterConfigA,
-      `Model A (${modelA})`,
+      options.promptA,
+      `Prompt A (${options.promptA})`,
     );
   } catch (err) {
     errorA = formatError(err);
-    console.log(chalk.red(`  Model A failed: ${errorA}`));
+    console.log(chalk.red(`  Prompt A failed: ${errorA}`));
   }
 
   // Run B
@@ -744,13 +534,12 @@ async function runCompareAction(
   try {
     executionB = await executeAndWait(
       scenarioId,
-      adapterTypeB,
-      adapterConfigB,
-      `Model B (${modelB})`,
+      options.promptB,
+      `Prompt B (${options.promptB})`,
     );
   } catch (err) {
     errorB = formatError(err);
-    console.log(chalk.red(`  Model B failed: ${errorB}`));
+    console.log(chalk.red(`  Prompt B failed: ${errorB}`));
   }
 
   // Extract metrics

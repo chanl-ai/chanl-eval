@@ -15,10 +15,8 @@ import { Scenario, ScenarioDocument } from '../scenarios/schemas/scenario.schema
 import { QueueProducerService } from './queue-producer.service';
 
 export interface ExecuteOptions {
-  adapterType?: string;
-  adapterConfig?: Record<string, any>;
+  promptId: string;
   personaId?: string;
-  agentId?: string;
   maxTurns?: number;
   parameters?: Record<string, any>;
   environment?: string;
@@ -56,7 +54,7 @@ export class ExecutionService {
    */
   async execute(
     scenarioId: string,
-    options?: ExecuteOptions,
+    options: ExecuteOptions,
   ): Promise<string> {
     try {
       // Verify scenario exists and is active
@@ -78,9 +76,9 @@ export class ExecutionService {
       const executionData: any = {
         executionId,
         scenarioId: new Types.ObjectId(scenarioId),
-        agentId: options?.agentId
-          ? new Types.ObjectId(options.agentId)
-          : scenario.agentIds?.[0],
+        promptId: options?.promptId
+          ? new Types.ObjectId(options.promptId)
+          : undefined,
         personaId: options?.personaId
           ? new Types.ObjectId(options.personaId)
           : scenario.personaIds?.[0],
@@ -99,11 +97,9 @@ export class ExecutionService {
 
       // Enqueue the BullMQ job
       await this.queueProducer.enqueueExecution(executionId, scenarioId, {
-        adapterType: options?.adapterType,
-        adapterConfig: options?.adapterConfig,
+        promptId: options.promptId,
         personaId:
           options?.personaId || scenario.personaIds?.[0]?.toString(),
-        agentId: options?.agentId || scenario.agentIds?.[0]?.toString(),
         maxTurns: options?.maxTurns,
         parameters: options?.parameters,
       });
