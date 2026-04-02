@@ -21,7 +21,7 @@ import {
 import { QueueProducerService } from '../../execution/queue-producer.service';
 import { EvaluationService } from '@chanl/scorecards-core';
 import { buildLlmJudge } from '../../execution/judge-llm';
-import { resolveLlmConfigSync } from '../../execution/llm-config-resolver';
+
 
 @Injectable()
 export class ScenarioExecutionService {
@@ -498,12 +498,38 @@ export class ScenarioExecutionService {
       text: s.actualResponse || '',
     }));
 
-    // 3. Resolve an API key for the LLM judge via central resolver
-    const judgeConfig = resolveLlmConfigSync(
-      undefined,
-      dto.apiKey ? { apiKey: dto.apiKey } : undefined,
-    );
-    const llmEvaluate = buildLlmJudge(judgeConfig || undefined);
+    // 3. Resolve an API key for the LLM judge
+    // Priority: Settings DB (UI-configured) > env vars (headless/CI fallback)
+    let judgeApiKey: string | undefined;
+    let judgeKind: 'openai' | 'anthropic' = 'openai';
+
+    // Settings DB first — this is where the Settings UI saves keys
+    try {
+      const settingsDoc = await this.executionModel.db.collection('settings').findOne({});
+      const providerKeys: Record<string, string> = settingsDoc?.providerKeys ?? {};
+      if (providerKeys.openai) {
+        judgeApiKey = providerKeys.openai;
+        judgeKind = 'openai';
+      } else if (providerKeys.anthropic) {
+        judgeApiKey = providerKeys.anthropic;
+        judgeKind = 'anthropic';
+      }
+    } catch {
+      // Settings lookup failed — fall through to env vars
+    }
+
+    // Env var fallback (headless/CI)
+    if (!judgeApiKey && process.env.CHANL_OPENAI_API_KEY) {
+      judgeApiKey = process.env.CHANL_OPENAI_API_KEY;
+      judgeKind = 'openai';
+    } else if (!judgeApiKey && process.env.CHANL_ANTHROPIC_API_KEY) {
+      judgeApiKey = process.env.CHANL_ANTHROPIC_API_KEY;
+      judgeKind = 'anthropic';
+    }
+
+    const llmEvaluate = judgeApiKey
+      ? buildLlmJudge({ kind: judgeKind, apiKey: judgeApiKey })
+      : undefined;
 
     // 4. Calculate first-response latency metric
     const firstAgentStep = conversationSteps.find((s) => s.role === 'agent');
@@ -549,15 +575,14 @@ export class ScenarioExecutionService {
         ? { _id: executionId }
         : { executionId };
 
-      // Generate critical summary
+      // Generate critical summary — reuse the same judge key
       let scorecardSummary: string | undefined;
-      try {
-        const summaryConfig = resolveLlmConfigSync(undefined, dto.apiKey ? { apiKey: dto.apiKey } : undefined);
-        if (summaryConfig) {
-          scorecardSummary = await this.generateEvalSummary(evalResult, summaryConfig);
+      if (judgeApiKey) {
+        try {
+          scorecardSummary = await this.generateEvalSummary(evalResult, { kind: judgeKind, apiKey: judgeApiKey });
+        } catch {
+          // Non-fatal — summary is optional
         }
-      } catch {
-        // Non-fatal — summary is optional
       }
 
       const updated = await this.executionModel.findOneAndUpdate(
