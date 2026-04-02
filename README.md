@@ -6,6 +6,8 @@
 
 Open-source testing engine for AI agents. Simulate multi-turn conversations with configurable personas, evaluate responses with scorecards, and catch regressions before they reach production.
 
+![chanl-eval](docs/screenshots/hero.gif)
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
@@ -74,6 +76,58 @@ chanl-eval is that tool.
 | **Transcript + results** | Full conversation with search. Expandable scorecard criteria showing reasoning and transcript evidence. |
 | **Multi-provider** | OpenAI, Anthropic, or any OpenAI-compatible endpoint (Ollama, Together, vLLM, Azure). Separate config for agent vs simulation LLM. |
 | **Custom attributes** | Key-value pairs on personas (product name, order ID, account number) injected into simulation prompts. |
+
+---
+
+## Screenshots
+
+<details>
+<summary><strong>Getting Started</strong> — guided onboarding with quick actions</summary>
+
+![Getting Started](docs/screenshots/01-getting-started.png)
+</details>
+
+<details>
+<summary><strong>Playground</strong> — configure prompts, select scenarios, run tests</summary>
+
+![Playground](docs/screenshots/02-playground.png)
+</details>
+
+<details open>
+<summary><strong>Execution Detail</strong> — conversation transcript + scorecard results with LLM reasoning</summary>
+
+![Execution Detail](docs/screenshots/09-execution-detail.png)
+</details>
+
+<details>
+<summary><strong>Scenarios</strong> — test cases with difficulty, personas, and scorecards</summary>
+
+![Scenarios](docs/screenshots/03-scenarios.png)
+</details>
+
+<details>
+<summary><strong>Personas</strong> — configurable customer personalities</summary>
+
+![Personas](docs/screenshots/04-personas.png)
+</details>
+
+<details>
+<summary><strong>Scorecards</strong> — evaluation criteria with dedicated handler types</summary>
+
+![Scorecards](docs/screenshots/06-scorecards.png)
+</details>
+
+<details>
+<summary><strong>Tool Fixtures</strong> — mock API tools with visual parameter builder</summary>
+
+![Tool Fixtures](docs/screenshots/10-tool-fixture-detail.png)
+</details>
+
+<details>
+<summary><strong>Runs</strong> — execution history with scores and status</summary>
+
+![Runs](docs/screenshots/05-runs.png)
+</details>
 
 ---
 
