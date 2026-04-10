@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="docs/screenshots/logo.png" alt="chanl-eval" width="120" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/logo-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/logo-light.svg" />
+    <img src="docs/screenshots/logo-light.svg" alt="chanl-eval" width="80" />
+  </picture>
 </p>
 
 <h1 align="center">chanl-eval</h1>
@@ -12,7 +16,7 @@
   <a href="https://github.com/chanl-ai/chanl-eval/stargazers"><img src="https://img.shields.io/github/stars/chanl-ai/chanl-eval?style=flat" alt="Stars" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
   <a href="https://www.npmjs.com/package/@chanl/eval-cli"><img src="https://img.shields.io/npm/v/@chanl/eval-cli.svg" alt="npm" /></a>
-  <a href="https://discord.gg/chanl"><img src="https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/B36e4Nyc"><img src="https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
   <a href="https://www.linkedin.com/company/chanl-ai"><img src="https://img.shields.io/badge/Follow-LinkedIn-0A66C2?logo=linkedin" alt="LinkedIn" /></a>
 </p>
 
@@ -20,7 +24,7 @@
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#features">Features</a> &bull;
   <a href="https://docs.chanl.ai/eval">Docs</a> &bull;
-  <a href="https://discord.gg/chanl">Discord</a> &bull;
+  <a href="https://discord.gg/B36e4Nyc">Discord</a> &bull;
   <a href="https://chanl.ai?ref=eval-readme">Chanl Cloud</a>
 </p>
 
@@ -57,9 +61,9 @@ Open **[localhost:3010](http://localhost:3010)** — sample scenarios, personas,
 
 ```bash
 npm install -g @chanl/eval-cli
-chanl init my-eval && cd my-eval
-chanl config set server http://localhost:18005
-chanl config set openaiApiKey sk-...
+chanl-eval init my-eval && cd my-eval
+chanl-eval config set server http://localhost:18005
+chanl-eval config set openaiApiKey sk-...
 ```
 
 ### Option 3: SDK
@@ -127,19 +131,19 @@ Scorecard: empathy, tools          Persona: "This is ridiculous"      ✓ Used l
 
 ```bash
 # Run a scenario
-chanl run "Angry Customer" --prompt-id <id>
+chanl-eval run "Angry Customer" --prompt-id <id>
 
 # Auto-generate test scenarios from a system prompt
-chanl generate --from-prompt "You are a support agent for..."
+chanl-eval generate --from-prompt "You are a support agent for..."
 
 # Run all scenarios as a test suite
-chanl test tests/
+chanl-eval test tests/
 
 # Compare two models on the same scenario
-chanl compare --scenario "Refund" --prompt-a <id> --prompt-b <id>
+chanl-eval compare --scenario "Refund" --prompt-a <id> --prompt-b <id>
 
 # Generate training data
-chanl dataset generate --scenario "Refund" --count 50 --export openai
+chanl-eval dataset generate --scenario "Refund" --count 50 --export openai
 ```
 
 ---
@@ -213,7 +217,7 @@ chanl-eval is the open-source core of [Chanl](https://chanl.ai). Cloud adds voic
 
 ## Community
 
-- [Discord](https://discord.gg/chanl) — questions, feedback, feature requests
+- [Discord](https://discord.gg/B36e4Nyc) — questions, feedback, feature requests
 - [GitHub Issues](https://github.com/chanl-ai/chanl-eval/issues) — bug reports
 - [LinkedIn](https://www.linkedin.com/company/chanl-ai) — updates
 
