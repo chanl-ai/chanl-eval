@@ -253,9 +253,7 @@ describe('GenerationService', () => {
 
     it('should enrich request with settings when no apiKey provided', async () => {
       mockSettingsService.get.mockResolvedValue({
-        simulationProvider: 'anthropic',
-        simulationApiKey: 'sk-test-key',
-        simulationModel: 'claude-3-haiku-20240307',
+        providerKeys: { anthropic: 'sk-test-key' },
       });
 
       const request = { systemPrompt: 'You are a support agent.' };
@@ -266,7 +264,6 @@ describe('GenerationService', () => {
           adapterType: 'anthropic',
           adapterConfig: expect.objectContaining({
             apiKey: 'sk-test-key',
-            model: 'claude-3-haiku-20240307',
           }),
         }),
       );
@@ -274,8 +271,7 @@ describe('GenerationService', () => {
 
     it('should skip settings enrichment when apiKey already provided', async () => {
       mockSettingsService.get.mockResolvedValue({
-        simulationProvider: 'anthropic',
-        simulationApiKey: 'sk-settings-key',
+        providerKeys: { anthropic: 'sk-settings-key' },
       });
 
       const request = {

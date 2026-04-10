@@ -8,6 +8,7 @@ import {
 } from '@chanl/scenarios-core';
 import { ScorecardsService } from '@chanl/scorecards-core';
 import { SettingsService } from '../settings/settings.service';
+import type { SettingsDocument } from '../settings/settings.schema';
 
 export interface PersistSuiteResult {
   scenarioIds: string[];
@@ -15,6 +16,17 @@ export interface PersistSuiteResult {
   scorecardId: string | null;
   summary: string;
   domain: string;
+}
+
+/** Extract the string ID from a Mongoose document regardless of shape. */
+function docId(doc: unknown): string | null {
+  if (!doc || typeof doc !== 'object') return null;
+  const d = doc as Record<string, unknown>;
+  if (typeof d.id === 'string') return d.id;
+  if (d._id && typeof (d._id as Record<string, unknown>).toString === 'function') {
+    return (d._id as Record<string, unknown>).toString() as string;
+  }
+  return null;
 }
 
 @Injectable()
@@ -47,8 +59,8 @@ export class GenerationService {
     const personaIds: string[] = [];
     for (const p of suite.personas) {
       try {
-        const created = await this.personaService.create(p as any, 'auto-generate');
-        const id = (created as any).id || (created as any)._id?.toString();
+        const created = await this.personaService.create(p, 'auto-generate');
+        const id = docId(created);
         if (id) personaIds.push(id);
       } catch (err) {
         this.logger.warn(`Failed to create persona "${p.name}": ${err}`);
@@ -65,29 +77,29 @@ export class GenerationService {
         passingThreshold: 70,
         scoringAlgorithm: 'weighted_average',
         tags: ['auto-generated'],
-      } as any);
+      });
 
-      scorecardId = (scorecard as any).id || (scorecard as any)._id?.toString();
+      scorecardId = docId(scorecard);
 
       if (scorecardId && suite.scorecard.criteria.length > 0) {
-        // Create a default category for all criteria
         const category = await this.scorecardsService.createCategory(scorecardId, {
           name: 'Auto-Generated Criteria',
           description: `Evaluation criteria for ${suite.domain}`,
-        } as any);
-        const categoryId = (category as any).id || (category as any)._id?.toString();
+        });
+        const categoryId = docId(category);
 
         if (categoryId) {
           for (const c of suite.scorecard.criteria) {
             try {
               await this.scorecardsService.createCriteria(scorecardId, categoryId, {
+                categoryId,
                 key: c.key,
                 name: c.name,
                 description: c.description,
                 type: c.type,
                 settings: c.settings,
                 threshold: c.threshold,
-              } as any);
+              });
             } catch (err) {
               this.logger.warn(`Failed to create criterion "${c.key}": ${err}`);
             }
@@ -102,7 +114,6 @@ export class GenerationService {
     const scenarioIds: string[] = [];
     for (let i = 0; i < suite.scenarios.length; i++) {
       const s = suite.scenarios[i];
-      // Map each scenario to its corresponding persona (1:1 by index)
       const scenarioPersonaIds = personaIds[i] ? [personaIds[i]] : personaIds.slice(0, 1);
 
       try {
@@ -112,17 +123,17 @@ export class GenerationService {
             description: s.description,
             prompt: s.prompt,
             category: s.category,
-            difficulty: s.difficulty as any,
+            difficulty: s.difficulty as 'easy' | 'medium' | 'hard',
             tags: [...(s.tags || []), 'auto-generated'],
             context: s.context,
             groundTruth: s.groundTruth,
             personaIds: scenarioPersonaIds,
             scorecardId: scorecardId || undefined,
             status: 'active',
-          } as any,
+          },
           'auto-generate',
         );
-        const id = (created as any).id || (created as any)._id?.toString();
+        const id = docId(created);
         if (id) scenarioIds.push(id);
       } catch (err) {
         this.logger.warn(`Failed to create scenario "${s.name}": ${err}`);
@@ -145,17 +156,12 @@ export class GenerationService {
     if (request.adapterConfig?.apiKey) return request;
 
     try {
-      const settings = await this.settingsService.get();
+      const settings: SettingsDocument = await this.settingsService.get();
       if (!settings) return request;
 
-      const s = settings as any;
-      const providerKeys: Record<string, string> = s.providerKeys || {};
-      const provider = s.simulationProvider || s.provider || 'openai';
-      const apiKey =
-        s.simulationApiKey ||
-        providerKeys[provider] ||
-        providerKeys['openai'] ||
-        providerKeys['anthropic'];
+      const keys = settings.providerKeys || {};
+      const apiKey = keys.openai || keys.anthropic || keys.http;
+      const provider = keys.anthropic && !keys.openai ? 'anthropic' : 'openai';
 
       if (apiKey) {
         return {
@@ -164,7 +170,6 @@ export class GenerationService {
           adapterConfig: {
             ...request.adapterConfig,
             apiKey,
-            model: s.simulationModel || request.adapterConfig?.model,
           },
         };
       }
