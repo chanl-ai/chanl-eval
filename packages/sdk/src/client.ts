@@ -17,6 +17,7 @@ import { ToolFixturesModule } from './modules/tool-fixtures';
 import { SettingsModule } from './modules/settings';
 import { ChatModule } from './modules/chat';
 import { DatasetsModule } from './modules/datasets';
+import { GenerationModule } from './modules/generation';
 import type { EvalClientConfig } from './types';
 
 /**
@@ -77,6 +78,7 @@ export class EvalClient {
   readonly settings: SettingsModule;
   readonly chat: ChatModule;
   readonly datasets: DatasetsModule;
+  readonly generation: GenerationModule;
 
   constructor(config: EvalClientConfig) {
     const headers: Record<string, string> = {
@@ -97,9 +99,10 @@ export class EvalClient {
         if (axios.isAxiosError(error) && error.response) {
           const status = error.response.status;
           const body = error.response.data as
-            | { message?: string; error?: { message?: string; code?: string } }
+            | { message?: string | string[]; error?: { message?: string; code?: string } }
             | undefined;
-          const message = body?.message || body?.error?.message || error.message;
+          const rawMessage = body?.message || body?.error?.message || error.message;
+          const message = Array.isArray(rawMessage) ? rawMessage.join('. ') : String(rawMessage);
 
           if (status === 401) {
             throw new EvalAuthError(message);
@@ -124,6 +127,7 @@ export class EvalClient {
     this.settings = new SettingsModule(this.http);
     this.chat = new ChatModule(this.http);
     this.datasets = new DatasetsModule(this.http);
+    this.generation = new GenerationModule(this.http);
   }
 
   /**

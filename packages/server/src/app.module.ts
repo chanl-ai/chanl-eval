@@ -16,6 +16,7 @@ import { PromptsModule } from './prompts/prompts.module';
 import { SettingsModule } from './settings/settings.module';
 import { ChatModule } from './chat/chat.module';
 import { DatasetModule } from './dataset/dataset.module';
+import { GenerationModule } from './generation/generation.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { DatasetModule } from './dataset/dataset.module';
     SettingsModule,
     ChatModule,
     DatasetModule,
+    GenerationModule,
   ],
   providers: [
     {

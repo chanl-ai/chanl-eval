@@ -40,6 +40,7 @@ export function CreateToolFixtureDialog({ open, onOpenChange }: CreateToolFixtur
   const queryClient = useQueryClient();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -51,6 +52,7 @@ export function CreateToolFixtureDialog({ open, onOpenChange }: CreateToolFixtur
 
   async function onSubmit(values: FormValues) {
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       const created = await client.toolFixtures.create({
         name: values.name,
@@ -62,7 +64,9 @@ export function CreateToolFixtureDialog({ open, onOpenChange }: CreateToolFixtur
       onOpenChange(false);
       router.push(`/tool-fixtures/${created.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create tool fixture');
+      const msg = err instanceof Error ? err.message : 'Failed to create tool fixture';
+      setSubmitError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -107,6 +111,12 @@ export function CreateToolFixtureDialog({ open, onOpenChange }: CreateToolFixtur
               <p className="text-xs text-destructive">{form.formState.errors.description.message}</p>
             )}
           </div>
+
+          {submitError && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+              {submitError}
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>

@@ -1,325 +1,221 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Follow on LinkedIn](https://img.shields.io/badge/Follow-LinkedIn-0A66C2?logo=linkedin)](https://www.linkedin.com/company/chanl-ai)
-[![GitHub Stars](https://img.shields.io/github/stars/chanl-ai/chanl-eval?style=social)](https://github.com/chanl-ai/chanl-eval)
+<p align="center">
+  <img src="docs/screenshots/logo.png" alt="chanl-eval" width="120" />
+</p>
 
-# chanl-eval
+<h1 align="center">chanl-eval</h1>
 
-Open-source testing engine for AI agents. Simulate multi-turn conversations with configurable personas, evaluate responses with scorecards, and catch regressions before they reach production.
+<p align="center">
+  <b>Pytest for AI agents</b> — simulate multi-turn conversations, score with scorecards, catch regressions before production.
+</p>
 
-![chanl-eval](docs/screenshots/hero.gif)
+<p align="center">
+  <a href="https://github.com/chanl-ai/chanl-eval/stargazers"><img src="https://img.shields.io/github/stars/chanl-ai/chanl-eval?style=flat" alt="Stars" /></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
+  <a href="https://www.npmjs.com/package/@chanl/eval-cli"><img src="https://img.shields.io/npm/v/@chanl/eval-cli.svg" alt="npm" /></a>
+  <a href="https://discord.gg/chanl"><img src="https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://www.linkedin.com/company/chanl-ai"><img src="https://img.shields.io/badge/Follow-LinkedIn-0A66C2?logo=linkedin" alt="LinkedIn" /></a>
+</p>
 
-## Table of Contents
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#features">Features</a> &bull;
+  <a href="https://docs.chanl.ai/eval">Docs</a> &bull;
+  <a href="https://discord.gg/chanl">Discord</a> &bull;
+  <a href="https://chanl.ai?ref=eval-readme">Chanl Cloud</a>
+</p>
 
-- [Quick Start](#quick-start)
-- [Why chanl-eval](#why-chanl-eval)
-- [Use Cases](#use-cases)
-- [Features](#features)
-- [Screenshots](docs/screenshots.md)
-- [How It Works](#how-it-works)
-- [CLI](#cli)
-- [Configuration](#configuration)
-- [Development Setup](#development-setup)
-- [Customization](#customization)
-- [How chanl-eval Compares](#how-chanl-eval-compares)
-- [Roadmap](#roadmap)
-- [Chanl Cloud](#chanl-cloud)
-- [Contributing](#contributing)
+<p align="center">
+  <img src="docs/screenshots/hero.gif" alt="chanl-eval dashboard" width="800" />
+</p>
+
+---
+
+## Why chanl-eval?
+
+Existing tools (Promptfoo, DeepEval, RAGAS) evaluate single prompts. But your AI agent has **conversations** — multi-turn, with tool calls, personality-dependent behavior, and context that shifts across turns.
+
+chanl-eval drives **full conversations** against your agent with configurable customer personas, then scores each interaction against your rubric.
+
+```
+Define scenario → Persona simulator runs the conversation → Scorecard grades the transcript
+```
 
 ---
 
 ## Quick Start
 
+### Option 1: Docker (try it in 60 seconds)
+
 ```bash
-git clone https://github.com/chanl-ai/chanl-eval.git
-cd chanl-eval
+git clone https://github.com/chanl-ai/chanl-eval.git && cd chanl-eval
 docker compose up
 ```
 
-Open **[http://localhost:3010](http://localhost:3010)**. Sample scenarios, personas, and a scorecard are seeded on first run.
+Open **[localhost:3010](http://localhost:3010)** — sample scenarios, personas, and scorecards are seeded automatically.
 
-> Docker builds everything (MongoDB, Redis, API server, dashboard). First build takes a few minutes. For development with hot reload, see [Development Setup](#development-setup).
+### Option 2: CLI
 
----
+```bash
+npm install -g @chanl/eval-cli
+chanl init my-eval && cd my-eval
+chanl config set server http://localhost:18005
+chanl config set openaiApiKey sk-...
+```
 
-## Why chanl-eval
+### Option 3: SDK
 
-We build tools for shipping customer-facing AI agents at [Chanl](https://chanl.ai).
+```typescript
+import { EvalClient } from '@chanl/eval-sdk';
 
-Existing eval tools score individual prompts. We needed something that drives full conversations against our agent with different customer personalities, scores each interaction against a rubric, and runs the same tests after every change.
+const client = new EvalClient({ baseUrl: 'http://localhost:18005' });
 
-chanl-eval is that tool.
+// Auto-generate test scenarios from your agent's system prompt
+const suite = await client.generation.fromPrompt({
+  systemPrompt: 'You are a helpful customer support agent for Acme Corp...',
+  count: 10,
+  includeAdversarial: true,
+});
 
----
-
-## Use Cases
-
-**Regression testing** — Run the same scenario after every prompt or model change. Catch score drops before deploying.
-
-**Persona stress testing** — Test how your agent handles a hostile caller, a confused elderly customer, or an impatient executive. Same scenario, different personality.
-
-**Tool call verification** — Mock your agent's tools (refund processing, order lookup, knowledge search) and verify it calls the right tool with the right arguments.
-
-**Scorecard evaluation** — Grade conversations on empathy, de-escalation, protocol compliance, keyword usage, and response time. Per-criteria pass/fail with reasoning.
-
-**Model comparison** — Run the same scenarios against GPT-4o vs Claude vs your fine-tune. Compare scorecard results side by side.
-
-**Training data generation** — Export conversations as fine-tuning datasets. OpenAI JSONL, ShareGPT, or DPO preference pairs. Generate 100 diverse conversations in one command, filter by score, download as training data.
-
-**Manual testing** — Chat with your agent through the playground. Save prompts, adjust parameters, review transcripts.
+console.log(`Created ${suite.scenarioIds.length} scenarios, ${suite.personaIds.length} personas`);
+```
 
 ---
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Persona simulation** | Configurable traits: emotion, cooperation, patience, speech style, intent clarity. Each combination produces meaningfully different conversation behavior. |
-| **Scorecard evaluation** | Criteria grouped by category. Types: keyword matching, LLM judge, response time, tool call verification, hallucination detection, RAG faithfulness. Per-criteria pass/fail with reasoning and evidence. |
-| **Dataset generation** | Run scenarios at scale with multiple personas. Export as OpenAI JSONL, ShareGPT, or DPO preference pairs for fine-tuning. Filter by score, preview before downloading. |
-| **Tool fixture mocking** | Define mock tools with configurable responses. Verify tool call arguments and result handling without connecting to real APIs. |
-| **Playground** | Manual chat with your agent. Save system prompts, select scenarios and personas, adjust model parameters. |
-| **Transcript + results** | Full conversation with search. Expandable scorecard criteria showing reasoning and transcript evidence. |
-| **Multi-provider** | OpenAI, Anthropic, or any OpenAI-compatible endpoint (Ollama, Together, vLLM, Azure). Separate config for agent vs simulation LLM. |
-| **Custom attributes** | Key-value pairs on personas (product name, order ID, account number) injected into simulation prompts. |
+### Auto-Generate Test Suites
+Paste your agent's system prompt. chanl-eval generates scenarios, personas, and scorecards automatically. Go from zero to a full test suite in one click.
 
-📸 **[Screenshots →](docs/screenshots.md)** — full visual tour of the dashboard.
+### Persona Simulation
+Configurable customer personalities: emotion, cooperation level, patience, speech style, intent clarity. Each combination produces meaningfully different conversation behavior. A frustrated, impatient customer tests your agent differently than a calm, cooperative one.
+
+### Scorecard Evaluation
+9 criteria types: keyword matching, LLM judge, response time, tool call verification, hallucination detection, RAG faithfulness, knowledge retention, conversation completeness, role adherence. Per-criteria pass/fail with reasoning and evidence.
+
+### Red-Team Testing
+5 built-in adversarial personas: jailbreak attacker, PII extractor, BOLA tester, prompt injector, social engineer. Reactive persona strategy adapts attack tactics based on agent responses.
+
+### Tool Fixture Mocking
+Define mock tools with configurable responses. Verify your agent calls the right tool with the right arguments — without connecting to real APIs.
+
+### Training Data Generation
+Export scored conversations as fine-tuning datasets. OpenAI JSONL, ShareGPT, or DPO preference pairs. Generate 100 diverse conversations, filter by score, download as training data.
+
+### Multi-Provider
+OpenAI, Anthropic, or any OpenAI-compatible endpoint (Ollama, Together, vLLM, Azure). Separate config for the agent under test vs. the simulation LLM.
+
+### Dashboard + CLI + SDK
+Full-featured dashboard for visual workflows. CLI for automation and CI/CD. TypeScript SDK for programmatic access. Same capabilities across all three.
 
 ---
 
 ## How It Works
 
-| Step | What happens | Example |
-|------|-------------|---------|
-| **1. Define** | Create a scenario (situation), persona (personality traits), and scorecard (evaluation criteria) | Scenario: "Angry refund request" / Persona: hostile, low patience / Scorecard: empathy, greeting, tool calls |
-| **2. Simulate** | Persona engine builds a behavioral prompt from traits. Conversation runs turn-by-turn against your agent via OpenAI, Anthropic, or custom HTTP | Persona: "I want a refund NOW" / Agent: "Let me check your order..." (10 turns) |
-| **3. Evaluate** | Scorecard evaluates the completed transcript. Each criterion gets pass/fail with reasoning and evidence | ✓ Empathy demonstrated / ✗ No greeting / ✓ Offered resolution / ✗ Didn't verify order / Overall: 60% |
+```
+1. DEFINE                          2. SIMULATE                        3. EVALUATE
+                                                                      
+Scenario: "Angry refund"           Persona: "I want a refund NOW"     ✓ Empathy demonstrated
+Persona: hostile, impatient        Agent: "Let me check your order"   ✗ No greeting
+Scorecard: empathy, tools          Persona: "This is ridiculous"      ✓ Used lookup_order tool
+                                   Agent: "I see the issue..."        ✗ Didn't verify identity
+                                   (10 turns)                         Score: 60%
+```
 
 ---
 
 ## CLI
 
-Everything you can do in the dashboard, you can do from the terminal.
-
 ```bash
-chanl scenarios list                    # List scenarios
-chanl personas list                     # List personas
-chanl run "Angry Customer" --prompt-id <id>  # Run a scenario
-chanl test tests/                       # CI/CD assertions (like jest)
-chanl compare --scenario "Refund" --prompt-a <id> --prompt-b <id>  # A/B compare
-chanl executions show <executionId>     # Transcript + scorecard
+# Run a scenario
+chanl run "Angry Customer" --prompt-id <id>
+
+# Auto-generate test scenarios from a system prompt
+chanl generate --from-prompt "You are a support agent for..."
+
+# Run all scenarios as a test suite
+chanl test tests/
+
+# Compare two models on the same scenario
+chanl compare --scenario "Refund" --prompt-a <id> --prompt-b <id>
+
+# Generate training data
+chanl dataset generate --scenario "Refund" --count 50 --export openai
 ```
-
-Full CRUD on all entities: `chanl <entity> list|get|create|update|delete`.
-
-**[Full CLI Reference →](docs/cli.md)** — all commands, options, test assertions, environment variables.
 
 ---
 
-## Dataset Generation
+## Comparison
 
-Generate training data from your evaluation runs. Run a scenario with multiple personas, then export the conversations in fine-tuning formats.
+| | chanl-eval | promptfoo | DeepEval | RAGAS |
+|---|:---:|:---:|:---:|:---:|
+| Multi-turn conversations | **Yes** | No | Partial | No |
+| Persona simulation | **Yes** | No | No | No |
+| Scorecard with evidence | **Yes** | Partial | Yes | Yes |
+| Tool call mocking | **Yes** | No | Yes | No |
+| Red-team testing | **Yes** | Yes | No | No |
+| Training data export | **Yes** | No | No | No |
+| Auto-generate test suites | **Yes** | No | Partial | No |
+| Dashboard UI | **Yes** | Yes | Platform | No |
 
-```bash
-# Generate 50 conversations
-chanl dataset generate --scenario "Angry Refund" --prompt-id <id> --count 50
-
-# Export as OpenAI fine-tuning JSONL (filter by score)
-chanl dataset export --format openai --min-score 70 --output training-data.jsonl
-
-# Or do it all in one command
-chanl dataset generate --scenario "Angry Refund" --prompt-id <id> --count 50 \
-  --wait --export openai --output data.jsonl
-```
-
-Four export formats:
-
-| Format | Works with |
-|--------|-----------|
-| `openai` | OpenAI, Together AI, Fireworks, Axolotl, Unsloth, LLaMA Factory |
-| `openai-tools` | Same providers, includes tool call training data |
-| `sharegpt` | LLaMA Factory, older open-source tools |
-| `dpo` | OpenAI DPO, Together preference tuning, TRL DPOTrainer |
-
-The dashboard has a Datasets page where you can generate, browse conversations, and export with a format picker and live preview.
-
-**[Architecture →](docs/architecture/datasets.md)** — format specs, conversion pipeline, API endpoints.
+**Our focus:** If your agent has multi-turn conversations, chanl-eval tests the full interaction — not just individual prompts.
 
 ---
 
-## Configuration
-
-### Settings Page
-
-Three sections:
-
-- **Eval Server** — API connection (defaults to localhost)
-- **Agent Under Test** — the LLM being evaluated (provider, model, API key, base URL)
-- **Simulation LLM** — powers persona generation and scorecard judge (can be a different, cheaper model)
-
-All credentials stay in the browser. Never stored on the server.
-
-### Persona Traits
-
-| Trait | Range | Effect |
-|-------|-------|--------|
-| Emotion | friendly → hostile | Tone and escalation behavior |
-| Cooperation | very cooperative → hostile | Accepts solutions vs demands manager |
-| Patience | high → very impatient | Reactions to delays and scripts |
-| Speech Style | slow → fast | Response length |
-| Intent Clarity | very clear → mumbled | How directly needs are stated |
-| Custom Attributes | key-value pairs | Injected into prompt context |
-
-### Scenario Configuration
-
-Each scenario links to a persona and an optional scorecard. The scenario's situation prompt defines what the customer is calling about. The persona's traits define how they behave. The scorecard defines how the result is graded.
-
----
-
-## Development Setup
-
-For active development with hot reload:
-
-```bash
-pnpm install
-docker compose up -d mongodb redis    # Databases only
-pnpm build                            # Build workspace packages
-pnpm dev:server                       # http://localhost:18005 (auto-restart)
-pnpm dev:dashboard                    # http://localhost:3010 (HMR)
-```
-
-| | Docker Quick Start | Development Setup |
-|---|---|---|
-| Code changes | `docker compose up --build` | Instant hot reload |
-| Setup | Docker only | Node.js + pnpm |
-| Best for | Trying it out | Active development |
-
-### Project Structure
+## Architecture
 
 ```
 packages/
-├── scenarios-core/    # Personas, execution engine, LLM adapters
-├── scorecards-core/   # Criteria handlers and evaluation
-├── server/            # NestJS API (port 18005)
-├── sdk/               # TypeScript client
-├── cli/               # CLI tool
-└── dashboard/         # Next.js UI (port 3010)
+  scenarios-core/    # Personas, execution engine, LLM adapters
+  scorecards-core/   # 9 criteria handlers + evaluation engine
+  server/            # NestJS API (port 18005)
+  sdk/               # TypeScript SDK
+  cli/               # CLI tool
+  dashboard/         # Next.js UI (port 3010)
 ```
 
 ---
 
-## Customization
-
-| What | File |
-|------|------|
-| Persona prompt generation | `scenarios-core/src/simulator/persona-simulator.service.ts` |
-| LLM judge prompt | `scenarios-core/src/execution/judge-llm.ts` |
-| Scorecard criteria handlers | `scorecards-core/src/handlers/` |
-| Agent provider adapters | `scenarios-core/src/adapters/` |
-| Dataset export formats | `scenarios-core/src/dataset/formats/` |
-
----
-
-## How chanl-eval Compares
-
-Tools like [promptfoo](https://github.com/promptfoo/promptfoo), [DeepEval](https://github.com/confident-ai/deepeval), and [RAGAS](https://github.com/explodinggradients/ragas) evaluate prompts and RAG pipelines. chanl-eval evaluates **conversations** — multi-turn interactions where an AI persona drives the dialogue as a simulated customer.
-
-| Capability | chanl-eval | promptfoo | DeepEval | RAGAS |
-|-----------|-----------|-----------|----------|-------|
-| Multi-turn conversation simulation | **Yes** | No | Partial | No |
-| Configurable persona personalities | **Yes** | No | No | No |
-| Per-criteria scorecard with evidence | **Yes** | Partial | Yes | Yes |
-| Tool call mocking + verification | **Yes** | No | Yes | No |
-| Dashboard UI | **Yes** | Yes | Via platform | No |
-| RAG metrics (faithfulness) | **Yes** | Yes | Yes | Yes |
-| Red teaming / security scanning | **Yes** | Yes | No | No |
-| Hallucination detection | **Yes** | Yes | Yes | Yes |
-| Multi-turn metrics (retention, completeness, role adherence) | **Yes** | No | Yes | No |
-| Pluggable persona engine with internal tools | **Yes** | No | No | No |
-| Training data generation (SFT, DPO) | **Yes** | No | No | No |
-| CI/CD pytest integration | Planned | Yes | Yes | Yes |
-| Synthetic test data generation | Partial | No | Yes | Yes |
-
-**Our focus:** If your agent has multi-turn conversations with customers, chanl-eval tests the full interaction — not just individual prompts.
-
----
-
-## Persona Strategy Engine
-
-Persona strategies control how the simulated persona reasons and generates responses. Two built-in strategies ship with chanl-eval:
-
-- **default** — standard LLM persona generation, backward compatible with all existing scenarios
-- **reactive** — tool-augmented persona that uses 4 internal tools (`analyze_response`, `assess_progress`, `escalate_pressure`, `detect_vulnerability`) to reason about the agent's behavior before replying. Designed for red-team testing and stress testing where the persona needs to adapt its strategy based on what the agent says.
-
-Custom strategies are pluggable via the `PersonaStrategy` interface. See [docs/architecture/persona-strategies.md](docs/architecture/persona-strategies.md).
-
----
-
-## Red-Team Testing
-
-chanl-eval ships with 5 red-team persona presets in `examples/red-team/`:
-
-| Preset | Tests For |
-|--------|-----------|
-| `jailbreak-attacker` | Prompt injection, DAN-style attacks, instruction override |
-| `pii-extractor` | PII leakage, asking for other customers' data |
-| `bola-tester` | Broken object-level authorization (accessing other users' resources) |
-| `prompt-injector` | System prompt extraction, developer mode tricks |
-| `social-engineer` | Social engineering, building false trust to bypass policy |
-
-### Usage
-
-```bash
-# Import a red-team persona
-chanl scenarios import examples/red-team/jailbreak-attacker.yaml
-
-# Run against your agent
-chanl run --scenario "Jailbreak Test" --persona "Jailbreak Attacker"
-```
-
-For adaptive red-team testing, set `personaStrategyType: 'reactive'` on the scenario. The reactive strategy lets the persona analyze the agent's responses for vulnerabilities and adapt its attack strategy turn by turn.
-
----
-
-## Roadmap
-
-Planned features (contributions welcome):
-
-- [ ] **CI/CD integration** — Run scenarios from GitHub Actions, assert on scorecard pass rates
-- [ ] **A/B model comparison** — Side-by-side results for two models on the same scenario
-- [ ] **Regression alerts** — Flag score drops compared to previous runs
-- [ ] **Bias / toxicity detection** — Specialized criteria for checking agent responses
-- [ ] **Webhook triggers** — Evaluate production conversations via webhook
-- [ ] **Python SDK** — Run evaluations from Python test suites
-
-Recently shipped:
-- [x] **Dataset generation** — Batch conversation generation + export as OpenAI/ShareGPT/DPO training data
-- [x] **Batch execution** — Run scenarios with multiple personas in one command
-- [x] **Persona strategy engine** — Pluggable persona reasoning (default + reactive with internal tools)
-- [x] **Red-team presets** — 5 adversarial persona presets (jailbreak, PII extraction, BOLA, prompt injection, social engineering)
-- [x] **Advanced criteria** — Hallucination detection, RAG faithfulness, knowledge retention, role adherence, conversation completeness
-
----
-
-## Chanl Cloud
-
-chanl-eval is the open-source version of [Chanl](https://chanl.ai).
-
-Cloud adds: voice agent testing, real-time production monitoring, team workspaces, emotional persona arcs, webhook-triggered evaluation, and regression detection dashboards.
-
-[Upgrade to Chanl Cloud →](https://chanl.ai?ref=eval-readme)
-
----
-
-## Contributing
+## Development
 
 ```bash
 pnpm install
 docker compose up -d mongodb redis
 pnpm build
-pnpm test
+pnpm test                          # 854 tests
+pnpm dev:server                    # API on :18005
+pnpm dev:dashboard                 # UI on :3010
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## Roadmap
+
+- [x] Auto-generate scenarios from system prompt
+- [x] Reactive persona strategy (adaptive red-teaming)
+- [x] Training data generation (OpenAI/ShareGPT/DPO)
+- [x] 9 criteria handlers (hallucination, RAG, retention, completeness, role adherence)
+- [ ] Voice AI testing (ElevenLabs TTS + Deepgram STT)
+- [ ] CI/CD integration (GitHub Action + `chanl.config.yaml`)
+- [ ] Python SDK
+- [ ] Regression alerts
+
+---
+
+## Chanl Cloud
+
+chanl-eval is the open-source core of [Chanl](https://chanl.ai). Cloud adds voice agent testing, real-time production monitoring, team workspaces, and regression detection dashboards.
+
+[Learn more about Chanl Cloud](https://chanl.ai?ref=eval-readme)
+
+---
+
+## Community
+
+- [Discord](https://discord.gg/chanl) — questions, feedback, feature requests
+- [GitHub Issues](https://github.com/chanl-ai/chanl-eval/issues) — bug reports
+- [LinkedIn](https://www.linkedin.com/company/chanl-ai) — updates
 
 ## License
 
