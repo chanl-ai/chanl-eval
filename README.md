@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/screenshots/logo.png" alt="chanl-eval" width="120" />
-</p>
-
 <h1 align="center">chanl-eval</h1>
 
 <p align="center">
