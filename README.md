@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/logo-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/logo-light.svg" />
+    <img src="docs/screenshots/logo-light.svg" alt="chanl-eval" width="80" />
+  </picture>
+</p>
+
 <h1 align="center">chanl-eval</h1>
 
 <p align="center">
