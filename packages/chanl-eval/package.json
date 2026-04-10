@@ -1,5 +1,6 @@
 {
   "name": "@chanl/eval",
+  "private": true,
   "version": "0.4.0",
   "description": "AI agent testing and evaluation engine — test your agents with simulated personas",
   "bin": {
