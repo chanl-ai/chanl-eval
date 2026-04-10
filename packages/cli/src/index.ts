@@ -21,7 +21,7 @@ export function createProgram(): Command {
   const program = new Command();
 
   program
-    .name('chanl')
+    .name('chanl-eval')
     .description('CLI for chanl-eval: AI agent testing framework')
     .version(VERSION, '-v, --version', 'Output the current version')
     .option('-f, --format <format>', 'Output format: table or json', 'table')

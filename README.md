@@ -61,9 +61,9 @@ Open **[localhost:3010](http://localhost:3010)** — sample scenarios, personas,
 
 ```bash
 npm install -g @chanl/eval-cli
-chanl init my-eval && cd my-eval
-chanl config set server http://localhost:18005
-chanl config set openaiApiKey sk-...
+chanl-eval init my-eval && cd my-eval
+chanl-eval config set server http://localhost:18005
+chanl-eval config set openaiApiKey sk-...
 ```
 
 ### Option 3: SDK
@@ -131,19 +131,19 @@ Scorecard: empathy, tools          Persona: "This is ridiculous"      ✓ Used l
 
 ```bash
 # Run a scenario
-chanl run "Angry Customer" --prompt-id <id>
+chanl-eval run "Angry Customer" --prompt-id <id>
 
 # Auto-generate test scenarios from a system prompt
-chanl generate --from-prompt "You are a support agent for..."
+chanl-eval generate --from-prompt "You are a support agent for..."
 
 # Run all scenarios as a test suite
-chanl test tests/
+chanl-eval test tests/
 
 # Compare two models on the same scenario
-chanl compare --scenario "Refund" --prompt-a <id> --prompt-b <id>
+chanl-eval compare --scenario "Refund" --prompt-a <id> --prompt-b <id>
 
 # Generate training data
-chanl dataset generate --scenario "Refund" --count 50 --export openai
+chanl-eval dataset generate --scenario "Refund" --count 50 --export openai
 ```
 
 ---

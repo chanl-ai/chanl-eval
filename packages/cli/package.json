@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "chanl": "./dist/bin/chanl.js"
+    "chanl-eval": "./dist/bin/chanl.js"
   },
   "files": [
     "dist"
