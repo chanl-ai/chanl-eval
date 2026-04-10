@@ -8,7 +8,7 @@
   <a href="https://github.com/chanl-ai/chanl-eval/stargazers"><img src="https://img.shields.io/github/stars/chanl-ai/chanl-eval?style=flat" alt="Stars" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
   <a href="https://www.npmjs.com/package/@chanl/eval-cli"><img src="https://img.shields.io/npm/v/@chanl/eval-cli.svg" alt="npm" /></a>
-  <a href="https://discord.gg/chanl"><img src="https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/B36e4Nyc"><img src="https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
   <a href="https://www.linkedin.com/company/chanl-ai"><img src="https://img.shields.io/badge/Follow-LinkedIn-0A66C2?logo=linkedin" alt="LinkedIn" /></a>
 </p>
 
@@ -16,7 +16,7 @@
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#features">Features</a> &bull;
   <a href="https://docs.chanl.ai/eval">Docs</a> &bull;
-  <a href="https://discord.gg/chanl">Discord</a> &bull;
+  <a href="https://discord.gg/B36e4Nyc">Discord</a> &bull;
   <a href="https://chanl.ai?ref=eval-readme">Chanl Cloud</a>
 </p>
 
@@ -209,7 +209,7 @@ chanl-eval is the open-source core of [Chanl](https://chanl.ai). Cloud adds voic
 
 ## Community
 
-- [Discord](https://discord.gg/chanl) — questions, feedback, feature requests
+- [Discord](https://discord.gg/B36e4Nyc) — questions, feedback, feature requests
 - [GitHub Issues](https://github.com/chanl-ai/chanl-eval/issues) — bug reports
 - [LinkedIn](https://www.linkedin.com/company/chanl-ai) — updates
 
