@@ -34,6 +34,7 @@ import {
 
 const primaryNav = [
   { title: 'Home', href: '/', icon: Home },
+  { title: 'Generate', href: '/generate', icon: Sparkles },
   { title: 'Playground', href: '/playground', icon: Beaker },
 ];
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUp,
@@ -18,6 +19,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Sparkles,
   Trash2,
   User,
   Wrench,
@@ -229,6 +231,7 @@ function ToolCallBlock({ message }: { message: TranscriptMessage }) {
 export default function PlaygroundPage() {
   const { client, adapterType, setAdapterType } = useEvalConfig();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const DEFAULT_PROMPT = 'You are a helpful customer support agent. Be friendly, concise, and professional.';
 
@@ -595,6 +598,18 @@ export default function PlaygroundPage() {
             ) : (
               <><Play className="mr-2 h-4 w-4" />Run Test</>
             )}
+          </Button>
+          <div className="w-px h-9 bg-border" />
+          <Button
+            variant="outline"
+            onClick={() => {
+              const prompt = encodeURIComponent(systemPrompt);
+              router.push(`/generate?prompt=${prompt}`);
+            }}
+            disabled={!systemPrompt.trim()}
+            data-testid="generate-scenarios-button"
+          >
+            <Sparkles className="mr-2 h-4 w-4" />Generate Scenarios
           </Button>
         </div>
       }

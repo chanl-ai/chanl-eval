@@ -12,6 +12,7 @@ import { registerCompareCommand } from './commands/compare';
 import { registerExecutionsCommand } from './commands/executions';
 import { registerToolFixturesCommand } from './commands/tool-fixtures';
 import { registerDatasetCommand } from './commands/dataset';
+import { registerGenerateCommand } from './commands/generate';
 import { initAnalytics, track } from './analytics';
 
 const VERSION = '0.1.0';
@@ -52,6 +53,7 @@ export function createProgram(): Command {
   registerExecutionsCommand(program);
   registerToolFixturesCommand(program);
   registerDatasetCommand(program);
+  registerGenerateCommand(program);
 
   // Top-level `run` shortcut → delegates to scenarios run
   program

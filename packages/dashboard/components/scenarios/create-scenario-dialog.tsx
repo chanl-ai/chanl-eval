@@ -48,6 +48,7 @@ export function CreateScenarioDialog({ open, onOpenChange }: CreateScenarioDialo
   const { client } = useEvalConfig();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -62,6 +63,7 @@ export function CreateScenarioDialog({ open, onOpenChange }: CreateScenarioDialo
 
   async function onSubmit(values: FormValues) {
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       await client.scenarios.create({
         name: values.name,
@@ -69,15 +71,17 @@ export function CreateScenarioDialog({ open, onOpenChange }: CreateScenarioDialo
         prompt: values.prompt,
         difficulty: values.difficulty,
         category: values.category || undefined,
-        status: 'active',
+        status: 'draft',
         personaIds: [],
       });
-      toast.success(`Scenario "${values.name}" created`);
+      toast.success(`Scenario "${values.name}" created as draft. Assign a persona to activate it.`);
       void queryClient.invalidateQueries({ queryKey: ['scenarios'] });
       form.reset();
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create scenario');
+      const msg = err instanceof Error ? err.message : 'Failed to create scenario';
+      setSubmitError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -165,6 +169,12 @@ export function CreateScenarioDialog({ open, onOpenChange }: CreateScenarioDialo
               />
             </div>
           </div>
+
+          {submitError && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive" data-testid="create-scenario-error">
+              {submitError}
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>

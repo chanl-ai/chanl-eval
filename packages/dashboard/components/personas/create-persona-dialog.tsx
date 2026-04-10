@@ -57,6 +57,7 @@ export function CreatePersonaDialog({ open, onOpenChange }: CreatePersonaDialogP
   const { client } = useEvalConfig();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -74,6 +75,7 @@ export function CreatePersonaDialog({ open, onOpenChange }: CreatePersonaDialogP
 
   async function onSubmit(values: FormValues) {
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       await client.personas.create({
         name: values.name,
@@ -97,7 +99,9 @@ export function CreatePersonaDialog({ open, onOpenChange }: CreatePersonaDialogP
       form.reset();
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create persona');
+      const msg = err instanceof Error ? err.message : 'Failed to create persona';
+      setSubmitError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -212,6 +216,12 @@ export function CreatePersonaDialog({ open, onOpenChange }: CreatePersonaDialogP
               </SelectContent>
             </Select>
           </div>
+
+          {submitError && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+              {submitError}
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>

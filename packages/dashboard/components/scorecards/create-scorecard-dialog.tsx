@@ -49,6 +49,7 @@ export function CreateScorecardDialog({ open, onOpenChange }: CreateScorecardDia
   const queryClient = useQueryClient();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -62,6 +63,7 @@ export function CreateScorecardDialog({ open, onOpenChange }: CreateScorecardDia
 
   async function onSubmit(values: FormValues) {
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       const scorecard = await client.scorecards.create({
         name: values.name,
@@ -79,7 +81,9 @@ export function CreateScorecardDialog({ open, onOpenChange }: CreateScorecardDia
         router.push(`/scorecards/${scorecard.id}`);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create scorecard');
+      const msg = err instanceof Error ? err.message : 'Failed to create scorecard';
+      setSubmitError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -144,6 +148,12 @@ export function CreateScorecardDialog({ open, onOpenChange }: CreateScorecardDia
               </Select>
             </div>
           </div>
+
+          {submitError && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+              {submitError}
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>

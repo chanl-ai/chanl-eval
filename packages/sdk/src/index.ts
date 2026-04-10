@@ -14,6 +14,16 @@ export { ToolFixturesModule } from './modules/tool-fixtures';
 export { SettingsModule } from './modules/settings';
 export { ChatModule } from './modules/chat';
 export { DatasetsModule } from './modules/datasets';
+export { GenerationModule } from './modules/generation';
+export type {
+  GenerateOptions,
+  GeneratedScenario,
+  GeneratedPersona,
+  GeneratedCriterion,
+  GeneratedScorecard,
+  GeneratedSuite,
+  PersistResult,
+} from './modules/generation';
 export type {
   GenerateDatasetOptions,
   GenerateDatasetResponse,
