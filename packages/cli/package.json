@@ -1,6 +1,6 @@
 {
   "name": "@chanl/eval-cli",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "CLI for chanl-eval: manage scenarios, personas, scorecards",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
