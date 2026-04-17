@@ -15,7 +15,6 @@ COPY packages/scenarios-core/package.json packages/scenarios-core/package.json
 COPY packages/scorecards-core/package.json packages/scorecards-core/package.json
 COPY packages/server/package.json packages/server/package.json
 COPY packages/cli/package.json packages/cli/package.json
-COPY packages/chanl-eval/package.json packages/chanl-eval/package.json
 
 # Install all dependencies
 RUN pnpm install --frozen-lockfile || pnpm install
