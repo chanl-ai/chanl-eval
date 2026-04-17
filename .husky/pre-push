@@ -21,6 +21,13 @@ if [ -n "$VIOLATIONS" ]; then
 fi
 echo "  ✓ No 'as any', @ts-ignore, or @ts-nocheck"
 
+# Verify Dockerfile package references resolve. Catches issue #8:
+# a stale `COPY packages/<removed>/package.json` line breaking
+# `docker compose up` for everyone.
+echo ""
+echo "Verifying Dockerfile package paths..."
+node scripts/verify-dockerfile-packages.mjs || { echo "❌ Dockerfile check failed"; exit 1; }
+
 # Build
 echo ""
 echo "Building..."

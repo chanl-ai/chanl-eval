@@ -47,7 +47,9 @@ COPY --from=builder /app/packages/server/package.json packages/server/package.js
 COPY --from=builder /app/packages/server/dist packages/server/dist
 
 # Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile || pnpm install --prod
+# --ignore-scripts skips the root `prepare: husky` hook, which is dev-only
+# and isn't installed in a --prod tree.
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts || pnpm install --prod --ignore-scripts
 
 EXPOSE 18005
 

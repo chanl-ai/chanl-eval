@@ -22,6 +22,13 @@ help: ## Show all targets
 infra: ## Start MongoDB + Redis containers
 	cd $(CURDIR) && docker compose up -d
 
+docker-verify: ## Static + full `docker compose build` check (run before releasing Docker changes)
+	@node $(CURDIR)/scripts/verify-dockerfile-packages.mjs
+	@echo ""
+	@echo "Running full docker compose build (this may take a minute)..."
+	@cd $(CURDIR) && docker compose build server dashboard
+	@echo "✅ Docker images build end-to-end"
+
 server: ## Start server with hot reload (port 18005)
 	cd $(CURDIR)/packages/server && pnpm start:dev
 
