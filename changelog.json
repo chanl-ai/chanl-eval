@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.4.1",
+    "date": "2026-04-17",
+    "title": "Docker Compose Fix",
+    "description": "`docker compose up` now works out of the box. Removes a stale reference to the deleted @chanl/eval wrapper package that broke the dashboard build, and stops the server runtime install from failing on the devDependency `husky` prepare hook. Adds a pre-push regression test so this class of bug can't ship again.",
+    "tag": "fix"
+  },
+  {
     "version": "0.3.0",
     "date": "2026-04-02",
     "title": "Training Data Generation",
