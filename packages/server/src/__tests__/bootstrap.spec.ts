@@ -9,6 +9,7 @@ import { ScenarioService } from '@chanl/scenarios-core';
 import { ScorecardsService } from '@chanl/scorecards-core';
 import { ApiKeyService } from '../auth/api-key.service';
 import { PromptsService } from '../prompts/prompts.service';
+import { IndexGuardService } from '../bootstrap/index-guard.service';
 
 // ════════════════════════════════════════════════════════════════════════════
 // First-run contract — assertions on STATE, not on mock calls.
@@ -97,6 +98,7 @@ describe('BootstrapService', () => {
   let mockScorecardsService: any;
   let mockApiKeyService: any;
   let mockPromptsService: any;
+  let mockIndexGuard: any;
 
   const fakePersonas = [
     { name: 'Angry - Karen', id: new Types.ObjectId().toString() },
@@ -140,6 +142,8 @@ describe('BootstrapService', () => {
         .mockResolvedValue([{ name: 'Customer Support Agent' }]),
     };
 
+    mockIndexGuard = { verify: jest.fn().mockResolvedValue([]) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BootstrapService,
@@ -148,6 +152,7 @@ describe('BootstrapService', () => {
         { provide: ScorecardsService, useValue: mockScorecardsService },
         { provide: ApiKeyService, useValue: mockApiKeyService },
         { provide: PromptsService, useValue: mockPromptsService },
+        { provide: IndexGuardService, useValue: mockIndexGuard },
       ],
     }).compile();
 

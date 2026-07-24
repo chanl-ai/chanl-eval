@@ -20,14 +20,13 @@ interface Match {
 }
 
 /**
- * Deterministic pattern matching over a transcript — no LLM call, no cost, no variance.
+ * Deterministic pattern matching over a transcript. No LLM call, no cost, no sampling variance.
  *
- * Exists because some failures are decidable by inspection: an agent that sends "$XX per month" or
- * "[Replace with pricing]" to a customer is wrong regardless of context. Sending that to an LLM judge
- * costs money and introduces sampling noise to answer a question a regex answers exactly.
+ * Some failures are decidable by inspection: unfilled template output is wrong regardless of
+ * context, so a regex answers exactly what an LLM judge would answer approximately and for a fee.
  *
- * Defaults to `must_not_match` against the agent's turns only — the persona is *supposed* to be able to
- * say anything, so scanning its turns would produce failures the agent under test cannot control.
+ * Defaults to `must_not_match` against agent turns only. The persona may say anything, so scanning
+ * its turns would fail the agent for output it does not control.
  */
 export class PatternHandler implements CriteriaHandler {
   readonly type = 'pattern';

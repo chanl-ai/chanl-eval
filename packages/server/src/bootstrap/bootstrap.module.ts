@@ -4,6 +4,7 @@ import { ScorecardsModule } from '@chanl/scorecards-core';
 import { ApiKeyModule } from '../auth/api-key.module';
 import { PromptsModule } from '../prompts/prompts.module';
 import { BootstrapService } from './bootstrap.service';
+import { IndexGuardService } from './index-guard.service';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { BootstrapService } from './bootstrap.service';
     ApiKeyModule,
     PromptsModule,
   ],
-  providers: [BootstrapService],
-  exports: [BootstrapService],
+  providers: [BootstrapService, IndexGuardService],
+  exports: [BootstrapService, IndexGuardService],
 })
 export class BootstrapModule {}

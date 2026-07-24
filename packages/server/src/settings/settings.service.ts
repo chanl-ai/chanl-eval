@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Settings, SettingsDocument } from './settings.schema';
+import {
+  Settings,
+  SettingsDocument,
+  SETTINGS_SINGLETON_KEY,
+} from './settings.schema';
 
 /** Prefix used when returning keys to a client. Never accept a value that starts with it. */
 export const MASK_PREFIX = '••••';
@@ -22,13 +26,45 @@ export class SettingsService {
     private readonly model: Model<SettingsDocument>,
   ) {}
 
+  /**
+   * The settings singleton, created on first access.
+   *
+   * Upserts on a constant key so concurrent boots converge on one document. Two settings documents
+   * would make `getApiKey` non-deterministic.
+   */
   async get(): Promise<SettingsDocument> {
-    let settings = await this.model.findOne();
-    if (!settings) {
-      settings = await this.model.create({});
-      this.logger.log('Created default settings document');
+    const existing = await this.model.findOne({ key: SETTINGS_SINGLETON_KEY });
+    if (existing) return existing;
+
+    // Adopt a document written before the singleton key existed, so an upgrade does not abandon
+    // already-saved provider keys.
+    const legacy = await this.model.findOne({ key: { $exists: false } });
+    if (legacy) {
+      const adopted = await this.model.findByIdAndUpdate(
+        legacy._id,
+        { $set: { key: SETTINGS_SINGLETON_KEY } },
+        { new: true },
+      );
+      if (adopted) {
+        this.logger.log('Adopted pre-existing settings document into the singleton key');
+        return adopted;
+      }
     }
-    return settings;
+
+    try {
+      return (await this.model.findOneAndUpdate(
+        { key: SETTINGS_SINGLETON_KEY },
+        { $setOnInsert: { key: SETTINGS_SINGLETON_KEY } },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      ))!;
+    } catch (error: any) {
+      // Lost the insert race against another node. The unique index did its job; re-read the winner.
+      if (error?.code === 11000) {
+        const winner = await this.model.findOne({ key: SETTINGS_SINGLETON_KEY });
+        if (winner) return winner;
+      }
+      throw error;
+    }
   }
 
   async getApiKey(provider: string): Promise<string | undefined> {

@@ -14,10 +14,8 @@ interface JudgeParams {
     max?: number;
   };
   /**
-   * Number of independent judge samples to draw for this criterion (self-consistency).
-   * 1 (default) preserves the original single-call behaviour. k>1 votes across samples and reports
-   * inter-sample agreement as `confidence` — a single sample gives you a verdict with no way to tell
-   * whether the judge was certain or coin-flipping.
+   * Independent judge samples to draw for this criterion (self-consistency). Default 1.
+   * k > 1 votes across samples and reports inter-sample agreement as `confidence`.
    */
   selfConsistency?: number;
 }
@@ -85,9 +83,8 @@ ${params.transcript}`;
 /**
  * Parse one judge response.
  *
- * Throws on unparseable output rather than substituting a default. The previous behaviour returned
- * `{ result: 5, passed: false }` for malformed JSON, which is indistinguishable in the UI from the
- * judge genuinely deciding the agent was mediocre — a transport problem silently became a bad grade.
+ * Throws on unparseable output rather than substituting a default value. A substituted score is
+ * indistinguishable from a genuine verdict, which turns a transport failure into a bad grade.
  */
 function parseJudgeResponse(raw: string, evaluationType: string): JudgeSample {
   let parsed: Partial<JudgeSample>;
@@ -171,10 +168,8 @@ function clampSelfConsistency(value: number | undefined): number {
   return Math.max(1, Math.min(MAX_SELF_CONSISTENCY, Math.floor(value)));
 }
 
-/**
- * One sample, with a single retry. Judge APIs fail transiently and a malformed JSON body is often
- * fixed by simply asking again — cheaper than discarding the criterion.
- */
+/** One sample, with a single retry. Judge APIs fail transiently and a retry is cheaper than
+ * discarding the criterion. */
 async function sampleOnce(
   call: RawJudgeCall,
   params: JudgeParams,

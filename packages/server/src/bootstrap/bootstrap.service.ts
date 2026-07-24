@@ -8,6 +8,7 @@ import { ScenarioService } from '@chanl/scenarios-core';
 import { ScorecardsService } from '@chanl/scorecards-core';
 import { ApiKeyService } from '../auth/api-key.service';
 import { PromptsService } from '../prompts/prompts.service';
+import { IndexGuardService } from './index-guard.service';
 
 @Injectable()
 export class BootstrapService implements OnApplicationBootstrap {
@@ -20,6 +21,7 @@ export class BootstrapService implements OnApplicationBootstrap {
     private readonly scorecardsService: ScorecardsService,
     private readonly apiKeyService: ApiKeyService,
     private readonly promptsService: PromptsService,
+    private readonly indexGuard: IndexGuardService,
   ) {}
 
   get isSeeded(): boolean {
@@ -40,6 +42,10 @@ export class BootstrapService implements OnApplicationBootstrap {
 
   private async seed(): Promise<void> {
     const summary: string[] = [];
+
+    // 0. Verify the unique indexes that carry correctness guarantees. Seeding below relies on them
+    // for idempotency, and a silently-failed index build would make that reliance false.
+    await this.indexGuard.verify();
 
     // 1. Bootstrap API key if none exist
     const hasKeys = await this.apiKeyService.hasAnyKeys();

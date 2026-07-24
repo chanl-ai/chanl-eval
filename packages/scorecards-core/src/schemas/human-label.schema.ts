@@ -4,18 +4,14 @@ import { Document, Types, Schema as MongooseSchema } from 'mongoose';
 export type HumanLabelDocument = HumanLabel & Document;
 
 /**
- * A human's verdict on one criterion of one scored run — the ground truth the LLM judge is measured
- * against.
+ * A human verdict on one criterion of one scored run. Ground truth for measuring the LLM judge.
  *
- * Stored in its own collection rather than embedded in the scorecard result, for three reasons:
- * the result document is an immutable record of what the judge said and should not be rewritten when
- * a person disagrees with it; several reviewers may label the same criterion (which is what lets us
- * report human-vs-human agreement as a ceiling); and agreement is computed by scanning labels across
- * many runs, which is a query against labels, not against results.
+ * Kept in its own collection rather than embedded in the scorecard result: the result is an
+ * immutable record of the judge's output, multiple reviewers may label the same criterion, and
+ * agreement is computed across many runs.
  *
- * The judge's verdict is snapshotted onto the label at write time. Re-running an evaluation replaces
- * the criteria results, so without a snapshot every historical label would silently re-pair itself
- * against a newer verdict and the agreement history would rewrite itself.
+ * The judge verdict is snapshotted at write time. Re-evaluating a run replaces its criteria
+ * results, so an unsnapshotted label would re-pair against a newer verdict and rewrite history.
  */
 @Schema({ collection: 'human_labels', timestamps: true })
 export class HumanLabel {

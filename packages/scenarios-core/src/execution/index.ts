@@ -8,3 +8,5 @@ export * from './template-renderer';
 export * from './llm-config-resolver';
 export * from './agent-config-resolver';
 export { buildLlmJudge, buildOpenAiJudge } from './judge-llm';
+export { SIMULATION_CONFIG_PROVIDER } from './simulation-config.provider';
+export type { SimulationConfigProvider } from './simulation-config.provider';

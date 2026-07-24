@@ -18,9 +18,8 @@ const STORAGE_AGENT_MODEL = 'chanl-eval-agent-model';
 const STORAGE_AGENT_BASE_URL = 'chanl-eval-agent-base-url';
 const STORAGE_SIM_MODEL = 'chanl-eval-sim-model';
 
-// Legacy keys from when the Settings page stored provider credentials in the browser. They never
-// reached the engine (runs read keys from the server), so they were pure dead weight — and leaving a
-// secret sitting in localStorage after we stopped using it is worse than useless. Purged on load.
+// Credentials are stored server-side. These browser keys are purged on load so no secret is left
+// behind by older builds.
 const LEGACY_SECRET_KEYS = ['chanl-eval-agent-api-key', 'chanl-eval-sim-api-key'];
 
 function envServer(): string {
