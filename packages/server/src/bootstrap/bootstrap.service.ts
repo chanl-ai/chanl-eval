@@ -40,6 +40,13 @@ export class BootstrapService implements OnApplicationBootstrap {
     }
   }
 
+  /**
+   * Seeds default data on every boot.
+   *
+   * Seeding is per-entity upsert keyed on a natural key, which cannot distinguish "the user deleted
+   * this default" from "never seeded". A deleted default is therefore restored on the next boot.
+   * This is intentional: defaults are treated as part of the installation, not as user data.
+   */
   private async seed(): Promise<void> {
     const summary: string[] = [];
 
