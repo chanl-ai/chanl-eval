@@ -444,6 +444,43 @@ here and does not need re-auditing.
 
 No regression, no improvement. Tracked as A7.
 
+## File size is regressing, and the metric hid it
+
+### E1 — Every fix landed in a file that was already over budget
+
+Six files above the 500-line limit grew by a net **+254 lines** during the fixes recorded above. None
+shrank.
+
+| File | Before | After | Δ |
+|---|---:|---:|---:|
+| `sdk/src/types.ts` | 666 | 785 | +119 |
+| `scorecards-core/scorecards.service.ts` | 799 | 865 | +66 |
+| `scenarios-core/scenario-execution.service.ts` | 676 | 701 | +25 |
+| `scenarios-core/scenario.service.ts` | 776 | 799 | +23 |
+| `dashboard/executions/[id]/page.tsx` | 646 | 666 | +20 |
+| `scenarios-core/execution-processor.ts` | 694 | 695 | +1 |
+
+New files created in the same period are all well inside the limit — largest is 331 lines. So the
+discipline holds for new code and fails completely for existing code: every correctness fix was
+appended to the nearest large service rather than prompting a split.
+
+### E2 — "17 files over 500 LOC" is the wrong measurement
+
+That count was reported as unchanged and therefore "no regression". It cannot detect this: a file
+moving from 799 to 865 does not change the count. The metric is insensitive to severity and reports
+stability while the problem compounds.
+
+**Use total excess instead** — the sum of `max(0, loc - 500)` across the repo. It moves whenever any
+oversized file grows, so appending to a large file registers immediately rather than being absorbed.
+
+### E3 — Scorecard tree construction is not atomic with its insert
+
+Surfaced while making seeding idempotent, and pre-existing. `createDefaultScorecardIfNeeded` inserts
+the scorecard, then builds 5 categories and 11 criteria in follow-up writes. A racing replica can
+receive the scorecard id before that tree exists, and a crash between the two steps leaves an empty
+scorecard permanently, since nothing re-checks. A complete fix needs unique indexes on
+`scorecard_categories` and `scorecard_criteria` so the tree build is itself idempotent.
+
 ## Review log
 
 | Date | Verdict | Notes |
