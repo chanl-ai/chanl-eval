@@ -192,6 +192,94 @@ competitive-gap problem, it has an adoption problem. W0–W3 are all small. Voic
 
 ---
 
+## Architecture review — 2026-07-24
+
+Audited against: no file over 500 LOC, DRY, testable, durable, scalable past one node.
+Findings are recorded, **not fixed** — each needs a decision, and three of them change contracts.
+
+### A1 — Stateful adapter singletons make concurrency unsafe (blocker for scale)
+
+`AdapterRegistry` stores **one instance per type** (`adapter-registry.ts:10`). `OpenAIAdapter.connect()`
+mutates `this.config` (`openai.adapter.ts:19`) and `disconnect()` blanks it (`:157`).
+`execution-processor.ts:194` grabs that shared instance per job.
+
+`queues.config.ts` declares `concurrency: 5` — and **that value is never wired to anything** (it is
+referenced only by its own declaration). Bull therefore runs the default concurrency of 1, which is
+the only reason this is not currently corrupting runs.
+
+The moment concurrency rises above 1 in a process: job A's `connect()` overwrites job B's model, key
+and endpoint, and A's `disconnect()` blanks the config while B is mid-conversation. That is
+cross-run credential bleed, not just a data race.
+
+Consequence for scale: you cannot raise per-node concurrency at all. Horizontal scale is possible
+only by adding processes pinned to concurrency 1 — the expensive way to buy throughput.
+
+**Fix:** make adapters stateless — pass config into `sendMessage` instead of holding it — which also
+deletes the connect/disconnect lifecycle and makes them trivially testable. A registry `create(type)`
+factory is the smaller change but keeps the lifecycle. Then wire `workerOptions.concurrency` for real,
+or delete it so it stops advertising a capability that does not exist.
+
+### A2 — Settings singleton has a check-then-create race
+
+`settings.service.ts:26-28` does `findOne()` then `create({})` with no unique index and no upsert.
+Two nodes booting together, or two concurrent first requests, create two settings documents.
+`getApiKey` then reads `findOne()`, so which one answers is arbitrary — a key saved through the UI can
+silently stop being found.
+
+**Fix:** `findOneAndUpdate({}, { $setOnInsert: {} }, { upsert: true, new: true })` plus a unique index
+on a constant discriminator field.
+
+### A3 — Bootstrap seeding runs per node with no lock
+
+`bootstrap.service.ts:27` seeds personas, scorecards and scenarios in `onApplicationBootstrap`. It
+guards with "already exists" checks, which is the same check-then-act pattern as A2 — concurrent
+replica boots can both pass the check. **Fix:** unique keys on seeded entities + upsert, or an
+advisory lock.
+
+### A4 — Retried jobs re-run the whole conversation
+
+`defaultJobOptions.attempts: 3` with exponential backoff, and the processor sets `status: running`
+with no guard for an already-completed execution. `stepResults` is `$set` from a fresh array, so a
+retry at least does not duplicate the transcript — but a transient failure late in the job re-drives
+every LLM turn and overwrites a previously good result. **Fix:** make the job idempotent — short-circuit
+if the execution already has results, or make retries resume rather than restart.
+
+### A5 — DRY: two implementations of "call an LLM"
+
+`judge-llm.ts` hand-rolls `fetch` plus provider branching, entirely separate from the adapters the
+persona path uses. Both now carry their own baseUrl handling. A fix applied to one will not reach the
+other. Consolidating the judge onto the adapters (once A1 makes them stateless) removes the fork.
+
+### A6 — A service reaches around its own abstraction into Mongo
+
+`scenario-execution.service.ts:509` does
+`this.executionModel.db.collection('settings').findOne({})` — bypassing `SettingsService` entirely,
+duplicating resolution logic that now lives in `getApiKey()` / `getSimulationBaseUrl()`, and making
+the judge path untestable without a live database. **This line was extended rather than fixed while
+adding `simulationBaseUrl` in this batch** — worth correcting before it grows a third reader.
+
+### A7 — 17 source files over 500 LOC
+
+| File | LOC | Note |
+|---|---|---|
+| `server/scripts/seed/insurance-seed.ts` | 1315 | data, not logic — lowest priority |
+| `dashboard/.../playground/page.tsx` | 1097 | one component doing config, run, and display |
+| `cli/src/commands/scenarios.ts` | 859 | |
+| `scorecards-core/scorecards.service.ts` | 799 | CRUD for four entities in one service |
+| `sdk/src/types.ts` | 785 | single barrel of every type; grew ~90 lines this batch |
+| `scenarios-core/.../scenario.service.ts` | 776 | |
+| `scenarios-core/execution-processor.ts` | 695 | **the architectural one** — conversation loop + scoring + persistence + config resolution in one class |
+| `dashboard/.../executions/[id]/page.tsx` | 666 | |
+
+`execution-processor.ts` is the one worth splitting on its seams rather than by line count: the
+conversation loop, the scoring hand-off, and persistence are three separable jobs.
+
+### Suggested order
+
+A2 and A3 are small, self-contained, and are correctness bugs today under replica boots.
+A1 is the real blocker and unlocks A5. A6 is a ten-line fix. A4 needs a decision on retry semantics.
+A7 follows A1 naturally, since making adapters stateless already carves up the processor.
+
 ## Review log
 
 | Date | Verdict | Notes |
