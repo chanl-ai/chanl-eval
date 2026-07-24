@@ -11,6 +11,7 @@ import {
   Database,
   FileText,
   Home,
+  Scale,
   ScrollText,
   Settings,
   Sparkles,
@@ -44,6 +45,7 @@ const dataNav = [
   { title: 'Personas', href: '/personas', icon: UserCircle },
   { title: 'Tool Fixtures', href: '/tool-fixtures', icon: Wrench },
   { title: 'Scorecards', href: '/scorecards', icon: ClipboardList },
+  { title: 'Judge benchmark', href: '/benchmark', icon: Scale },
   { title: 'Datasets', href: '/datasets', icon: Database },
 ];
 

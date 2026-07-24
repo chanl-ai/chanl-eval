@@ -80,3 +80,32 @@ export {
   EvaluateOptions,
   EvaluationResult,
 } from './evaluation';
+
+// Human-in-the-loop benchmarking
+export {
+  HumanLabel,
+  HumanLabelDocument,
+  HumanLabelSchema,
+} from './schemas';
+export {
+  LabelsService,
+  LabelsController,
+  CreateLabelDto,
+  AgreementQueryDto,
+  agreementFor,
+  overallAgreement,
+  booleanAgreement,
+  scoreAgreement,
+  confidenceCalibration,
+  interpret,
+  MIN_LABELS_FOR_KAPPA,
+} from './labels';
+export type {
+  CreateLabelInput,
+  CriterionAgreement,
+  AgreementReport,
+  AgreementStats,
+  OverallAgreement,
+  Pair,
+  Interpretation,
+} from './labels';

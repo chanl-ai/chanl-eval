@@ -46,6 +46,7 @@ import { ShareResults } from '@/components/share-results';
 import { useFirstRunPrompt } from '@/components/first-run-prompt';
 import { useEvalConfig } from '@/lib/eval-config';
 import type { ScoreMetric, ScorecardCriterionDisplay } from '@/components/scorecard/types';
+import { CriterionReviewCard } from '@/components/labels/criterion-review-card';
 import type { Execution, Scorecard, ScorecardResult } from '@chanl/eval-sdk';
 
 // ---------------------------------------------------------------------------
@@ -448,8 +449,8 @@ export default function RunDetailPage() {
   return (
     <PageLayout
       backHref="/executions"
-      title={execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail'}
-      description={execution ? formatDate(execution.createdAt) : 'Loading...'}
+      title={scenarioName ?? (execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail')}
+      description={execution ? `Run ${execution.id.slice(-8)} · ${formatDate(execution.createdAt)}` : 'Loading...'}
       titleExtra={
         execution ? (
           <div className="flex items-center gap-2">
@@ -608,6 +609,25 @@ export default function RunDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Human review — grade the judge's verdicts so its agreement can be measured.
+              Only available once results live in the scorecard_results collection, since a label
+              has to point at a persisted result id. */}
+          {scorecardResult?.id && (scorecardResult.criteriaResults?.length ?? 0) > 0 && (
+            <CriterionReviewCard
+              scorecardResultId={scorecardResult.id}
+              criteria={(scorecardResult.criteriaResults ?? []).map((cr: any) => ({
+                criteriaId: cr.criteriaId,
+                criteriaKey: cr.criteriaKey,
+                criteriaName: cr.criteriaName,
+                result: cr.result ?? null,
+                passed: cr.passed,
+                reasoning: cr.reasoning,
+                confidence: cr.confidence,
+                notApplicable: cr.notApplicable,
+              }))}
+            />
+          )}
 
           {/* Errors */}
           {execution.errorMessages && execution.errorMessages.length > 0 && (

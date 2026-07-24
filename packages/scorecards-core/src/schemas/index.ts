@@ -45,3 +45,9 @@ export {
   CriteriaResult,
   AnalysisMetadata,
 } from './scorecard-result.schema';
+
+export {
+  HumanLabel,
+  HumanLabelDocument,
+  HumanLabelSchema,
+} from './human-label.schema';

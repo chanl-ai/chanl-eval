@@ -15,6 +15,9 @@ import {
   ScorecardResult,
   ScorecardResultSchema,
 } from './schemas/scorecard-result.schema';
+import { HumanLabel, HumanLabelSchema } from './schemas/human-label.schema';
+import { LabelsService } from './labels/labels.service';
+import { LabelsController } from './labels/labels.controller';
 import { CriteriaHandlerRegistry } from './handlers/criteria-handler-registry';
 import {
   HallucinationHandler,
@@ -52,9 +55,10 @@ function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
       { name: ScorecardCategory.name, schema: ScorecardCategorySchema },
       { name: ScorecardCriteria.name, schema: ScorecardCriteriaSchema },
       { name: ScorecardResult.name, schema: ScorecardResultSchema },
+      { name: HumanLabel.name, schema: HumanLabelSchema },
     ]),
   ],
-  controllers: [ScorecardsController],
+  controllers: [ScorecardsController, LabelsController],
   providers: [
     ScorecardsService,
     {
@@ -62,7 +66,13 @@ function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
       useFactory: createCriteriaHandlerRegistry,
     },
     EvaluationService,
+    LabelsService,
   ],
-  exports: [ScorecardsService, EvaluationService, CriteriaHandlerRegistry],
+  exports: [
+    ScorecardsService,
+    EvaluationService,
+    CriteriaHandlerRegistry,
+    LabelsService,
+  ],
 })
 export class ScorecardsModule {}

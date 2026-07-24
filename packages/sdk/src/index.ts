@@ -12,6 +12,7 @@ export { ScorecardsModule } from './modules/scorecards';
 export { ExecutionsModule } from './modules/executions';
 export { ToolFixturesModule } from './modules/tool-fixtures';
 export { SettingsModule } from './modules/settings';
+export { LabelsModule } from './modules/labels';
 export { ChatModule } from './modules/chat';
 export { DatasetsModule } from './modules/datasets';
 export { GenerationModule } from './modules/generation';
@@ -97,6 +98,14 @@ export type {
   SettingsStatus,
   KeySource,
   UpdateSettingsDto,
+
+  // Human-in-the-loop benchmarking
+  HumanLabel,
+  CreateLabelDto,
+  AgreementStats,
+  OverallAgreement,
+  CriterionAgreement,
+  AgreementReport,
   // Chat
   ChatSession,
   ChatRequest,
