@@ -992,4 +992,35 @@ describe('ScorecardsService', () => {
       expect(result).toBeNull();
     });
   });
+
+  // ---- default tree durability (E3) ----
+
+  it('rebuilds the tree for a scorecard row left without one', async () => {
+    // A crash between inserting the scorecard and writing its categories used to leave an empty
+    // scorecard permanently, because nothing re-checked.
+    const first = await service.createDefaultScorecardIfNeeded();
+    expect(first).toBeTruthy();
+
+    await categoryModel.deleteMany({ scorecardId: first });
+    await criteriaModel.deleteMany({ scorecardId: first });
+
+    const second = await service.createDefaultScorecardIfNeeded();
+
+    expect(second?.toString()).toBe(first?.toString());
+    expect(await categoryModel.countDocuments({ scorecardId: first })).toBeGreaterThan(0);
+    expect(await criteriaModel.countDocuments({ scorecardId: first })).toBeGreaterThan(0);
+  });
+
+  it('does not duplicate categories when repairing a partially built tree', async () => {
+    const id = await service.createDefaultScorecardIfNeeded();
+    const full = await categoryModel.countDocuments({ scorecardId: id });
+
+    // Leave one category behind, as a crash mid-build would.
+    const survivors = await categoryModel.find({ scorecardId: id }).limit(1);
+    await categoryModel.deleteMany({ scorecardId: id, _id: { $ne: survivors[0]._id } });
+
+    await service.createDefaultScorecardIfNeeded();
+
+    expect(await categoryModel.countDocuments({ scorecardId: id })).toBe(full);
+  });
 });

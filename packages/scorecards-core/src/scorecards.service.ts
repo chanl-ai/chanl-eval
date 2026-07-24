@@ -1,3 +1,4 @@
+import { DEFAULT_SCORECARD } from './default-scorecard';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types, FilterQuery } from 'mongoose';
@@ -518,13 +519,24 @@ export class ScorecardsService {
       const defaultData = this.getDefaultScorecardData();
       const existing = await this.upsertDefaultScorecard(defaultData);
 
-      // Whoever performed the insert owns building the category and criteria tree below; a caller
-      // that matched an existing scorecard must not build a second one.
+      // A scorecard row is not the same as a usable scorecard. The tree is built in follow-up
+      // writes, so a crash between the two, or a replica reading the id before the winner finished,
+      // leaves a scorecard with no categories and nothing that ever re-checks. Verify the tree
+      // rather than assuming the row implies it.
       if (existing) {
-        this.logger.log(
-          `Default scorecard already exists: ${existing._id}`,
+        // Compare against the expected count, not against zero. A tree that is partially built —
+        // a crash midway, or a replica that stopped early — has categories but is still unusable,
+        // and a presence check would declare it finished and leave it that way.
+        const categoryCount = await this.categoryModel.countDocuments({
+          scorecardId: existing._id,
+        });
+        if (categoryCount >= defaultData.categories.length) {
+          this.logger.log(`Default scorecard already exists: ${existing._id}`);
+          return existing._id as Types.ObjectId;
+        }
+        this.logger.warn(
+          `Default scorecard ${existing._id} has ${categoryCount}/${defaultData.categories.length} categories; completing its tree`,
         );
-        return existing._id as Types.ObjectId;
       }
 
       const inserted = await this.scorecardModel
@@ -543,32 +555,44 @@ export class ScorecardsService {
           ? new Types.ObjectId(scorecardId)
           : scorecardId;
 
-      // Create categories and criteria
+      // Idempotent: the repair path above may run against a partially-built tree.
       for (const categoryData of defaultData.categories) {
-        const category = await this.createCategory(
-          scorecardObjectId.toString(),
+        const category = await this.categoryModel.findOneAndUpdate(
+          { scorecardId: scorecardObjectId, name: categoryData.name },
           {
-            name: categoryData.name,
-            description: categoryData.description,
-            weight: categoryData.weight,
+            $setOnInsert: {
+              scorecardId: scorecardObjectId,
+              name: categoryData.name,
+              description: categoryData.description,
+              weight: categoryData.weight,
+              version: 1,
+            },
           },
+          { new: true, upsert: true, setDefaultsOnInsert: true },
         );
 
         const categoryIdStr =
           category._id?.toString() || '';
 
         for (const criteriaData of categoryData.criteria) {
-          await this.createCriteria(
-            scorecardObjectId.toString(),
-            categoryIdStr,
+          // Upsert, not create: criteria may survive a partially-rebuilt tree, and the unique
+          // {scorecardId, key} index would otherwise abort the repair on the first one that exists.
+          await this.criteriaModel.findOneAndUpdate(
+            { scorecardId: scorecardObjectId, key: criteriaData.key },
             {
-              categoryId: categoryIdStr,
-              key: criteriaData.key,
-              name: criteriaData.name,
-              type: criteriaData.type,
-              settings: criteriaData.settings,
-              threshold: criteriaData.threshold,
+              $setOnInsert: {
+                scorecardId: scorecardObjectId,
+                categoryId: new Types.ObjectId(categoryIdStr),
+                key: criteriaData.key,
+                name: criteriaData.name,
+                type: criteriaData.type,
+                settings: criteriaData.settings,
+                threshold: criteriaData.threshold,
+                version: 1,
+                isActive: true,
+              },
             },
+            { upsert: true, setDefaultsOnInsert: true },
           );
         }
       }
@@ -653,201 +677,17 @@ export class ScorecardsService {
    * Get default scorecard data structure.
    * Creates a comprehensive scorecard with 5 categories covering all aspects of call quality.
    */
-  private getDefaultScorecardData(): {
-    name: string;
-    description: string;
-    status: string;
-    categories: Array<{
+  private getDefaultScorecardData() {
+    return DEFAULT_SCORECARD as unknown as {
       name: string;
       description: string;
-      weight: number;
-      criteria: Array<{
-        key: string;
+      status: string;
+      categories: Array<{
         name: string;
-        type: string;
-        settings: any;
-        threshold?: any;
+        description: string;
+        weight: number;
+        criteria: Array<Record<string, any>>;
       }>;
-    }>;
-  } {
-    return {
-      name: 'Call Quality Scorecard',
-      description:
-        'Comprehensive call quality evaluation with communication, problem-solving, and timing metrics',
-      status: 'active',
-      categories: [
-        {
-          name: 'Opening & Greeting',
-          description: 'Evaluates how the agent opens the call',
-          weight: 15,
-          criteria: [
-            {
-              key: 'proper_greeting',
-              name: 'Proper Greeting',
-              type: CriteriaType.PROMPT,
-              settings: {
-                description:
-                  'Did the agent introduce themselves and greet the customer professionally?',
-                evaluationType: 'boolean',
-              },
-              threshold: { expectedValue: true },
-            },
-            {
-              key: 'greeting_keywords',
-              name: 'Greeting Keywords',
-              type: CriteriaType.KEYWORD,
-              settings: {
-                matchType: 'must_contain',
-                keyword: [
-                  'hello',
-                  'hi',
-                  'good morning',
-                  'good afternoon',
-                  'good evening',
-                  'thank you for calling',
-                  'how can I help',
-                ],
-              },
-            },
-          ],
-        },
-        {
-          name: 'Problem Resolution',
-          description:
-            'Evaluates how well the agent addresses customer issues',
-          weight: 35,
-          criteria: [
-            {
-              key: 'issue_identified',
-              name: 'Issue Identified',
-              type: CriteriaType.PROMPT,
-              settings: {
-                description:
-                  "Did the agent correctly identify and understand the customer's issue or request?",
-                evaluationType: 'boolean',
-              },
-              threshold: { expectedValue: true },
-            },
-            {
-              key: 'resolution_quality',
-              name: 'Resolution Quality',
-              type: CriteriaType.PROMPT,
-              settings: {
-                description:
-                  "Rate how effectively the agent resolved or addressed the customer's issue (0-10, where 10 is fully resolved)",
-                evaluationType: 'score',
-              },
-              threshold: { min: 7, max: 10 },
-            },
-            {
-              key: 'clear_explanation',
-              name: 'Clear Explanation',
-              type: CriteriaType.PROMPT,
-              settings: {
-                description:
-                  'Did the agent provide clear and understandable explanations?',
-                evaluationType: 'boolean',
-              },
-              threshold: { expectedValue: true },
-            },
-          ],
-        },
-        {
-          name: 'Communication Quality',
-          description:
-            'Evaluates professionalism and communication style',
-          weight: 25,
-          criteria: [
-            {
-              key: 'politeness_score',
-              name: 'Politeness & Professionalism',
-              type: CriteriaType.PROMPT,
-              settings: {
-                description:
-                  "Rate the agent's overall politeness and professional demeanor (0-10)",
-                evaluationType: 'score',
-              },
-              threshold: { min: 7, max: 10 },
-            },
-            {
-              key: 'empathy_shown',
-              name: 'Empathy Demonstrated',
-              type: CriteriaType.PROMPT,
-              settings: {
-                description:
-                  "Did the agent show empathy and understanding toward the customer's situation?",
-                evaluationType: 'boolean',
-              },
-              threshold: { expectedValue: true },
-            },
-            {
-              key: 'no_inappropriate_language',
-              name: 'Professional Language',
-              type: CriteriaType.KEYWORD,
-              settings: {
-                matchType: 'must_not_contain',
-                keyword: [
-                  'damn',
-                  'hell',
-                  'crap',
-                  'stupid',
-                  'idiot',
-                  'shut up',
-                ],
-              },
-            },
-          ],
-        },
-        {
-          name: 'Closing & Follow-up',
-          description: 'Evaluates how the agent closes the call',
-          weight: 10,
-          criteria: [
-            {
-              key: 'proper_closing',
-              name: 'Proper Closing',
-              type: CriteriaType.PROMPT,
-              settings: {
-                description:
-                  'Did the agent properly close the call by thanking the customer and offering further assistance?',
-                evaluationType: 'boolean',
-              },
-              threshold: { expectedValue: true },
-            },
-            {
-              key: 'closing_keywords',
-              name: 'Closing Keywords',
-              type: CriteriaType.KEYWORD,
-              settings: {
-                matchType: 'must_contain',
-                keyword: [
-                  'thank you',
-                  'thanks',
-                  'have a great day',
-                  'is there anything else',
-                  'goodbye',
-                  'bye',
-                ],
-              },
-            },
-          ],
-        },
-        {
-          name: 'Timing Metrics',
-          description:
-            'Evaluates response time and call efficiency',
-          weight: 15,
-          criteria: [
-            {
-              key: 'agent_response_time',
-              name: 'Agent Response Time',
-              type: CriteriaType.RESPONSE_TIME,
-              settings: { participant: 'agent' },
-              threshold: { max: 5 },
-            },
-          ],
-        },
-      ],
     };
   }
 
