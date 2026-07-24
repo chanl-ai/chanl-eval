@@ -644,6 +644,12 @@ export interface SettingsStatus {
   hasAnyKey: boolean;
 }
 
+/**
+ * A criterion verdict: pass/fail, or a 0-10 score. Values written before normalisation may still be
+ * strings ("pass"/"fail"), so read them through `normalizeVerdict`.
+ */
+export type CriterionVerdict = boolean | number;
+
 // ============================================================================
 // HUMAN-IN-THE-LOOP BENCHMARKING
 // ============================================================================

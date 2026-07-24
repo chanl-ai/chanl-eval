@@ -111,3 +111,6 @@ export type {
   ChatRequest,
   ChatResponse,
 } from './types';
+
+export { normalizeVerdict, verdictOf } from './verdict';
+export type { CriterionVerdict } from './types';

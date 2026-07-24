@@ -109,3 +109,7 @@ export type {
   Pair,
   Interpretation,
 } from './labels';
+
+// Verdict normalisation
+export { normalizeVerdict, verdictOf, isScoreVerdict } from './verdict';
+export type { CriterionVerdict } from './verdict';

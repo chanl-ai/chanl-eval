@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { verdictOf } from '@chanl/eval-sdk';
 import type {
   CriterionReview,
   ScorecardCriterionDisplay,
@@ -41,7 +42,7 @@ export function CriterionReviewControl({
   options: ScorecardReviewOptions;
 }) {
   const [open, setOpen] = useState(false);
-  const judgeVerdict = normalizeVerdict(criterion.result, criterion.passed);
+  const judgeVerdict = verdictOf(criterion.result, criterion.passed);
   const isScore = typeof judgeVerdict === 'number';
   const [value, setValue] = useState(String(isScore ? judgeVerdict : criterion.passed));
   const [note, setNote] = useState('');
@@ -167,20 +168,6 @@ export function CriterionReviewControl({
       </Popover>
     </div>
   );
-}
-
-/**
- * `result` is stored loosely: numeric scores, booleans, and the strings "pass"/"fail" all appear in
- * it depending on which producer wrote the row. Only a boolean or a number is a valid verdict, so
- * anything else falls back to `passed`, which is always boolean.
- */
-function normalizeVerdict(
-  result: boolean | number | undefined,
-  passed: boolean,
-): boolean | number {
-  if (typeof result === 'number' && Number.isFinite(result)) return result;
-  if (typeof result === 'boolean') return result;
-  return passed;
 }
 
 function formatVerdict(v: boolean | number | undefined): string {

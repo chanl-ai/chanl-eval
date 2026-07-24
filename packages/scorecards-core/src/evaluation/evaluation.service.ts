@@ -1,3 +1,4 @@
+import { verdictOf } from '../verdict';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -119,7 +120,9 @@ export class EvaluationService {
             categoryVersion: category?.version || 1,
             categoryName: category?.name,
             criteriaName: criterion.name,
-            result: handlerResult.result,
+            // Normalised on the way in, so no consumer has to guess whether this is a number, a
+            // boolean or the string "pass".
+            result: verdictOf(handlerResult.result, handlerResult.passed),
             passed: handlerResult.passed,
             reasoning: handlerResult.reasoning,
             evidence: handlerResult.evidence,

@@ -7,6 +7,7 @@ import {
   ScorecardResultDocument,
   CriteriaResult,
 } from '../schemas/scorecard-result.schema';
+import { normalizeVerdict } from '../verdict';
 import {
   AgreementStats,
   OverallAgreement,
@@ -83,7 +84,7 @@ export class LabelsService {
       );
     }
 
-    const normalizedJudge = normalizeJudgeVerdict(criterion.result);
+    const normalizedJudge = normalizeVerdict(criterion.result);
     const evaluationType = typeof normalizedJudge === 'number' ? 'score' : 'boolean';
     const humanResult = normalizeHumanResult(input.humanResult, evaluationType);
     const humanPassed =
@@ -232,25 +233,6 @@ function normalizeHumanResult(
 }
 
 /**
- * `result` is stored loosely — numeric scores, booleans, and the strings "pass"/"fail" all occur
- * depending on which producer wrote the row. Coercing a string with Boolean() is wrong in a way that
- * silently inverts meaning: Boolean('fail') is true, so a human overruling a failed criterion would
- * be recorded as agreeing with it.
- */
-function normalizeJudgeVerdict(judge: unknown): boolean | number | null {
-  if (typeof judge === 'number' && Number.isFinite(judge)) return judge;
-  if (typeof judge === 'boolean') return judge;
-  if (typeof judge === 'string') {
-    const v = judge.trim().toLowerCase();
-    if (v === 'pass' || v === 'true' || v === 'yes') return true;
-    if (v === 'fail' || v === 'false' || v === 'no') return false;
-    const n = Number(v);
-    if (!Number.isNaN(n)) return n;
-  }
-  return null;
-}
-
-/**
  * For scores, "agreed" means within 1 point. An 8-vs-9 split is not a judge failure worth putting in
  * a review queue; treating it as one would bury the 2-vs-9 cases that actually matter.
  */
@@ -259,7 +241,7 @@ function verdictsAgree(
   judge: any,
   evaluationType: string,
 ): boolean {
-  const normalized = normalizeJudgeVerdict(judge);
+  const normalized = normalizeVerdict(judge);
   if (normalized === null) return false;
   if (evaluationType === 'score') {
     return Math.abs(Number(human) - Number(normalized)) <= 1;
