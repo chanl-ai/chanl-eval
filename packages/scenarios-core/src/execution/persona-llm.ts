@@ -1,7 +1,7 @@
 import { OpenAIAdapter } from '../adapters/openai.adapter';
 import { AnthropicAdapter } from '../adapters/anthropic.adapter';
 import { AgentMessage } from '../adapters/agent-adapter.interface';
-import { resolveLlmConfigSync } from './llm-config-resolver';
+import { resolveLlmConfigSync, resolveLlmEndpoint } from './llm-config-resolver';
 
 const USER_TURN =
   'Respond as the customer with your next message only. Stay in character. Keep it to one or two short sentences. No role labels or quotes.';
@@ -13,8 +13,57 @@ const USER_TURN =
 export function resolvePersonaLlmKey(
   adapterType: string | undefined,
   adapterConfig: Record<string, any> | undefined,
-): { kind: 'openai' | 'anthropic'; apiKey: string; model?: string } | null {
+): {
+  kind: 'openai' | 'anthropic';
+  apiKey: string;
+  model?: string;
+  baseUrl?: string;
+} | null {
   return resolveLlmConfigSync(adapterType, adapterConfig);
+}
+
+interface PersonaLlmResolution {
+  kind: 'openai' | 'anthropic';
+  apiKey: string;
+  model?: string;
+  baseUrl?: string;
+}
+
+/**
+ * One place that turns a resolved simulation config into a connected adapter, so the persona honours
+ * a custom `baseUrl` the same way the agent-under-test does. Without threading `endpoint` through,
+ * the adapter silently falls back to api.openai.com / api.anthropic.com.
+ */
+async function runPersonaTurn(
+  resolved: PersonaLlmResolution,
+  systemPrompt: string,
+  userMessage: string,
+  history: AgentMessage[],
+  temperature: number,
+  maxTokens: number,
+): Promise<string | null> {
+  const isOpenAi = resolved.kind === 'openai';
+  const adapter = isOpenAi ? new OpenAIAdapter() : new AnthropicAdapter();
+  const endpoint = resolveLlmEndpoint(resolved.baseUrl, resolved.kind);
+
+  const config: Record<string, any> = {
+    apiKey: resolved.apiKey,
+    model: resolved.model || (isOpenAi ? 'gpt-4o-mini' : 'claude-3-5-haiku-20241022'),
+    temperature,
+    maxTokens,
+    systemPrompt,
+  };
+  // Only set when present — an explicit `undefined` would clobber the adapter's default endpoint.
+  if (endpoint) config.endpoint = endpoint;
+
+  await adapter.connect(config);
+  try {
+    const res = await adapter.sendMessage(userMessage, history);
+    const text = (res.content || '').trim();
+    return text.length > 0 ? text : null;
+  } finally {
+    await adapter.disconnect();
+  }
 }
 
 /**
@@ -33,33 +82,14 @@ export async function generatePersonaUtterance(options: {
   if (!resolved) return null;
 
   try {
-    if (resolved.kind === 'openai') {
-      const adapter = new OpenAIAdapter();
-      await adapter.connect({
-        apiKey: resolved.apiKey,
-        model: resolved.model || 'gpt-4o-mini',
-        temperature: 0.85,
-        maxTokens: 256,
-        systemPrompt: options.personaSystemPrompt,
-      });
-      const res = await adapter.sendMessage(USER_TURN, options.history);
-      await adapter.disconnect();
-      const text = (res.content || '').trim();
-      return text.length > 0 ? text : null;
-    }
-
-    const adapter = new AnthropicAdapter();
-    await adapter.connect({
-      apiKey: resolved.apiKey,
-      model: resolved.model || 'claude-3-5-haiku-20241022',
-      temperature: 0.85,
-      maxTokens: 256,
-      systemPrompt: options.personaSystemPrompt,
-    });
-    const res = await adapter.sendMessage(USER_TURN, options.history);
-    await adapter.disconnect();
-    const text = (res.content || '').trim();
-    return text.length > 0 ? text : null;
+    return await runPersonaTurn(
+      resolved,
+      options.personaSystemPrompt,
+      USER_TURN,
+      options.history,
+      0.85,
+      256,
+    );
   } catch {
     return null;
   }
@@ -85,33 +115,14 @@ export async function generatePersonaOpening(options: {
 You are starting the conversation as this customer. Say your opening line only — one or two short sentences.`;
 
   try {
-    if (resolved.kind === 'openai') {
-      const adapter = new OpenAIAdapter();
-      await adapter.connect({
-        apiKey: resolved.apiKey,
-        model: resolved.model || 'gpt-4o-mini',
-        temperature: 0.8,
-        maxTokens: 200,
-        systemPrompt: options.personaSystemPrompt,
-      });
-      const res = await adapter.sendMessage(openerUserMsg, []);
-      await adapter.disconnect();
-      const text = (res.content || '').trim();
-      return text.length > 0 ? text : null;
-    }
-
-    const adapter = new AnthropicAdapter();
-    await adapter.connect({
-      apiKey: resolved.apiKey,
-      model: resolved.model || 'claude-3-5-haiku-20241022',
-      temperature: 0.8,
-      maxTokens: 200,
-      systemPrompt: options.personaSystemPrompt,
-    });
-    const res = await adapter.sendMessage(openerUserMsg, []);
-    await adapter.disconnect();
-    const text = (res.content || '').trim();
-    return text.length > 0 ? text : null;
+    return await runPersonaTurn(
+      resolved,
+      options.personaSystemPrompt,
+      openerUserMsg,
+      [],
+      0.8,
+      200,
+    );
   } catch {
     return null;
   }

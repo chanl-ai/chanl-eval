@@ -73,20 +73,37 @@ export class PromptHandler implements CriteriaHandler {
         evaluationType,
         transcript: context.transcriptText,
         threshold: thresholdInfo,
+        selfConsistency: settings.selfConsistency,
       });
+
+      // The judge could not produce a verdict (transport error, unparseable response). That is a
+      // fact about our infrastructure, not about the agent — report it as N/A so it is excluded from
+      // scoring instead of quietly counting as a failure.
+      if (llmResult.error) {
+        return {
+          result: null,
+          passed: false,
+          notApplicable: true,
+          reasoning: `LLM judge unavailable: ${llmResult.error}. Criterion not scored.`,
+          evidence: [],
+        };
+      }
 
       return {
         result: llmResult.result,
         passed: llmResult.passed ?? checkThreshold(criteria, llmResult.result),
         reasoning: llmResult.reasoning || 'LLM evaluation completed.',
         evidence: llmResult.evidence || [],
+        ...(llmResult.confidence !== undefined
+          ? { confidence: llmResult.confidence }
+          : {}),
       };
     } catch (error: any) {
-      const fallbackResult = evaluationType === 'boolean' ? false : 5;
       return {
-        result: fallbackResult,
+        result: null,
         passed: false,
-        reasoning: `LLM evaluation failed: ${error.message}. Using fallback.`,
+        notApplicable: true,
+        reasoning: `LLM evaluation failed: ${error.message}. Criterion not scored.`,
         evidence: [],
       };
     }

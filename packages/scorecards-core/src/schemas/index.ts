@@ -18,6 +18,7 @@ export {
   CriteriaSettings,
   PromptCriteriaSettings,
   KeywordCriteriaSettings,
+  PatternCriteriaSettings,
   ResponseTimeCriteriaSettings,
   ToolCallCriteriaSettings,
   HallucinationCriteriaSettings,

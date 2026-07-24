@@ -27,6 +27,7 @@ export {
   CriteriaSettings,
   PromptCriteriaSettings,
   KeywordCriteriaSettings,
+  PatternCriteriaSettings,
   ResponseTimeCriteriaSettings,
   ToolCallCriteriaSettings,
   Threshold,
@@ -63,10 +64,15 @@ export {
   checkThreshold,
   normalizeScore,
   KeywordHandler,
+  PatternHandler,
+  PATTERN_LIBRARY,
+  PATTERN_PRESET_NAMES,
+  isPatternPresetName,
   PromptHandler,
   ResponseTimeHandler,
   ToolCallHandler,
 } from './handlers';
+export type { PatternPresetName, LibraryPattern } from './handlers';
 
 // Evaluation
 export {

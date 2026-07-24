@@ -16,6 +16,8 @@ export interface CriteriaResult {
   reasoning: string;
   evidence: string[];
   notApplicable?: boolean;
+  /** Judge agreement 0-1 when the criterion ran with self-consistency sampling. */
+  confidence?: number;
 }
 
 export interface AnalysisMetadata {

@@ -273,7 +273,7 @@ describe('PromptHandler', () => {
     expect(result.passed).toBe(true);
   });
 
-  it('should handle LLM errors gracefully', async () => {
+  it('reports a thrown LLM error as N/A, not as a mediocre score', async () => {
     const mockLlm = jest.fn().mockRejectedValue(new Error('API timeout'));
 
     const criteria = makeCriteria({
@@ -284,9 +284,54 @@ describe('PromptHandler', () => {
     const ctx = makeContext({ llmEvaluate: mockLlm });
     const result = await handler.evaluate(criteria, ctx);
 
-    expect(result.result).toBe(5);
+    // Previously this returned result: 5 — indistinguishable from the judge deciding the agent was
+    // mediocre, and it dragged the category average down for what is purely our own outage.
+    expect(result.notApplicable).toBe(true);
+    expect(result.result).toBeNull();
     expect(result.passed).toBe(false);
     expect(result.reasoning).toContain('API timeout');
+  });
+
+  it('reports a structured judge error as N/A', async () => {
+    const mockLlm = jest.fn().mockResolvedValue({
+      result: null,
+      passed: false,
+      reasoning: 'Judge did not return a usable verdict',
+      evidence: [],
+      error: 'OpenAI judge error (429): rate limited',
+    });
+
+    const criteria = makeCriteria({
+      type: CriteriaType.PROMPT,
+      settings: { description: 'Rate', evaluationType: 'score' },
+    });
+
+    const result = await handler.evaluate(criteria, makeContext({ llmEvaluate: mockLlm }));
+
+    expect(result.notApplicable).toBe(true);
+    expect(result.reasoning).toContain('429');
+  });
+
+  it('passes selfConsistency through and surfaces the returned confidence', async () => {
+    const mockLlm = jest.fn().mockResolvedValue({
+      result: 8,
+      passed: true,
+      reasoning: 'good',
+      evidence: [],
+      confidence: 2 / 3,
+    });
+
+    const criteria = makeCriteria({
+      type: CriteriaType.PROMPT,
+      settings: { description: 'Rate', evaluationType: 'score', selfConsistency: 3 },
+    });
+
+    const result = await handler.evaluate(criteria, makeContext({ llmEvaluate: mockLlm }));
+
+    expect(mockLlm).toHaveBeenCalledWith(
+      expect.objectContaining({ selfConsistency: 3 }),
+    );
+    expect(result.confidence).toBeCloseTo(2 / 3);
   });
 });
 

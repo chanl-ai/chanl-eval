@@ -124,6 +124,9 @@ export class EvaluationService {
             reasoning: handlerResult.reasoning,
             evidence: handlerResult.evidence,
             ...(handlerResult.notApplicable ? { notApplicable: true } : {}),
+            ...(handlerResult.confidence !== undefined
+              ? { confidence: handlerResult.confidence }
+              : {}),
           });
         } catch (error: any) {
           this.logger.error(
@@ -155,7 +158,13 @@ export class EvaluationService {
 
         if (categoryCriteria.length === 0) continue;
 
-        const normalizedScores = categoryCriteria.map((cr) => {
+        // A criterion that could not be evaluated (no ground truth, no tools, judge unreachable) must
+        // not be scored as a zero — that silently penalises the agent for our own missing inputs.
+        // It is recorded on the result as N/A and excluded from the average.
+        const scorableCriteria = categoryCriteria.filter((cr) => !cr.notApplicable);
+        if (scorableCriteria.length === 0) continue;
+
+        const normalizedScores = scorableCriteria.map((cr) => {
           const criterion = allCriteria.find(
             (c) => c._id?.toString() === cr.criteriaId,
           );

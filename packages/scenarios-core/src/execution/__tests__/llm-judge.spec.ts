@@ -121,22 +121,27 @@ describe('buildLlmJudge', () => {
     expect(result.evidence).toEqual(['Agent apologized', 'Offered refund']);
   });
 
-  it('handles API error (non-200) with thrown error', async () => {
+  it('reports an API error as an explicit error, never as a low score', async () => {
     mockFetch.mockResolvedValue({
       ok: false,
+      status: 429,
       text: () => Promise.resolve('Rate limit exceeded'),
     });
 
     const judge = buildLlmJudge({ kind: 'openai', apiKey: 'sk-test' })!;
+    const result = await judge({
+      criterionName: 'test',
+      description: 'test',
+      evaluationType: 'score',
+      transcript: 'test',
+    });
 
-    await expect(
-      judge({
-        criterionName: 'test',
-        description: 'test',
-        evaluationType: 'boolean',
-        transcript: 'test',
-      }),
-    ).rejects.toThrow();
+    // The old behaviour returned result: 5 / passed: false, which is indistinguishable from the
+    // judge deciding the agent was mediocre. A transport failure is not evidence about the agent.
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('429');
+    expect(result.result).toBeNull();
+    expect(result.reasoning).toContain('Judge did not return a usable verdict');
   });
 
   it('handles malformed JSON gracefully with defaults', async () => {
@@ -191,6 +196,206 @@ describe('buildLlmJudge', () => {
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.model).toBe('claude-3-5-haiku-20241022');
+  });
+});
+
+// ==========================================================================
+// Custom host (F2) — persona and judge must not be pinned to the public provider
+// ==========================================================================
+describe('buildLlmJudge — custom baseUrl', () => {
+  const params = {
+    criterionName: 'test',
+    description: 'test',
+    evaluationType: 'boolean' as const,
+    transcript: 'test',
+  };
+
+  it('routes an OpenAI-compatible base URL to /v1/chat/completions', async () => {
+    mockFetch.mockResolvedValue(mockOpenAiResponse({ result: true, passed: true, reasoning: 'ok', evidence: [] }));
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x', baseUrl: 'http://localhost:11434' })!;
+    await judge(params);
+
+    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:11434/v1/chat/completions');
+  });
+
+  it('does not double-append when the base already ends in /v1', async () => {
+    mockFetch.mockResolvedValue(mockOpenAiResponse({ result: true, passed: true, reasoning: 'ok', evidence: [] }));
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x', baseUrl: 'http://localhost:11434/v1/' })!;
+    await judge(params);
+
+    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:11434/v1/chat/completions');
+  });
+
+  it('accepts a full endpoint URL unchanged', async () => {
+    mockFetch.mockResolvedValue(mockOpenAiResponse({ result: true, passed: true, reasoning: 'ok', evidence: [] }));
+
+    const judge = buildLlmJudge({
+      kind: 'openai',
+      apiKey: 'x',
+      baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    })!;
+    await judge(params);
+
+    expect(mockFetch.mock.calls[0][0]).toBe('https://openrouter.ai/api/v1/chat/completions');
+  });
+
+  it('routes an Anthropic-compatible base URL to /v1/messages', async () => {
+    mockFetch.mockResolvedValue(mockAnthropicResponse({ result: true, passed: true, reasoning: 'ok', evidence: [] }));
+
+    const judge = buildLlmJudge({ kind: 'anthropic', apiKey: 'x', baseUrl: 'https://proxy.internal' })!;
+    await judge(params);
+
+    expect(mockFetch.mock.calls[0][0]).toBe('https://proxy.internal/v1/messages');
+  });
+
+  it('falls back to the public host when no baseUrl is given', async () => {
+    mockFetch.mockResolvedValue(mockOpenAiResponse({ result: true, passed: true, reasoning: 'ok', evidence: [] }));
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x' })!;
+    await judge(params);
+
+    expect(mockFetch.mock.calls[0][0]).toBe('https://api.openai.com/v1/chat/completions');
+  });
+});
+
+// ==========================================================================
+// Self-consistency (F3)
+// ==========================================================================
+describe('buildLlmJudge — self-consistency', () => {
+  function queueOpenAi(responses: Record<string, any>[]) {
+    for (const r of responses) mockFetch.mockResolvedValueOnce(mockOpenAiResponse(r));
+  }
+
+  it('makes exactly one call and reports no confidence by default', async () => {
+    queueOpenAi([{ result: true, passed: true, reasoning: 'ok', evidence: [] }]);
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x' })!;
+    const result = await judge({
+      criterionName: 'c', description: 'd', evaluationType: 'boolean', transcript: 't',
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(result.confidence).toBeUndefined();
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).temperature).toBe(0.2);
+  });
+
+  it('draws k samples and majority-votes a boolean verdict', async () => {
+    queueOpenAi([
+      { result: true, passed: true, reasoning: 'yes A', evidence: ['a'] },
+      { result: false, passed: false, reasoning: 'no B', evidence: ['b'] },
+      { result: true, passed: true, reasoning: 'yes C', evidence: ['c'] },
+    ]);
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x' })!;
+    const result = await judge({
+      criterionName: 'c', description: 'd', evaluationType: 'boolean', transcript: 't',
+      selfConsistency: 3,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(result.result).toBe(true);
+    expect(result.passed).toBe(true);
+    expect(result.confidence).toBeCloseTo(2 / 3);
+    expect(result.reasoning).toContain('2/3 agreed');
+  });
+
+  it('reports full confidence when every sample agrees', async () => {
+    queueOpenAi([
+      { result: false, passed: false, reasoning: 'no', evidence: [] },
+      { result: false, passed: false, reasoning: 'no', evidence: [] },
+      { result: false, passed: false, reasoning: 'no', evidence: [] },
+    ]);
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x' })!;
+    const result = await judge({
+      criterionName: 'c', description: 'd', evaluationType: 'boolean', transcript: 't',
+      selfConsistency: 3,
+    });
+
+    expect(result.result).toBe(false);
+    expect(result.confidence).toBe(1);
+  });
+
+  it('takes the median for score criteria and flags disagreement', async () => {
+    queueOpenAi([
+      { result: 9, passed: true, reasoning: 'great', evidence: [] },
+      { result: 3, passed: false, reasoning: 'poor', evidence: [] },
+      { result: 8, passed: true, reasoning: 'good', evidence: [] },
+    ]);
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x' })!;
+    const result = await judge({
+      criterionName: 'c', description: 'd', evaluationType: 'score', transcript: 't',
+      selfConsistency: 3,
+    });
+
+    expect(result.result).toBe(8);
+    expect(result.passed).toBe(true); // 2 of 3 samples passed
+    // 9 and 8 are within ±1 of the median; 3 is not.
+    expect(result.confidence).toBeCloseTo(2 / 3);
+  });
+
+  it('samples at a higher temperature so agreement is meaningful', async () => {
+    queueOpenAi([
+      { result: true, passed: true, reasoning: 'a', evidence: [] },
+      { result: true, passed: true, reasoning: 'b', evidence: [] },
+    ]);
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x' })!;
+    await judge({
+      criterionName: 'c', description: 'd', evaluationType: 'boolean', transcript: 't',
+      selfConsistency: 2,
+    });
+
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).temperature).toBe(0.7);
+  });
+
+  it('aggregates the surviving samples when some fail', async () => {
+    mockFetch
+      .mockResolvedValueOnce(mockOpenAiResponse({ result: true, passed: true, reasoning: 'ok', evidence: [] }))
+      // second sample fails both its attempt and its retry
+      .mockResolvedValueOnce({ ok: false, status: 500, text: () => Promise.resolve('boom') })
+      .mockResolvedValueOnce({ ok: false, status: 500, text: () => Promise.resolve('boom') })
+      .mockResolvedValueOnce(mockOpenAiResponse({ result: true, passed: true, reasoning: 'ok', evidence: [] }));
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x' })!;
+    const result = await judge({
+      criterionName: 'c', description: 'd', evaluationType: 'boolean', transcript: 't',
+      selfConsistency: 3,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.result).toBe(true);
+    expect(result.reasoning).toContain('1 of 3 samples failed');
+  });
+
+  it('clamps selfConsistency to a sane range', async () => {
+    mockFetch.mockResolvedValue(mockOpenAiResponse({ result: true, passed: true, reasoning: 'ok', evidence: [] }));
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x' })!;
+    await judge({
+      criterionName: 'c', description: 'd', evaluationType: 'boolean', transcript: 't',
+      selfConsistency: 500,
+    });
+
+    expect(mockFetch.mock.calls.length).toBeLessThanOrEqual(9);
+  });
+
+  it('retries once before giving up on unparseable output', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ choices: [{ message: { content: 'not json' } }] }) })
+      .mockResolvedValueOnce(mockOpenAiResponse({ result: true, passed: true, reasoning: 'recovered', evidence: [] }));
+
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'x' })!;
+    const result = await judge({
+      criterionName: 'c', description: 'd', evaluationType: 'boolean', transcript: 't',
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(result.error).toBeUndefined();
+    expect(result.reasoning).toBe('recovered');
   });
 });
 

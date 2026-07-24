@@ -502,11 +502,13 @@ export class ScenarioExecutionService {
     // Priority: Settings DB (UI-configured) > env vars (headless/CI fallback)
     let judgeApiKey: string | undefined;
     let judgeKind: 'openai' | 'anthropic' = 'openai';
+    let settingsBaseUrl: string | undefined;
 
     // Settings DB first — this is where the Settings UI saves keys
     try {
       const settingsDoc = await this.executionModel.db.collection('settings').findOne({});
       const providerKeys: Record<string, string> = settingsDoc?.providerKeys ?? {};
+      settingsBaseUrl = settingsDoc?.simulationBaseUrl || undefined;
       if (providerKeys.openai) {
         judgeApiKey = providerKeys.openai;
         judgeKind = 'openai';
@@ -527,9 +529,20 @@ export class ScenarioExecutionService {
       judgeKind = 'anthropic';
     }
 
-    const llmEvaluate = judgeApiKey
-      ? buildLlmJudge({ kind: judgeKind, apiKey: judgeApiKey })
-      : undefined;
+    // Optional OpenAI-/Anthropic-compatible host for the judge (Ollama, OpenRouter, vLLM, Azure).
+    // Without it the judge is pinned to the provider's public host even when everything else in the
+    // run points somewhere cheaper.
+    const judgeBaseUrl = process.env.CHANL_SIMULATION_BASE_URL || settingsBaseUrl;
+
+    const llmEvaluate =
+      judgeApiKey || judgeBaseUrl
+        ? buildLlmJudge({
+            kind: judgeKind,
+            // Self-hosted OpenAI-compatible servers accept any bearer token.
+            apiKey: judgeApiKey || 'not-needed',
+            baseUrl: judgeBaseUrl,
+          })
+        : undefined;
 
     // 4. Calculate first-response latency metric
     const firstAgentStep = conversationSteps.find((s) => s.role === 'agent');
