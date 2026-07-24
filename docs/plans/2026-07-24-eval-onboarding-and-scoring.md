@@ -481,6 +481,56 @@ receive the scorecard id before that tree exists, and a crash between the two st
 scorecard permanently, since nothing re-checks. A complete fix needs unique indexes on
 `scorecard_categories` and `scorecard_criteria` so the tree build is itself idempotent.
 
+## Loose typing at boundaries
+
+### F1 — One field, three contradictory declarations, three incidents
+
+`CriteriaResult.result` holds a criterion verdict. It is declared three separate ways inside a single
+SDK file:
+
+| Location | Declaration |
+|---|---|
+| `sdk/src/types.ts:255` | `result: any` |
+| `sdk/src/types.ts:464` | `result: boolean \| number \| string` |
+| `sdk/src/types.ts:772` | `result?: any` |
+
+The declaration at `:464` is correct — numeric scores, booleans and the strings `"pass"`/`"fail"` all
+occur, depending on which producer wrote the row. So the real shape was known and written down, and
+that knowledge reached neither the other two declarations nor any consumer.
+
+Three separate defects have traced to it:
+
+1. The review control posted the raw value, which the API rejected with 400.
+2. Agreement was derived with `Boolean(judge)`. `Boolean('fail')` is `true`, so a human overruling a
+   failed criterion was recorded as agreeing with it — corrupting the disagreement queue and the
+   pairing behind kappa, silently.
+3. `cli/src/commands/scenarios.ts:797,810` reads
+   `score: typeof cr.result === 'number' ? cr.result : undefined`. For a string verdict the score is
+   dropped entirely, so a scored run reports no score in the CLI. Unfixed.
+
+The pattern is identical each time: a consumer branches on `typeof`, the string case falls through a
+gap the type system said could not exist, and the failure is silent rather than loud.
+
+### F2 — The surface, measured
+
+335 explicit `any` annotations in non-test source:
+
+| Package | `any` | Package | `any` |
+|---|---:|---|---:|
+| scenarios-core | 142 | sdk | 56 |
+| cli | 63 | scorecards-core | 38 |
+| dashboard | 23 | server | 13 |
+
+Twelve Mongoose `Mixed` fields store values with no shape at rest, including
+`scorecard_results.criteriaResults` — the array holding the field above.
+
+`any` is not uniformly a problem; it is a problem where a value crosses a boundary and the far side
+believes a narrower type. The three defects above all occurred at exactly such a crossing.
+
+**Fix:** type the verdict once as a shared union, converge the three declarations on it, and
+normalise at the boundary where a value enters the system rather than at each consumer. Consumers
+that branch on `typeof` should be reading a normalised value, not guessing.
+
 ## Review log
 
 | Date | Verdict | Notes |
