@@ -32,6 +32,13 @@ services:
       NODE_ENV: production
       MONGODB_URI: mongodb://mongodb:27017/chanl-eval
       REDIS_URL: redis://redis:6379
+      # LLM credentials. Optional here — you can also paste a key into the dashboard Settings page,
+      # which stores it on the server. Set either one and the first run works; set neither and every
+      # run fails with "no LLM key configured". Copy .env.example to .env to use this path.
+      CHANL_OPENAI_API_KEY: "${CHANL_OPENAI_API_KEY:-}"
+      CHANL_ANTHROPIC_API_KEY: "${CHANL_ANTHROPIC_API_KEY:-}"
+      # Optional: run persona + judge against any OpenAI-compatible host (Ollama, OpenRouter, vLLM).
+      CHANL_SIMULATION_BASE_URL: "${CHANL_SIMULATION_BASE_URL:-}"
     depends_on:
       mongodb:
         condition: service_healthy

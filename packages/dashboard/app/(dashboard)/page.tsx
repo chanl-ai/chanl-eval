@@ -14,6 +14,7 @@ import {
   ScrollText,
   Settings,
   Terminal,
+  TriangleAlert,
   UserCircle,
 } from 'lucide-react';
 
@@ -190,17 +191,26 @@ function FeatureSection({ title, description, items }: {
 export default function HomePage() {
   const { baseUrl, apiKey } = useEvalConfig();
   const [serverOk, setServerOk] = useState<boolean | null>(null);
+  const [hasLlmKey, setHasLlmKey] = useState<boolean | null>(null);
 
-  // Probe server health
+  // Probe server health + whether the engine can actually reach an LLM.
+  // A reachable server with no key still fails every run, so "healthy" alone is a misleading signal.
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const c = new EvalClient({ baseUrl, apiKey });
       try {
-        const c = new EvalClient({ baseUrl, apiKey });
         const h = await c.health();
         if (!cancelled) setServerOk(!!h?.status);
       } catch {
         if (!cancelled) setServerOk(false);
+        return;
+      }
+      try {
+        const status = await c.settings.status();
+        if (!cancelled) setHasLlmKey(status.hasAnyKey);
+      } catch {
+        if (!cancelled) setHasLlmKey(null);
       }
     })();
     return () => { cancelled = true; };
@@ -220,6 +230,27 @@ export default function HomePage() {
         </Button>
       }
     >
+      {/* First-run blocker: the engine has no way to reach an LLM, so every run will fail. */}
+      {serverOk && hasLlmKey === false && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+              <div>
+                <p className="text-sm font-medium">No LLM key configured</p>
+                <p className="text-sm text-muted-foreground">
+                  Runs need an OpenAI or Anthropic key to drive the conversation and score it. Add one
+                  in Settings, or set <code>CHANL_OPENAI_API_KEY</code> on the server.
+                </p>
+              </div>
+            </div>
+            <Button asChild size="sm" className="shrink-0" data-testid="configure-llm-key">
+              <Link href="/settings">Add a key</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Hero banner */}
       <Card className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/20">
         <CardContent className="flex flex-col gap-3 py-6 sm:flex-row sm:items-center sm:justify-between">

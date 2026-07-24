@@ -622,12 +622,26 @@ export interface Settings {
     anthropic?: string;
     http?: string;
   };
+  /** OpenAI-/Anthropic-compatible host for persona + judge calls. */
+  simulationBaseUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface UpdateSettingsDto {
   providerKeys?: Record<string, string>;
+  simulationBaseUrl?: string;
+}
+
+/** Where a provider's key is resolved from — null means the engine cannot reach that provider. */
+export type KeySource = 'settings' | 'env' | null;
+
+export interface SettingsStatus {
+  /** Keys are masked (••••abcd). Never send a masked value back on update. */
+  settings: Settings;
+  keySources: Record<string, KeySource>;
+  /** False means no run can reach an LLM — the first-run blocker worth surfacing prominently. */
+  hasAnyKey: boolean;
 }
 
 // ============================================================================

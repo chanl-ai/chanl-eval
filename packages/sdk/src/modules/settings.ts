@@ -4,7 +4,7 @@
 
 import type { AxiosInstance } from 'axios';
 import { unwrapResponse } from '../client';
-import type { Settings, UpdateSettingsDto } from '../types';
+import type { Settings, SettingsStatus, UpdateSettingsDto } from '../types';
 
 export class SettingsModule {
   constructor(private readonly http: AxiosInstance) {}
@@ -13,6 +13,20 @@ export class SettingsModule {
     const response = await this.http.get('/settings');
     const data = unwrapResponse<any>(response);
     return data.settings || data;
+  }
+
+  /**
+   * Settings plus where each provider key resolves from. Use this to tell "nothing configured"
+   * apart from "configured via environment variable" without guessing.
+   */
+  async status(): Promise<SettingsStatus> {
+    const response = await this.http.get('/settings');
+    const data = unwrapResponse<any>(response);
+    return {
+      settings: data.settings || data,
+      keySources: data.keySources || {},
+      hasAnyKey: Boolean(data.hasAnyKey),
+    };
   }
 
   async getApiKey(provider: string): Promise<string> {

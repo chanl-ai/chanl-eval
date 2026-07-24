@@ -94,6 +94,8 @@ export type {
   ToolFixtureStats,
   // Settings
   Settings,
+  SettingsStatus,
+  KeySource,
   UpdateSettingsDto,
   // Chat
   ChatSession,
