@@ -1,5 +1,6 @@
 import {
   IsString,
+  MaxLength,
   IsOptional,
   IsEnum,
   IsArray,
@@ -46,7 +47,16 @@ export class CreateScenarioDto {
     required?: boolean;
   }>;
 
-  @IsEnum(['support', 'sales', 'booking', 'technical', 'onboarding', 'feedback'])
+  /**
+   * Free-form grouping label. Categories are domain-specific — an insurance workspace uses claims,
+   * billing and retention; a SaaS one uses support and onboarding — so this is not a closed set.
+   *
+   * The storage layer has never constrained this field. A fixed allowlist here rejected values the
+   * application itself writes, which made any scenario outside the list unsaveable: loading it and
+   * pressing save with no edits failed validation.
+   */
+  @IsString()
+  @MaxLength(64)
   category: string = 'support';
 
   @IsEnum(['easy', 'medium', 'hard'])

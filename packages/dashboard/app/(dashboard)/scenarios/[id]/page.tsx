@@ -180,8 +180,8 @@ export default function ScenarioDetailPage() {
                   data-testid="scenario-prompt"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  The customer&apos;s situation — written in first person. This becomes the persona&apos;s motivation
-                  during the simulated conversation.
+                  The customer&apos;s situation — written in the third person (e.g. &quot;Customer was rear-ended and
+                  wants to file a claim&quot;). This becomes the persona&apos;s motivation during the simulated conversation.
                 </p>
               </div>
 

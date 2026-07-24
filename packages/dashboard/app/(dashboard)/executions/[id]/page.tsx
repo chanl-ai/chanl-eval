@@ -46,7 +46,6 @@ import { ShareResults } from '@/components/share-results';
 import { useFirstRunPrompt } from '@/components/first-run-prompt';
 import { useEvalConfig } from '@/lib/eval-config';
 import type { ScoreMetric, ScorecardCriterionDisplay } from '@/components/scorecard/types';
-import { CriterionReviewCard } from '@/components/labels/criterion-review-card';
 import type { Execution, Scorecard, ScorecardResult } from '@chanl/eval-sdk';
 
 // ---------------------------------------------------------------------------
@@ -169,6 +168,8 @@ function scorecardResultToMetrics(result: ScorecardResult): ScoreMetric[] {
     }
     categoryMap.get(catId)!.criteria.push({
       name: cr.criteriaName,
+      criteriaId: cr.criteriaId,
+      result: (cr as any).result,
       passed: cr.passed,
       explanation: cr.reasoning,
       evidence: cr.evidence?.length > 0 ? cr.evidence.slice(0, 2) : undefined,
@@ -215,6 +216,8 @@ function embeddedResultsToMetrics(result: {
     }
     categoryMap.get(catId)!.criteria.push({
       name: cr.criteriaName || cr.criteriaId,
+      criteriaId: cr.criteriaId,
+      result: (cr as any).result,
       passed: cr.passed,
       explanation: cr.reasoning,
       evidence: cr.evidence?.length ? cr.evidence.slice(0, 2) : undefined,
@@ -399,6 +402,37 @@ export default function RunDetailPage() {
   });
   const scorecardResult = scorecardQ.data?.[0] ?? null;
 
+  // Human verdicts for this run, attached inline to each criterion in the scorecard panel.
+  const labelsQ = useQuery({
+    queryKey: ['labels', scorecardResult?.id],
+    queryFn: () => client.labels.listForResult(scorecardResult!.id),
+    enabled: !!scorecardResult?.id,
+  });
+
+  const reviews = (labelsQ.data ?? []).reduce<Record<string, { agreed: boolean; humanResult: boolean | number; note?: string }>>(
+    (acc, l) => {
+      acc[l.criteriaId] = { agreed: l.agreed, humanResult: l.humanResult, note: l.note };
+      return acc;
+    },
+    {},
+  );
+
+  const reviewMutation = useMutation({
+    mutationFn: (input: { criteriaId: string; humanResult: boolean | number; note?: string }) =>
+      client.labels.create({
+        scorecardResultId: scorecardResult!.id,
+        criteriaId: input.criteriaId,
+        humanResult: input.humanResult,
+        note: input.note,
+      }),
+    onSuccess: (label) => {
+      void qc.invalidateQueries({ queryKey: ['labels', scorecardResult?.id] });
+      void qc.invalidateQueries({ queryKey: ['agreement'] });
+      toast.success(label.agreed ? 'Recorded: judge was right' : 'Recorded: you disagree');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Could not record verdict'),
+  });
+
   // Use embedded results first, fall back to separate collection
   const hasEvaluation = !!(embeddedResults || scorecardResult);
   const metrics = scorecardResult
@@ -569,6 +603,20 @@ export default function RunDetailPage() {
                     metrics={metrics}
                     overallScorePercentage={displayScore}
                     summary={scorecardSummary}
+                    review={
+                      scorecardResult?.id
+                        ? {
+                            reviews,
+                            pending: reviewMutation.isPending,
+                            onReview: (criteriaId, humanResult, note) =>
+                              reviewMutation.mutate({ criteriaId, humanResult, note }),
+                            onEditCriterion: (criteriaId) =>
+                              router.push(
+                                `/scorecards/${scorecardResult.scorecardId}?criterion=${criteriaId}`,
+                              ),
+                          }
+                        : undefined
+                    }
                   />
                 ) : (
                   /* State 1: No evaluation — show picker */
@@ -609,25 +657,6 @@ export default function RunDetailPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Human review — grade the judge's verdicts so its agreement can be measured.
-              Only available once results live in the scorecard_results collection, since a label
-              has to point at a persisted result id. */}
-          {scorecardResult?.id && (scorecardResult.criteriaResults?.length ?? 0) > 0 && (
-            <CriterionReviewCard
-              scorecardResultId={scorecardResult.id}
-              criteria={(scorecardResult.criteriaResults ?? []).map((cr: any) => ({
-                criteriaId: cr.criteriaId,
-                criteriaKey: cr.criteriaKey,
-                criteriaName: cr.criteriaName,
-                result: cr.result ?? null,
-                passed: cr.passed,
-                reasoning: cr.reasoning,
-                confidence: cr.confidence,
-                notApplicable: cr.notApplicable,
-              }))}
-            />
-          )}
 
           {/* Errors */}
           {execution.errorMessages && execution.errorMessages.length > 0 && (
