@@ -48,16 +48,28 @@ const GUARDED: GuardedIndex[] = [
     guarantee: 'default scorecards are seeded idempotently across concurrent boots',
     partialFilter: { createdBy: 'system' },
   },
+  {
+    collection: 'scorecard_categories',
+    field: 'name',
+    guarantee:
+      'a partially built default scorecard tree can be completed without duplicating categories',
+  },
+  {
+    collection: 'scorecard_criteria',
+    field: 'key',
+    guarantee:
+      'a partially built default scorecard tree can be completed without duplicating criteria',
+  },
 ];
 
 /**
  * Verifies that correctness-bearing unique indexes actually exist, and says so loudly when they
  * do not.
  *
- * Both of these indexes were added to collections that previously had no such constraint. On an
- * install that already contains duplicates the build fails, and Mongoose's default behaviour is to
- * log the error and carry on — so the application keeps running with an upsert that has quietly
- * lost its concurrency guarantee, and nothing in the product surfaces it.
+ * These indexes were added to collections that previously had no such constraint. On an install
+ * that already contains duplicates the build fails, and Mongoose's default behaviour is to log the
+ * error and carry on — so the application keeps running with an upsert that has quietly lost its
+ * concurrency guarantee, and nothing in the product surfaces it.
  *
  * A guarantee nobody verifies is a guarantee nobody has. This makes the failure loud and names the
  * duplicates that need resolving.
