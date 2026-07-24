@@ -19,6 +19,7 @@ import { CriteriaHandlerRegistry } from './handlers/criteria-handler-registry';
 import {
   HallucinationHandler,
   KeywordHandler,
+  PatternHandler,
   PromptHandler,
   RagFaithfulnessHandler,
   ResponseTimeHandler,
@@ -33,6 +34,7 @@ function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
   const registry = new CriteriaHandlerRegistry();
   registry.register(new HallucinationHandler());
   registry.register(new KeywordHandler());
+  registry.register(new PatternHandler());
   registry.register(new PromptHandler());
   registry.register(new ResponseTimeHandler());
   registry.register(new RagFaithfulnessHandler());
