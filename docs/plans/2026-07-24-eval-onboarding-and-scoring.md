@@ -97,10 +97,11 @@ Independent — each ships as its own PR. Commits carry `Feature: <slug>` + `Epi
 
 | # | Feature | Slug | Layers | Status |
 |---|---------|------|--------|--------|
-| F1 | API key onboarding path | `onboarding-api-keys` | server env, dashboard, docs | in-progress |
-| F2 | Provider baseUrl for persona + judge | `simulation-baseurl` | scenarios-core, dashboard | in-progress |
-| F3 | Judge reliability (honest failures + self-consistency) | `judge-reliability` | scenarios-core, scorecards-core | in-progress |
-| F4 | Deterministic pattern/leak handler | `pattern-handler` | scorecards-core, seeds | in-progress |
+| F1 | API key onboarding path | `onboarding-api-keys` | server env, dashboard, docs | done |
+| F2 | Provider baseUrl for persona + judge | `simulation-baseurl` | scenarios-core, dashboard | done |
+| F3 | Judge reliability (honest failures + self-consistency) | `judge-reliability` | scenarios-core, scorecards-core | done |
+| F4 | Deterministic pattern/leak handler | `pattern-handler` | scorecards-core, seeds | done |
+| F5 | Human-in-the-loop judge benchmarking | `judge-agreement` | scorecards-core, sdk, dashboard | done |
 
 ### F1 — `onboarding-api-keys`
 
