@@ -27,6 +27,7 @@ export interface CreateLabelInput {
 
 export interface CriterionAgreement extends AgreementStats {
   criteriaKey: string;
+  scorecardId: string;
   criteriaName?: string;
   evaluationType: string;
 }
@@ -168,19 +169,21 @@ export class LabelsService {
       judgeConfidence: l.judgeConfidence,
     });
 
-    // Group by criterion — an aggregate kappa across criteria of different types would be
-    // meaningless, and per-criterion is the actionable view anyway: it names which rubric line the
-    // judge cannot read.
+    // Group per scorecard AND criterion. criteriaKey alone is not unique across scorecards, so
+    // grouping on it merges unrelated rubrics that happen to share a key — two scorecards each
+    // defining "clarity" would report one pooled kappa spanning both.
     const groups = new Map<string, HumanLabelDocument[]>();
     for (const l of usable) {
-      const list = groups.get(l.criteriaKey) || [];
+      const key = `${l.scorecardId}::${l.criteriaKey}`;
+      const list = groups.get(key) || [];
       list.push(l);
-      groups.set(l.criteriaKey, list);
+      groups.set(key, list);
     }
 
     const byCriterion: CriterionAgreement[] = [...groups.entries()]
-      .map(([criteriaKey, group]) => ({
-        criteriaKey,
+      .map(([, group]) => ({
+        criteriaKey: group[0].criteriaKey,
+        scorecardId: group[0].scorecardId,
         criteriaName: group[0].criteriaName,
         evaluationType: group[0].evaluationType,
         ...agreementFor(group.map(toPair)),
