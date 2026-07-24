@@ -30,6 +30,11 @@ export class Prompt {
 export type PromptDocument = Prompt & Document;
 export const PromptSchema = SchemaFactory.createForClass(Prompt);
 
+// Seeding upserts defaults by name. Without this index two replicas booting together would each
+// pass the upsert's read phase and insert a duplicate — the index is what actually makes seeding
+// idempotent under concurrency, not the upsert on its own.
+PromptSchema.index({ name: 1 }, { unique: true });
+
 // Add virtual id
 PromptSchema.set('toJSON', {
   virtuals: true,

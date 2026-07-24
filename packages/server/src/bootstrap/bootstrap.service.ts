@@ -7,6 +7,7 @@ import { PersonaService, Persona } from '@chanl/scenarios-core';
 import { ScenarioService } from '@chanl/scenarios-core';
 import { ScorecardsService } from '@chanl/scorecards-core';
 import { ApiKeyService } from '../auth/api-key.service';
+import { PromptsService } from '../prompts/prompts.service';
 
 @Injectable()
 export class BootstrapService implements OnApplicationBootstrap {
@@ -18,6 +19,7 @@ export class BootstrapService implements OnApplicationBootstrap {
     private readonly scenarioService: ScenarioService,
     private readonly scorecardsService: ScorecardsService,
     private readonly apiKeyService: ApiKeyService,
+    private readonly promptsService: PromptsService,
   ) {}
 
   get isSeeded(): boolean {
@@ -65,7 +67,13 @@ export class BootstrapService implements OnApplicationBootstrap {
       summary.push('1 scorecard');
     }
 
-    // 4. Seed default scenarios referencing personas + scorecard
+    // 4. Seed default prompts (the agents under test).
+    // Without at least one, nothing on this install can execute: /scenarios/:id/execute requires a
+    // promptId, so a fresh quickstart dead-ends at "promptId must be a string".
+    const prompts = await this.promptsService.createDefaultPromptsIfNeeded();
+    summary.push(`${prompts.length} prompts`);
+
+    // 5. Seed default scenarios referencing personas + scorecard
     const personaMap: Record<string, string> = {};
     for (const p of personas) {
       // Mongoose documents have .id (virtual) and ._id — Persona type omits them

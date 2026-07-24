@@ -1,10 +1,94 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { MongooseModule, getConnectionToken } from '@nestjs/mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import { Connection, Types } from 'mongoose';
 import { BootstrapService } from '../bootstrap/bootstrap.service';
+import { BootstrapModule } from '../bootstrap/bootstrap.module';
 import { PersonaService } from '@chanl/scenarios-core';
 import { ScenarioService } from '@chanl/scenarios-core';
 import { ScorecardsService } from '@chanl/scorecards-core';
 import { ApiKeyService } from '../auth/api-key.service';
-import { Types } from 'mongoose';
+import { PromptsService } from '../prompts/prompts.service';
+
+// ════════════════════════════════════════════════════════════════════════════
+// First-run contract — assertions on STATE, not on mock calls.
+//
+// The mock-based suite below could not catch a seeder that was never wired: it asserts
+// `expect(mockX.createDefaults).toHaveBeenCalled()`, and a service that is never invoked has no
+// mock to fail. That shape let the quickstart ship with zero prompts seeded, so a fresh install
+// hit "promptId must be a string" on the very first Run while this file stayed green.
+//
+// These tests boot the real services against an in-memory Mongo and assert what a first-run user
+// actually needs to exist. They fail if any seeder is dropped, renamed, or never called.
+// ════════════════════════════════════════════════════════════════════════════
+describe('BootstrapService — first-run contract (real DB)', () => {
+  let mongod: MongoMemoryServer;
+  let module: TestingModule;
+  let service: BootstrapService;
+  // Must come from the Nest module: MongooseModule opens its own connection, so the global
+  // `mongoose.connection` is never connected here and every query would hang until the test timeout.
+  let connection: Connection;
+
+  beforeAll(async () => {
+    mongod = await MongoMemoryServer.create();
+    module = await Test.createTestingModule({
+      imports: [MongooseModule.forRoot(mongod.getUri()), BootstrapModule],
+    }).compile();
+    await module.init();
+    connection = module.get<Connection>(getConnectionToken());
+    service = module.get(BootstrapService);
+    await service.onApplicationBootstrap();
+  }, 120_000);
+
+  afterAll(async () => {
+    await module?.close();
+    await mongod?.stop();
+  });
+
+  it('reports itself seeded', () => {
+    expect(service.isSeeded).toBe(true);
+  });
+
+  it.each([
+    ['personas', 'a scenario needs a persona to drive the conversation'],
+    ['scorecards', 'a run needs a rubric to be scored against'],
+    ['scenarios', 'there must be something to run'],
+    ['prompts', 'execute requires a promptId — with none, the first Run 400s'],
+  ])('seeds at least one document into %s (%s)', async (collection) => {
+    const count = await connection.collection(collection).countDocuments({});
+    expect(count).toBeGreaterThan(0);
+  });
+
+  it('seeds a runnable pair: a scenario and a prompt to execute it against', async () => {
+    // This is the actual first-run contract. Either half alone is useless.
+    const [scenarios, prompts] = await Promise.all([
+      connection.collection('scenarios').countDocuments({}),
+      connection.collection('prompts').countDocuments({}),
+    ]);
+    expect({ scenarios: scenarios > 0, prompts: prompts > 0 }).toEqual({
+      scenarios: true,
+      prompts: true,
+    });
+  });
+
+  it('gives every seeded prompt the adapter config a run needs', async () => {
+    const prompts = await connection.collection('prompts').find({}).toArray();
+    for (const p of prompts) {
+      expect(p.content?.length).toBeGreaterThan(0);
+      expect(p.adapterConfig?.adapterType).toBeTruthy();
+      expect(p.adapterConfig?.model).toBeTruthy();
+    }
+  });
+
+  it('is idempotent — a second boot does not duplicate seed data', async () => {
+    const before = await connection.collection('prompts').countDocuments({});
+
+    await service.onApplicationBootstrap();
+
+    const after = await connection.collection('prompts').countDocuments({});
+    expect(after).toBe(before);
+  });
+});
 
 describe('BootstrapService', () => {
   let service: BootstrapService;
@@ -12,6 +96,7 @@ describe('BootstrapService', () => {
   let mockScenarioService: any;
   let mockScorecardsService: any;
   let mockApiKeyService: any;
+  let mockPromptsService: any;
 
   const fakePersonas = [
     { name: 'Angry - Karen', id: new Types.ObjectId().toString() },
@@ -49,6 +134,12 @@ describe('BootstrapService', () => {
       }),
     };
 
+    mockPromptsService = {
+      createDefaultPromptsIfNeeded: jest
+        .fn()
+        .mockResolvedValue([{ name: 'Customer Support Agent' }]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BootstrapService,
@@ -56,6 +147,7 @@ describe('BootstrapService', () => {
         { provide: ScenarioService, useValue: mockScenarioService },
         { provide: ScorecardsService, useValue: mockScorecardsService },
         { provide: ApiKeyService, useValue: mockApiKeyService },
+        { provide: PromptsService, useValue: mockPromptsService },
       ],
     }).compile();
 
@@ -78,6 +170,7 @@ describe('BootstrapService', () => {
     expect(
       mockScorecardsService.createDefaultScorecardIfNeeded,
     ).toHaveBeenCalled();
+    expect(mockPromptsService.createDefaultPromptsIfNeeded).toHaveBeenCalled();
     expect(mockScenarioService.createDefaultScenarios).toHaveBeenCalledWith(
       expect.objectContaining({
         'Angry - Karen': fakePersonas[0].id,
