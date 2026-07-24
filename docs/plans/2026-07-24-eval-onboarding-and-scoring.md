@@ -341,6 +341,71 @@ rather than observable state. That shape cannot catch an omission, which is prec
 that shipped a quickstart nobody can complete. The highest-value test work here is not more coverage —
 it is converting a handful of existing mock-assertions into state-assertions.
 
+## Architecture review, pass 3 — 2026-07-24 (durability under process death)
+
+New ground plus an audit of the C1 fix itself. A1–A7, B1–B5 stand.
+
+### C2 — A killed worker orphans the run and loses every turn (durability + multi-node)
+
+Be precise about what already works: an error **thrown inside the job** is handled correctly —
+`execution-processor.ts:427` catches it, marks the execution `failed`, and records the message.
+
+The gap is **process death**: SIGKILL, OOM, container restart, rolling deploy. Then:
+
+- **All progress is lost.** The conversation loop (`:227-380`) pushes turns into a local array and the
+  only write is at `:381`, *after* the loop. A run killed at turn 9 of 10 persists nothing.
+- **The row is orphaned forever.** `status: 'running'` is set at `:81` and never reconciled. There is
+  no reaper for stuck executions anywhere in the codebase.
+- **`@OnQueueFailed` (`:688`) only logs.** It does not touch the execution document, so it cannot
+  rescue the row even when it does fire.
+- **The retry pays twice.** Bull redelivers the stalled job and, per A4, it restarts from turn 0 —
+  spending 19 turns of LLM to deliver 10.
+
+No `lockDuration`, `maxStalledCount`, or `@OnQueueStalled` handler is configured, so stall detection
+runs on Bull defaults that nobody chose.
+
+This is squarely a multi-node problem: rolling deploys kill workers as a matter of routine, so the
+failure mode is not exotic — it is every deploy during an active run.
+
+**Fix:** persist the transcript incrementally (append per turn, or checkpoint every N turns) so a
+retry can resume; reconcile the execution row on `@OnQueueFailed`; and add a reaper that fails
+executions left `running` past a deadline. The incremental write is what makes A4's "resume rather
+than restart" option available at all.
+
+### C3 — The C1 fix adds a unique index to a previously unconstrained field, with no migration
+
+`prompts.name` had no constraint until this batch. `PromptSchema.index({ name: 1 }, { unique: true })`
+is what makes the seeding upsert genuinely idempotent — but on an existing install that already holds
+two prompts with the same name (which was legal), the index build fails. Mongoose logs and continues
+by default, so the index silently does not exist and the upsert quietly loses its concurrency
+guarantee. Nothing surfaces.
+
+The local dev DB happens to have zero duplicates, so this passed by luck, not by design.
+
+**Fix:** a startup check that logs loudly if the index is missing, or a migration that de-duplicates
+before building. At minimum do not let a silent index-build failure masquerade as a working guarantee.
+
+### C4 — Two ways to create the same entities, one skipping every invariant
+
+`scripts/seed/index.ts` writes raw into eight collections (`prompts`, `personas`, `scorecards`,
+`scorecard_categories`, `scorecard_criteria`, `scenarios`, `tool_fixtures`, `settings`) via
+`db.collection(...).insertOne`, bypassing the services entirely — so schema defaults, validators and
+the virtual-id plugin never run.
+
+C1 made this worse in a small way: bootstrap now upserts the shared `DEFAULT_PROMPTS` **and tags them
+`_default`**, while the manual script inserts the same data raw without that tag. The same named
+prompt is now a different document depending on which seeder created it.
+
+**Fix:** have the script call the services (it already imports from the workspace), or narrow it to a
+thin wrapper over `createDefault*IfNeeded`.
+
+### C5 — Two classes of concern ruled out (recorded so they are not re-audited)
+
+- **Package graph is a clean DAG.** `scorecards-core` is a leaf; `scenarios-core` → scorecards-core;
+  `server` → both; `sdk` standalone; `cli`/`dashboard` → sdk. No cycles, correct direction.
+- **Config sprawl is mild.** 14 runtime env vars; exactly one (`CHANL_EVAL_SERVER`, a client-side var)
+  is absent from `.env.example`.
+
 ## Review log
 
 | Date | Verdict | Notes |
