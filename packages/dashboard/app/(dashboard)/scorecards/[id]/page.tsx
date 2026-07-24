@@ -597,7 +597,7 @@ export default function ScorecardDetailPage() {
           </div>
 
           {/* Col 3: Settings sidebar */}
-          <div className="space-y-4 overflow-y-auto pb-6">
+          <div className="space-y-4 overflow-y-auto">
             <JudgeAgreementPanel scorecardId={id} />
 
             <Card>
