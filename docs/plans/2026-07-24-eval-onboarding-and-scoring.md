@@ -280,6 +280,67 @@ A2 and A3 are small, self-contained, and are correctness bugs today under replic
 A1 is the real blocker and unlocks A5. A6 is a ten-line fix. A4 needs a decision on retry semantics.
 A7 follows A1 naturally, since making adapters stateless already carves up the processor.
 
+## Architecture review, pass 2 — 2026-07-24 (testability + multi-node)
+
+New ground only; A1–A7 above stand unchanged.
+
+### B1 — A passing test is the reason the cold-start gap survived
+
+`bootstrap.spec.ts:69` is named **"should seed all defaults on fresh DB"** and it passes. Prompts are
+never seeded, so a fresh install cannot execute a scenario (`promptId must be a string`, 400).
+
+The test cannot catch that, because it asserts on **mock calls** rather than resulting state:
+`expect(mockPersonaService.createDefaultPersonas).toHaveBeenCalled()`,
+`expect(mockScenarioService.createDefaultScenarios).toHaveBeenCalled()`. A seeder that is never
+invoked has no mock to fail. The test encodes an incomplete definition of "all defaults" and then
+guards that definition.
+
+This is the most valuable finding of the audit: not "there is no test", but "there is a test, it is
+green, and its shape makes the bug invisible". Any assertion written against a mock of the thing you
+control can only prove you called what you already decided to call.
+
+**Fix:** assert on state, not on calls — after bootstrap, query the DB and assert every collection a
+first run needs is non-empty (including `prompts`). That test would have failed the day it was written.
+
+### B2 — `ScenarioExecutionService` (689 LOC) has zero test references
+
+Nothing imports it in any spec. It holds the judge key/baseUrl resolution, the direct
+`db.collection('settings')` access from A6, and the scorecard evaluation entry point — i.e. the path
+that decides whether a run gets scored at all. It is the most consequential untested file in the repo,
+and it is the one this batch extended.
+
+### B3 — `LabelsService` (248 LOC) has zero test references — added in this batch
+
+The pure agreement maths got 29 tests; the service that writes the labels got none. Untested:
+per-reviewer upsert uniqueness, the `agreed` derivation (including the within-1-point rule for
+scores), and **the judge-verdict snapshot** — the mechanism that keeps agreement history from
+rewriting itself when a run is re-evaluated.
+
+The maths is the part that was testable without a database, so it is the part that got tested. That is
+backwards: the snapshot is the piece whose silent failure corrupts data permanently, and a wrong kappa
+is at least visible. Worth fixing before more labels accumulate under untested write semantics.
+
+### B4 — `SettingsService` is only ever mocked, never exercised
+
+Its single spec reference (`generation.spec.ts`) injects a mock. So the A2 check-then-create race and
+the masked-value rejection guard added in this batch both ship with no test.
+
+### B5 — Multi-node surface is narrower than assumed (recorded so nobody re-audits)
+
+No SSE, no websockets, no in-memory session or request state anywhere in the server. Every `Map` found
+is either request-scoped or a stateless registry (`CriteriaHandlerRegistry`, `PersonaStrategyRegistry`
+hold stateless singletons and are safe to share).
+
+The multi-node blockers are therefore exactly three, all already recorded: **A1** (stateful adapters),
+**A2** (settings race), **A3** (bootstrap seed race). Nothing else in the request path is node-local.
+
+### Through-line
+
+B1 and B4 are the same defect at different sites: tests that assert against mocked collaborators
+rather than observable state. That shape cannot catch an omission, which is precisely the failure mode
+that shipped a quickstart nobody can complete. The highest-value test work here is not more coverage —
+it is converting a handful of existing mock-assertions into state-assertions.
+
 ## Review log
 
 | Date | Verdict | Notes |
