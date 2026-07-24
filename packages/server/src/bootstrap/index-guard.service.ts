@@ -8,6 +8,12 @@ interface GuardedIndex {
   field: string;
   /** What breaks, in user terms, if the index is absent. */
   guarantee: string;
+  /**
+   * Scope of a partial index. Duplicate diagnosis must apply the same filter, otherwise it reports
+   * rows the index does not constrain — two user-created scenarios may share a name while two
+   * seeded ones may not.
+   */
+  partialFilter?: Record<string, unknown>;
 }
 
 /**
@@ -23,6 +29,24 @@ const GUARDED: GuardedIndex[] = [
     collection: 'settings',
     field: 'key',
     guarantee: 'exactly one settings document exists, so saved API keys always resolve',
+  },
+  {
+    collection: 'personas',
+    field: 'name',
+    guarantee: 'default personas are seeded idempotently across concurrent boots',
+    partialFilter: { isDefault: true },
+  },
+  {
+    collection: 'scenarios',
+    field: 'name',
+    guarantee: 'default scenarios are seeded idempotently across concurrent boots',
+    partialFilter: { createdBy: 'system' },
+  },
+  {
+    collection: 'scorecards',
+    field: 'name',
+    guarantee: 'default scorecards are seeded idempotently across concurrent boots',
+    partialFilter: { createdBy: 'system' },
   },
 ];
 
@@ -44,8 +68,33 @@ export class IndexGuardService {
 
   constructor(@InjectConnection() private readonly connection: Connection) {}
 
+  /**
+   * Wait for Mongoose to finish building indexes.
+   *
+   * `Model.init()` resolves once the model's index builds complete and rejects if one fails, which
+   * is precisely the condition this service reports. Without awaiting it, verification races the
+   * build and reports absent indexes that appear moments later.
+   */
+  private async awaitIndexBuilds(): Promise<void> {
+    const models = Object.values(this.connection.models);
+
+    await Promise.all(
+      models.map(async (model) => {
+        try {
+          await model.init();
+        } catch (error: any) {
+          this.logger.error(
+            `Index build failed for ${model.modelName}: ${error?.message}`,
+          );
+        }
+      }),
+    );
+  }
+
   /** Returns the indexes that are missing, after logging each one. */
   async verify(): Promise<string[]> {
+    await this.awaitIndexBuilds();
+
     const missing: string[] = [];
 
     for (const guard of GUARDED) {
@@ -62,6 +111,7 @@ export class IndexGuardService {
 
         const duplicates = await collection
           .aggregate([
+            ...(guard.partialFilter ? [{ $match: guard.partialFilter }] : []),
             { $group: { _id: `$${guard.field}`, n: { $sum: 1 } } },
             { $match: { n: { $gt: 1 } } },
           ])

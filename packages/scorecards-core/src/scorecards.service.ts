@@ -23,6 +23,9 @@ import { CreateScorecardCriteriaDto } from './dto/create-scorecard-criteria.dto'
 import { UpdateScorecardCriteriaDto } from './dto/update-scorecard-criteria.dto';
 import { CreateScorecardResultDto } from './dto/create-scorecard-result.dto';
 
+/** Marks the seeded scorecard. Callers cannot set `createdBy`, so it identifies only that row. */
+const DEFAULT_SCORECARD_CREATED_BY = 'system';
+
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: {
@@ -504,14 +507,19 @@ export class ScorecardsService {
   }
 
   /**
-   * Create a default scorecard if none exists.
-   * Used to ensure at least one scorecard exists for evaluation.
+   * Seed the default scorecard, with its categories and criteria.
+   *
+   * Idempotent by upsert on `name` rather than an existence check, so replicas booting
+   * concurrently converge instead of each inserting a scorecard (the unique index on `name` is
+   * what actually enforces that).
    */
   async createDefaultScorecardIfNeeded(): Promise<Types.ObjectId | null> {
     try {
-      // Check if an active scorecard already exists
-      const existing = await this.scorecardModel.findOne({ status: 'active' }).exec();
+      const defaultData = this.getDefaultScorecardData();
+      const existing = await this.upsertDefaultScorecard(defaultData);
 
+      // Whoever performed the insert owns building the category and criteria tree below; a caller
+      // that matched an existing scorecard must not build a second one.
       if (existing) {
         this.logger.log(
           `Default scorecard already exists: ${existing._id}`,
@@ -519,17 +527,13 @@ export class ScorecardsService {
         return existing._id as Types.ObjectId;
       }
 
-      // Get default scorecard data structure
-      const defaultData = this.getDefaultScorecardData();
-
-      // Create the scorecard
-      const createdScorecard = await this.createScorecard({
-        name: defaultData.name,
-        description: defaultData.description,
-        status: defaultData.status,
-      });
-
-      const scorecardId = createdScorecard._id;
+      const inserted = await this.scorecardModel
+        .findOne({
+          name: defaultData.name,
+          createdBy: DEFAULT_SCORECARD_CREATED_BY,
+        })
+        .exec();
+      const scorecardId = inserted?._id;
       if (!scorecardId) {
         throw new Error('Failed to extract scorecard ID after creation');
       }
@@ -580,6 +584,68 @@ export class ScorecardsService {
         error.stack,
       );
       return null;
+    }
+  }
+
+  /**
+   * Upsert the default scorecard by name, and report whether it already existed.
+   *
+   * Returns the pre-existing document, or null when this call performed the insert. A concurrent
+   * seeder can win the insert between this call's read and write, which the unique index turns
+   * into a duplicate-key error; the loser reads back the winner's document and so reports it as
+   * pre-existing.
+   */
+  private async upsertDefaultScorecard(defaultData: {
+    name: string;
+    description: string;
+    status: string;
+  }): Promise<ScorecardDocument | null> {
+    // An install can carry an unmarked default scorecard, which the upsert below would not match
+    // and would seed a second copy of. Claim it first.
+    await this.scorecardModel.updateOne(
+      { name: defaultData.name, createdBy: { $exists: false } },
+      { $set: { createdBy: DEFAULT_SCORECARD_CREATED_BY } },
+      { timestamps: false },
+    );
+
+    // createdBy matches the scope of the unique index, so the index covers this upsert.
+    const filter = {
+      name: defaultData.name,
+      createdBy: DEFAULT_SCORECARD_CREATED_BY,
+    };
+    const now = new Date();
+
+    try {
+      return await this.scorecardModel.findOneAndUpdate(
+        filter,
+        // $setOnInsert only: re-seeding must not clobber a scorecard the user has since edited.
+        {
+          $setOnInsert: {
+            name: defaultData.name,
+            description: defaultData.description,
+            status: defaultData.status,
+            createdBy: DEFAULT_SCORECARD_CREATED_BY,
+            categoryIds: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+        {
+          new: false,
+          upsert: true,
+          setDefaultsOnInsert: true,
+          // Timestamps are set explicitly above so re-seeding does not bump updatedAt on a
+          // document it did not change.
+          timestamps: false,
+        },
+      );
+    } catch (error: any) {
+      if (error?.code !== 11000) throw error;
+      // Must resolve to the winner's document: returning null here would be read as "this call
+      // inserted it" and build a second category tree.
+      const winner = await this.scorecardModel.findOne(filter).exec();
+      if (!winner) throw error;
+      return winner;
     }
   }
 

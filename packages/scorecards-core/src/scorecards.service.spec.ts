@@ -706,6 +706,73 @@ describe('ScorecardsService', () => {
       expect(all.data).toHaveLength(1);
     });
 
+    it('should not duplicate when seeders run concurrently', async () => {
+      // The unique index is what enforces this, so it has to exist before the race.
+      await scorecardModel.createIndexes();
+
+      const ids = await Promise.all([
+        service.createDefaultScorecardIfNeeded(),
+        service.createDefaultScorecardIfNeeded(),
+        service.createDefaultScorecardIfNeeded(),
+      ]);
+
+      for (const id of ids) {
+        expect(id).toBeDefined();
+        expect(id!.toString()).toBe(ids[0]!.toString());
+      }
+
+      const all = await service.findAllScorecards({});
+      expect(all.data).toHaveLength(1);
+
+      // Only the call that inserted the scorecard may build its tree.
+      const categories = await service.findCategoriesByScorecard(
+        ids[0]!.toString(),
+      );
+      expect(categories).toHaveLength(5);
+      const criteria = await service.findCriteriaByScorecard(
+        ids[0]!.toString(),
+      );
+      expect(criteria).toHaveLength(11);
+    });
+
+    it('should let the database reject a second row for the seeded name', async () => {
+      // The upsert alone leaves a read-then-write window, so the guarantee rests on the index.
+      // Written against the driver to bypass the service and assert the constraint itself.
+      await scorecardModel.createIndexes();
+      await service.createDefaultScorecardIfNeeded();
+
+      await expect(
+        scorecardModel.collection.insertOne({
+          name: 'Call Quality Scorecard',
+          createdBy: 'system',
+        }),
+      ).rejects.toThrow(/E11000/);
+    });
+
+    it('should leave user scorecards unconstrained', async () => {
+      await scorecardModel.createIndexes();
+      await service.createDefaultScorecardIfNeeded();
+
+      await service.createScorecard({ name: 'Call Quality Scorecard' });
+      await service.createScorecard({ name: 'Call Quality Scorecard' });
+
+      const all = await service.findAllScorecards({});
+      expect(all.pagination.total).toBe(3);
+    });
+
+    it('should adopt an unmarked default scorecard instead of seeding a second', async () => {
+      const legacy = await service.createScorecard({
+        name: 'Call Quality Scorecard',
+        status: 'active',
+      });
+
+      const scorecardId = await service.createDefaultScorecardIfNeeded();
+
+      expect(scorecardId!.toString()).toBe(legacy._id!.toString());
+      const all = await service.findAllScorecards({});
+      expect(all.data).toHaveLength(1);
+    });
+
     it('should create default scorecard (local mode)', async () => {
       const scorecardId =
         await service.createDefaultScorecardIfNeeded();

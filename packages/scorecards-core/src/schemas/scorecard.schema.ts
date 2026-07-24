@@ -67,4 +67,16 @@ export class Scorecard {
 
 export const ScorecardSchema = SchemaFactory.createForClass(Scorecard);
 ScorecardSchema.index({ status: 1 });
+
+// Seeding upserts the default scorecard by name. Two replicas booting together would each pass the
+// upsert's read phase and insert a duplicate — this index is what makes seeding idempotent under
+// concurrency, and it is also what keeps a second scorecard from being built with its own
+// duplicate category and criteria tree.
+//
+// Scoped to the seeded row: `createdBy` is only ever 'system' for that one (CreateScorecardDto has
+// no such field, so a caller cannot set it), and user scorecards legitimately share names.
+ScorecardSchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { createdBy: 'system' } },
+);
 ScorecardSchema.plugin(virtualIdPlugin);
