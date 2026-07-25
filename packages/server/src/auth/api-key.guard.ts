@@ -1,9 +1,11 @@
+import { ConfigService } from '@nestjs/config';
 import {
   Injectable,
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ApiKeyService } from './api-key.service';
@@ -16,6 +18,7 @@ export class ApiKeyGuard implements CanActivate {
   constructor(
     private readonly apiKeyService: ApiKeyService,
     private readonly reflector: Reflector,
+    private readonly config: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -36,7 +39,7 @@ export class ApiKeyGuard implements CanActivate {
       return true;
     }
 
-    if (process.env.CHANL_EVAL_REQUIRE_API_KEY !== 'true') {
+    if (this.config.get<string>('CHANL_EVAL_REQUIRE_API_KEY') !== 'true') {
       return true;
     }
 

@@ -14,6 +14,7 @@ import { SettingsModule } from './settings/settings.module';
 import { SettingsService } from './settings/settings.service';
 import { createSimulationConfigProvider } from './settings/simulation-config.factory';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { validateEnvironment, CONFIG_DEFAULTS } from './config/env.validation';
 import { ScorecardsModule } from '@chanl/scorecards-core';
 
 // Local modules
@@ -28,15 +29,25 @@ import { GenerationModule } from './generation/generation.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, cache: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      cache: true,
+      validate: validateEnvironment,
+    }),
     // Infrastructure
-    MongooseModule.forRoot(
-      process.env.MONGODB_URI || 'mongodb://localhost:27217/chanl-eval',
-    ),
-    BullModule.forRoot({
-      redis: parseRedisUrl(
-        process.env.REDIS_URL || 'redis://localhost:6479',
-      ),
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        uri: config.get<string>('MONGODB_URI') ?? CONFIG_DEFAULTS.MONGODB_URI,
+      }),
+    }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        redis: parseRedisUrl(
+          config.get<string>('REDIS_URL') ?? CONFIG_DEFAULTS.REDIS_URL,
+        ),
+      }),
     }),
 
     // Core packages

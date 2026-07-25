@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getConnectionToken, getModelToken } from '@nestjs/mongoose';
+import { ConfigModule } from '@nestjs/config';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Connection, Model } from 'mongoose';
 import { SettingsService, MASK_PREFIX } from '../settings/settings.service';
@@ -25,6 +26,8 @@ describe('SettingsService', () => {
     mongod = await MongoMemoryServer.create();
     module = await Test.createTestingModule({
       imports: [
+        // ignoreEnvFile + isGlobal: reads straight from process.env, which the tests mutate.
+        ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
         MongooseModule.forRoot(mongod.getUri()),
         MongooseModule.forFeature([{ name: Settings.name, schema: SettingsSchema }]),
       ],

@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -24,6 +25,7 @@ export class SettingsService {
   constructor(
     @InjectModel(Settings.name)
     private readonly model: Model<SettingsDocument>,
+    private readonly config: ConfigService,
   ) {}
 
   /**
@@ -98,9 +100,8 @@ export class SettingsService {
 
   /** Simulation host, env first so an operator can pin it for a deployment. */
   async getSimulationBaseUrl(): Promise<string | undefined> {
-    if (process.env.CHANL_SIMULATION_BASE_URL) {
-      return process.env.CHANL_SIMULATION_BASE_URL;
-    }
+    const fromEnv = this.config.get<string>('CHANL_SIMULATION_BASE_URL');
+    if (fromEnv) return fromEnv;
     const settings = await this.get();
     return settings.simulationBaseUrl || undefined;
   }
