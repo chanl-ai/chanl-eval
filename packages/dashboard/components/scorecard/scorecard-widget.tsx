@@ -5,7 +5,8 @@ import { Check, AlertCircle, ChevronDown, CheckCircle, XCircle, Minus } from 'lu
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { SCORECARD_COLORS } from './scorecard-colors';
-import type { ScoreMetric, ScorecardWidgetProps, ScorecardCriterionDisplay } from './types';
+import type { ScoreMetric, ScorecardWidgetProps, ScorecardCriterionDisplay, ScorecardReviewOptions } from './types';
+import { CriterionReviewControl } from './criterion-review-control';
 
 /**
  * ScorecardWidget — Presentational component for displaying scorecard results.
@@ -20,6 +21,7 @@ export function ScorecardWidget({
   overallStatus: overallStatusProp,
   summary,
   className,
+  review,
 }: ScorecardWidgetProps) {
   if (metrics.length === 0) {
     return (
@@ -85,7 +87,7 @@ export function ScorecardWidget({
       {/* Category Metrics */}
       <div className="space-y-4">
         {metrics.map((metric, index) => (
-          <ScorecardMetricRow key={index} metric={metric} />
+          <ScorecardMetricRow key={index} metric={metric} review={review} />
         ))}
       </div>
     </div>
@@ -93,7 +95,13 @@ export function ScorecardWidget({
 }
 
 /** Single category row with progress bar + expandable criteria */
-function ScorecardMetricRow({ metric }: { metric: ScoreMetric }) {
+function ScorecardMetricRow({
+  metric,
+  review,
+}: {
+  metric: ScoreMetric;
+  review?: ScorecardReviewOptions;
+}) {
   const isPass = metric.status === 'pass';
   const colorKey = isPass ? 'pass' : 'fail';
 
@@ -201,7 +209,7 @@ function ScorecardMetricRow({ metric }: { metric: ScoreMetric }) {
             {metric.criteria && metric.criteria.length > 0 ? (
               <div>
                 {metric.criteria.map((item, index) => (
-                  <CriterionRow key={index} item={item} index={index} />
+                  <CriterionRow key={index} item={item} index={index} review={review} />
                 ))}
               </div>
             ) : (
@@ -217,7 +225,15 @@ function ScorecardMetricRow({ metric }: { metric: ScoreMetric }) {
 }
 
 /** Single criterion row inside the expanded details */
-function CriterionRow({ item, index }: { item: ScorecardCriterionDisplay; index: number }) {
+function CriterionRow({
+  item,
+  index,
+  review,
+}: {
+  item: ScorecardCriterionDisplay;
+  index: number;
+  review?: ScorecardReviewOptions;
+}) {
   const isNA = item.notApplicable === true;
   const criterionPassed = isNA ? true : item.passed;
 
@@ -232,7 +248,7 @@ function CriterionRow({ item, index }: { item: ScorecardCriterionDisplay; index:
 
   return (
     <div
-      className="flex items-start justify-between gap-6 border-b px-6 py-4 transition-colors last:border-b-0"
+      className="group/criterion flex items-start justify-between gap-6 border-b px-6 py-4 transition-colors last:border-b-0"
       style={{
         backgroundColor:
           isNA ? undefined : !criterionPassed ? SCORECARD_COLORS.fail.bg : undefined,
@@ -279,6 +295,13 @@ function CriterionRow({ item, index }: { item: ScorecardCriterionDisplay; index:
         </div>
       </div>
       <div className="flex min-w-[60px] shrink-0 items-center justify-end gap-2">
+        {review && !isNA && (
+          <CriterionReviewControl
+            criterion={item}
+            review={item.criteriaId ? review.reviews?.[item.criteriaId] : undefined}
+            options={review}
+          />
+        )}
         {isNA ? (
           <>
             <Minus className="size-4 text-muted-foreground" />

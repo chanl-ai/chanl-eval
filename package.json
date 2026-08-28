@@ -17,6 +17,7 @@
     "test": "pnpm -r test",
     "test:cov": "pnpm -r test:cov",
     "lint": "pnpm -r lint",
+    "check:size": "node scripts/check-file-size.mjs",
     "clean": "pnpm -r clean",
     "dev:server": "pnpm --filter @chanl/eval-server start:dev",
     "dev:dashboard": "pnpm --filter @chanl/eval-dashboard dev"

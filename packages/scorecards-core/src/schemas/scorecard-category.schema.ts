@@ -62,4 +62,7 @@ export class ScorecardCategory {
 export const ScorecardCategorySchema =
   SchemaFactory.createForClass(ScorecardCategory);
 ScorecardCategorySchema.index({ scorecardId: 1 });
+// Makes the default-tree build idempotent: two callers repairing the same scorecard converge on one
+// category per name instead of each inserting its own.
+ScorecardCategorySchema.index({ scorecardId: 1, name: 1 }, { unique: true });
 ScorecardCategorySchema.plugin(virtualIdPlugin);

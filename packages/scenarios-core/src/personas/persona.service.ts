@@ -5,6 +5,115 @@ import { Persona, PersonaDocument } from './schemas/persona.schema';
 import { CreatePersonaDto } from './dto/create-persona.dto';
 import { UpdatePersonaDto } from './dto/update-persona.dto';
 
+/** The personas every install starts with. Keyed by `name` when seeded. */
+const DEFAULT_PERSONAS = [
+  {
+    name: 'Angry - Karen',
+    description: 'Frustrated customer with demanding tone',
+    gender: 'female',
+    emotion: 'irritated',
+    language: 'english',
+    accent: 'british',
+    intentClarity: 'slightly unclear',
+    speechStyle: 'normal',
+    backgroundNoise: false,
+    allowInterruptions: false,
+    tags: ['customer-service', 'complaint', 'urgent'],
+    isDefault: true,
+    isActive: true,
+  },
+  {
+    name: 'Friendly - Sophia',
+    description: 'Warm and welcoming customer service representative',
+    gender: 'female',
+    emotion: 'friendly',
+    language: 'english',
+    accent: 'american',
+    intentClarity: 'very clear',
+    speechStyle: 'slow',
+    backgroundNoise: false,
+    allowInterruptions: true,
+    tags: ['customer-service', 'helpful', 'patient'],
+    isDefault: true,
+    isActive: true,
+  },
+  {
+    name: 'Polite - Carlos',
+    description: 'Professional and courteous customer',
+    gender: 'male',
+    emotion: 'polite',
+    language: 'spanish',
+    accent: 'mexican',
+    intentClarity: 'very clear',
+    speechStyle: 'normal',
+    backgroundNoise: false,
+    allowInterruptions: false,
+    tags: ['professional', 'courteous', 'spanish'],
+    isDefault: true,
+    isActive: true,
+  },
+  {
+    name: 'Stressed - Mei',
+    description: 'Overwhelmed customer with urgent needs',
+    gender: 'female',
+    emotion: 'stressed',
+    language: 'english',
+    accent: 'american',
+    intentClarity: 'slightly unclear',
+    speechStyle: 'fast',
+    backgroundNoise: true,
+    allowInterruptions: true,
+    tags: ['urgent', 'overwhelmed', 'time-sensitive'],
+    isDefault: true,
+    isActive: true,
+  },
+  {
+    name: 'Distracted - Alex',
+    description: 'Customer who seems preoccupied and unfocused',
+    gender: 'male',
+    emotion: 'distracted',
+    language: 'english',
+    accent: 'canadian',
+    intentClarity: 'mumbled',
+    speechStyle: 'moderate',
+    backgroundNoise: true,
+    allowInterruptions: true,
+    tags: ['distracted', 'unfocused', 'multitasking'],
+    isDefault: true,
+    isActive: true,
+  },
+  {
+    name: 'Calm - James',
+    description: 'Relaxed and composed customer',
+    gender: 'male',
+    emotion: 'calm',
+    language: 'english',
+    accent: 'american',
+    intentClarity: 'very clear',
+    speechStyle: 'slow',
+    backgroundNoise: false,
+    allowInterruptions: false,
+    tags: ['calm', 'patient', 'composed'],
+    isDefault: true,
+    isActive: true,
+  },
+  {
+    name: 'Curious - Maria',
+    description: 'Inquisitive customer asking many questions',
+    gender: 'female',
+    emotion: 'curious',
+    language: 'portuguese',
+    accent: 'brazilian',
+    intentClarity: 'very clear',
+    speechStyle: 'normal',
+    backgroundNoise: false,
+    allowInterruptions: true,
+    tags: ['inquisitive', 'questions', 'portuguese'],
+    isDefault: true,
+    isActive: true,
+  },
+];
+
 @Injectable()
 export class PersonaService {
   private readonly logger = new Logger(PersonaService.name);
@@ -203,145 +312,27 @@ export class PersonaService {
   }
 
   /**
-   * Create default personas. Idempotent -- skips if defaults already exist.
+   * Seed the default personas.
+   *
+   * Idempotent by upsert on `name` rather than an existence check, so replicas booting
+   * concurrently converge instead of each inserting a full set (the unique index on `name` is
+   * what actually enforces that).
    */
   async createDefaultPersonas(
     createdBy?: string,
   ): Promise<Persona[]> {
     try {
-      const existingDefaults = await this.getDefaultPersonas();
-      if (existingDefaults.length > 0) {
-        return existingDefaults;
+      const personas: Persona[] = [];
+
+      for (const definition of DEFAULT_PERSONAS) {
+        const persona = await this.upsertDefaultPersona({
+          ...definition,
+          createdBy,
+        });
+        if (persona) personas.push(persona);
       }
 
-      const defaultPersonas = [
-        {
-          name: 'Angry - Karen',
-          description: 'Frustrated customer with demanding tone',
-          gender: 'female',
-          emotion: 'irritated',
-          language: 'english',
-          accent: 'british',
-          intentClarity: 'slightly unclear',
-          speechStyle: 'normal',
-          backgroundNoise: false,
-          allowInterruptions: false,
-          tags: ['customer-service', 'complaint', 'urgent'],
-          isDefault: true,
-          isActive: true,
-          createdBy,
-        },
-        {
-          name: 'Friendly - Sophia',
-          description: 'Warm and welcoming customer service representative',
-          gender: 'female',
-          emotion: 'friendly',
-          language: 'english',
-          accent: 'american',
-          intentClarity: 'very clear',
-          speechStyle: 'slow',
-          backgroundNoise: false,
-          allowInterruptions: true,
-          tags: ['customer-service', 'helpful', 'patient'],
-          isDefault: true,
-          isActive: true,
-          createdBy,
-        },
-        {
-          name: 'Polite - Carlos',
-          description: 'Professional and courteous customer',
-          gender: 'male',
-          emotion: 'polite',
-          language: 'spanish',
-          accent: 'mexican',
-          intentClarity: 'very clear',
-          speechStyle: 'normal',
-          backgroundNoise: false,
-          allowInterruptions: false,
-          tags: ['professional', 'courteous', 'spanish'],
-          isDefault: true,
-          isActive: true,
-          createdBy,
-        },
-        {
-          name: 'Stressed - Mei',
-          description: 'Overwhelmed customer with urgent needs',
-          gender: 'female',
-          emotion: 'stressed',
-          language: 'english',
-          accent: 'american',
-          intentClarity: 'slightly unclear',
-          speechStyle: 'fast',
-          backgroundNoise: true,
-          allowInterruptions: true,
-          tags: ['urgent', 'overwhelmed', 'time-sensitive'],
-          isDefault: true,
-          isActive: true,
-          createdBy,
-        },
-        {
-          name: 'Distracted - Alex',
-          description: 'Customer who seems preoccupied and unfocused',
-          gender: 'male',
-          emotion: 'distracted',
-          language: 'english',
-          accent: 'canadian',
-          intentClarity: 'mumbled',
-          speechStyle: 'moderate',
-          backgroundNoise: true,
-          allowInterruptions: true,
-          tags: ['distracted', 'unfocused', 'multitasking'],
-          isDefault: true,
-          isActive: true,
-          createdBy,
-        },
-        {
-          name: 'Calm - James',
-          description: 'Relaxed and composed customer',
-          gender: 'male',
-          emotion: 'calm',
-          language: 'english',
-          accent: 'american',
-          intentClarity: 'very clear',
-          speechStyle: 'slow',
-          backgroundNoise: false,
-          allowInterruptions: false,
-          tags: ['calm', 'patient', 'composed'],
-          isDefault: true,
-          isActive: true,
-          createdBy,
-        },
-        {
-          name: 'Curious - Maria',
-          description: 'Inquisitive customer asking many questions',
-          gender: 'female',
-          emotion: 'curious',
-          language: 'portuguese',
-          accent: 'brazilian',
-          intentClarity: 'very clear',
-          speechStyle: 'normal',
-          backgroundNoise: false,
-          allowInterruptions: true,
-          tags: ['inquisitive', 'questions', 'portuguese'],
-          isDefault: true,
-          isActive: true,
-          createdBy,
-        },
-      ];
-
-      const insertData = defaultPersonas.map((persona) => ({
-        ...persona,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
-
-      const personas = (await this.personaModel.insertMany(
-        insertData,
-      )) as Persona[];
-
-      this.logger.log(
-        `Created ${personas.length} default personas`,
-      );
+      this.logger.log(`Default personas ensured: ${personas.length}`);
       return personas;
     } catch (error: any) {
       this.logger.error(
@@ -349,6 +340,41 @@ export class PersonaService {
         error.stack,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Upsert one default persona by name.
+   *
+   * A concurrent seeder can win the insert between this call's read and write, which the unique
+   * index turns into a duplicate-key error. The document exists either way, so read it back.
+   */
+  private async upsertDefaultPersona(
+    definition: Record<string, unknown>,
+  ): Promise<Persona | null> {
+    // isDefault matches the scope of the unique index, so the index covers this upsert.
+    const filter = { name: definition.name as string, isDefault: true };
+    const now = new Date();
+
+    try {
+      return await this.personaModel.findOneAndUpdate(
+        filter,
+        // $setOnInsert only: re-seeding must not clobber a persona the user has since edited.
+        { $setOnInsert: { ...definition, createdAt: now, updatedAt: now } },
+        {
+          new: true,
+          upsert: true,
+          setDefaultsOnInsert: true,
+          // Timestamps are set explicitly above so re-seeding does not bump updatedAt on a
+          // document it did not change.
+          timestamps: false,
+        },
+      );
+    } catch (error: any) {
+      if (error?.code !== 11000) throw error;
+      const winner = await this.personaModel.findOne(filter);
+      if (!winner) throw error;
+      return winner;
     }
   }
 

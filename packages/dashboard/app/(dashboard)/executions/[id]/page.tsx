@@ -168,6 +168,8 @@ function scorecardResultToMetrics(result: ScorecardResult): ScoreMetric[] {
     }
     categoryMap.get(catId)!.criteria.push({
       name: cr.criteriaName,
+      criteriaId: cr.criteriaId,
+      result: (cr as any).result,
       passed: cr.passed,
       explanation: cr.reasoning,
       evidence: cr.evidence?.length > 0 ? cr.evidence.slice(0, 2) : undefined,
@@ -214,6 +216,8 @@ function embeddedResultsToMetrics(result: {
     }
     categoryMap.get(catId)!.criteria.push({
       name: cr.criteriaName || cr.criteriaId,
+      criteriaId: cr.criteriaId,
+      result: (cr as any).result,
       passed: cr.passed,
       explanation: cr.reasoning,
       evidence: cr.evidence?.length ? cr.evidence.slice(0, 2) : undefined,
@@ -398,6 +402,37 @@ export default function RunDetailPage() {
   });
   const scorecardResult = scorecardQ.data?.[0] ?? null;
 
+  // Human verdicts for this run, attached inline to each criterion in the scorecard panel.
+  const labelsQ = useQuery({
+    queryKey: ['labels', scorecardResult?.id],
+    queryFn: () => client.labels.listForResult(scorecardResult!.id),
+    enabled: !!scorecardResult?.id,
+  });
+
+  const reviews = (labelsQ.data ?? []).reduce<Record<string, { agreed: boolean; humanResult: boolean | number; note?: string }>>(
+    (acc, l) => {
+      acc[l.criteriaId] = { agreed: l.agreed, humanResult: l.humanResult, note: l.note };
+      return acc;
+    },
+    {},
+  );
+
+  const reviewMutation = useMutation({
+    mutationFn: (input: { criteriaId: string; humanResult: boolean | number; note?: string }) =>
+      client.labels.create({
+        scorecardResultId: scorecardResult!.id,
+        criteriaId: input.criteriaId,
+        humanResult: input.humanResult,
+        note: input.note,
+      }),
+    onSuccess: (label) => {
+      void qc.invalidateQueries({ queryKey: ['labels', scorecardResult?.id] });
+      void qc.invalidateQueries({ queryKey: ['agreement'] });
+      toast.success(label.agreed ? 'Recorded: judge was right' : 'Recorded: you disagree');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Could not record verdict'),
+  });
+
   // Use embedded results first, fall back to separate collection
   const hasEvaluation = !!(embeddedResults || scorecardResult);
   const metrics = scorecardResult
@@ -448,8 +483,8 @@ export default function RunDetailPage() {
   return (
     <PageLayout
       backHref="/executions"
-      title={execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail'}
-      description={execution ? formatDate(execution.createdAt) : 'Loading...'}
+      title={scenarioName ?? (execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail')}
+      description={execution ? `Run ${execution.id.slice(-8)} · ${formatDate(execution.createdAt)}` : 'Loading...'}
       titleExtra={
         execution ? (
           <div className="flex items-center gap-2">
@@ -568,6 +603,20 @@ export default function RunDetailPage() {
                     metrics={metrics}
                     overallScorePercentage={displayScore}
                     summary={scorecardSummary}
+                    review={
+                      scorecardResult?.id
+                        ? {
+                            reviews,
+                            pending: reviewMutation.isPending,
+                            onReview: (criteriaId, humanResult, note) =>
+                              reviewMutation.mutate({ criteriaId, humanResult, note }),
+                            onEditCriterion: (criteriaId) =>
+                              router.push(
+                                `/scorecards/${scorecardResult.scorecardId}?criterion=${criteriaId}`,
+                              ),
+                          }
+                        : undefined
+                    }
                   />
                 ) : (
                   /* State 1: No evaluation — show picker */

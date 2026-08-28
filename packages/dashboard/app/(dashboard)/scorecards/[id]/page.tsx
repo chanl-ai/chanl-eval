@@ -20,6 +20,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { JudgeAgreementPanel } from '@/components/scorecard/judge-agreement-panel';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -596,7 +597,9 @@ export default function ScorecardDetailPage() {
           </div>
 
           {/* Col 3: Settings sidebar */}
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto">
+            <JudgeAgreementPanel scorecardId={id} />
+
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Settings</CardTitle>

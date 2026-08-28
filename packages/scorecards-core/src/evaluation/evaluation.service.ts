@@ -1,3 +1,4 @@
+import { verdictOf } from '../verdict';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -119,11 +120,16 @@ export class EvaluationService {
             categoryVersion: category?.version || 1,
             categoryName: category?.name,
             criteriaName: criterion.name,
-            result: handlerResult.result,
+            // Normalised on the way in, so no consumer has to guess whether this is a number, a
+            // boolean or the string "pass".
+            result: verdictOf(handlerResult.result, handlerResult.passed),
             passed: handlerResult.passed,
             reasoning: handlerResult.reasoning,
             evidence: handlerResult.evidence,
             ...(handlerResult.notApplicable ? { notApplicable: true } : {}),
+            ...(handlerResult.confidence !== undefined
+              ? { confidence: handlerResult.confidence }
+              : {}),
           });
         } catch (error: any) {
           this.logger.error(
@@ -155,7 +161,13 @@ export class EvaluationService {
 
         if (categoryCriteria.length === 0) continue;
 
-        const normalizedScores = categoryCriteria.map((cr) => {
+        // A criterion that could not be evaluated (no ground truth, no tools, judge unreachable) must
+        // not be scored as a zero — that silently penalises the agent for our own missing inputs.
+        // It is recorded on the result as N/A and excluded from the average.
+        const scorableCriteria = categoryCriteria.filter((cr) => !cr.notApplicable);
+        if (scorableCriteria.length === 0) continue;
+
+        const normalizedScores = scorableCriteria.map((cr) => {
           const criterion = allCriteria.find(
             (c) => c._id?.toString() === cr.criteriaId,
           );

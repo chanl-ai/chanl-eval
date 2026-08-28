@@ -1,5 +1,5 @@
 import { Controller, Get, Put, Param, Body, NotFoundException } from '@nestjs/common';
-import { SettingsService } from './settings.service';
+import { SettingsService, MASK_PREFIX } from './settings.service';
 
 @Controller('settings')
 export class SettingsController {
@@ -14,14 +14,23 @@ export class SettingsController {
       const keys: Record<string, string> = {};
       for (const [provider, key] of Object.entries(masked.providerKeys)) {
         if (key && typeof key === 'string' && key.length > 4) {
-          keys[provider] = '••••' + key.slice(-4);
+          keys[provider] = MASK_PREFIX + key.slice(-4);
         } else if (key) {
-          keys[provider] = '••••';
+          keys[provider] = MASK_PREFIX;
         }
       }
       masked.providerKeys = keys;
     }
-    return { settings: masked };
+
+    // Tells the UI whether a run can actually reach an LLM, and from where. Without this the
+    // dashboard cannot distinguish "no key anywhere" from "operator set CHANL_OPENAI_API_KEY".
+    const keySources = await this.settingsService.getKeySources();
+
+    return {
+      settings: masked,
+      keySources,
+      hasAnyKey: Object.values(keySources).some((s) => s !== null),
+    };
   }
 
   @Get('keys/:provider')
@@ -34,7 +43,9 @@ export class SettingsController {
   }
 
   @Put()
-  async update(@Body() dto: { providerKeys?: Record<string, string> }) {
+  async update(
+    @Body() dto: { providerKeys?: Record<string, string>; simulationBaseUrl?: string },
+  ) {
     await this.settingsService.update(dto);
     return this.get();
   }

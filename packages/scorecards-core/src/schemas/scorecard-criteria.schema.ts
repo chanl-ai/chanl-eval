@@ -14,6 +14,7 @@ export enum CriteriaType {
   CONVERSATION_COMPLETENESS = 'conversation_completeness',
   ROLE_ADHERENCE = 'role_adherence',
   RAG_FAITHFULNESS = 'rag_faithfulness',
+  PATTERN = 'pattern',
 }
 
 // ========== SETTINGS INTERFACES ==========
@@ -21,6 +22,12 @@ export enum CriteriaType {
 export interface PromptCriteriaSettings {
   description: string;
   evaluationType: 'boolean' | 'score';
+  /**
+   * Draw k independent judge samples and vote instead of trusting one call (self-consistency).
+   * Reports inter-sample agreement as `confidence`. Default 1 (single call, no confidence signal).
+   * Costs k× — use it on the criteria whose verdicts you actually act on.
+   */
+  selfConsistency?: number;
 }
 
 export interface KeywordCriteriaSettings {
@@ -29,6 +36,23 @@ export interface KeywordCriteriaSettings {
   /** Plural alias — some DB documents store `keywords` instead of `keyword` */
   keywords?: string | string[];
   caseSensitive?: boolean;
+}
+
+export interface PatternCriteriaSettings {
+  /**
+   * Built-in pattern groups to enable: 'placeholder' | 'system_prompt_leak' | 'pii' | 'internal_ids'.
+   * Typed as string[] so an unknown preset degrades to a reported warning instead of a hard failure.
+   */
+  presets?: string | string[];
+  /** Additional custom regex sources, e.g. ['ACME-\\d{4}'] */
+  patterns?: string | string[];
+  /** Default 'must_not_match' — any match fails the criterion. */
+  matchType?: 'must_not_match' | 'must_match';
+  /** Whose turns to scan. Default 'agent' — the persona is allowed to say anything. */
+  speaker?: 'agent' | 'customer' | 'any';
+  caseSensitive?: boolean;
+  /** Max evidence snippets to return. Default 5. */
+  maxEvidence?: number;
 }
 
 export interface ResponseTimeCriteriaSettings {
@@ -69,6 +93,7 @@ export interface RagFaithfulnessCriteriaSettings {
 export type CriteriaSettings =
   | PromptCriteriaSettings
   | KeywordCriteriaSettings
+  | PatternCriteriaSettings
   | ResponseTimeCriteriaSettings
   | ToolCallCriteriaSettings
   | HallucinationCriteriaSettings
@@ -142,7 +167,8 @@ export function getEvaluationType(
   }
   if (
     criteria.type === CriteriaType.KEYWORD ||
-    criteria.type === CriteriaType.TOOL_CALL
+    criteria.type === CriteriaType.TOOL_CALL ||
+    criteria.type === CriteriaType.PATTERN
   ) {
     return 'boolean';
   }

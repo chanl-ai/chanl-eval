@@ -1,13 +1,19 @@
 import {
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   BadRequestException,
   InternalServerErrorException,
+  Optional,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { randomUUID } from 'crypto';
+import {
+  SIMULATION_CONFIG_PROVIDER,
+  SimulationConfigProvider,
+} from '../../execution/simulation-config.provider';
 import {
   ScenarioExecution,
   ScenarioExecutionDocument,
@@ -34,7 +40,45 @@ export class ScenarioExecutionService {
     private scenarioModel: Model<ScenarioDocument>,
     private readonly queueProducer: QueueProducerService,
     private readonly evaluationService: EvaluationService,
+    @Optional()
+    @Inject(SIMULATION_CONFIG_PROVIDER)
+    private readonly simulationConfig?: SimulationConfigProvider,
   ) {}
+
+  /**
+   * Judge credentials, resolved entirely through the injected provider.
+   *
+   * Config resolution lives in the application layer so this package reads no environment variables
+   * of its own and can be tested by supplying a stub.
+   */
+  private async resolveJudgeConfig(): Promise<{
+    judgeApiKey?: string;
+    judgeKind: 'openai' | 'anthropic';
+    judgeBaseUrl?: string;
+  }> {
+    if (!this.simulationConfig) {
+      return { judgeKind: 'openai' };
+    }
+
+    try {
+      const [openai, anthropic, baseUrl] = await Promise.all([
+        this.simulationConfig.getApiKey('openai'),
+        this.simulationConfig.getApiKey('anthropic'),
+        this.simulationConfig.getSimulationBaseUrl(),
+      ]);
+
+      if (openai) {
+        return { judgeApiKey: openai, judgeKind: 'openai', judgeBaseUrl: baseUrl };
+      }
+      if (anthropic) {
+        return { judgeApiKey: anthropic, judgeKind: 'anthropic', judgeBaseUrl: baseUrl };
+      }
+      return { judgeKind: 'openai', judgeBaseUrl: baseUrl };
+    } catch (error: any) {
+      this.logger.warn(`Simulation config lookup failed: ${error?.message}`);
+      return { judgeKind: 'openai' };
+    }
+  }
 
   /**
    * Create and queue a scenario execution.
@@ -498,38 +542,19 @@ export class ScenarioExecutionService {
       text: s.actualResponse || '',
     }));
 
-    // 3. Resolve an API key for the LLM judge
-    // Priority: Settings DB (UI-configured) > env vars (headless/CI fallback)
-    let judgeApiKey: string | undefined;
-    let judgeKind: 'openai' | 'anthropic' = 'openai';
+    // 3. Resolve credentials for the LLM judge.
+    // Priority: operator-configured settings > env vars (headless/CI fallback).
+    const { judgeApiKey, judgeKind, judgeBaseUrl } = await this.resolveJudgeConfig();
 
-    // Settings DB first — this is where the Settings UI saves keys
-    try {
-      const settingsDoc = await this.executionModel.db.collection('settings').findOne({});
-      const providerKeys: Record<string, string> = settingsDoc?.providerKeys ?? {};
-      if (providerKeys.openai) {
-        judgeApiKey = providerKeys.openai;
-        judgeKind = 'openai';
-      } else if (providerKeys.anthropic) {
-        judgeApiKey = providerKeys.anthropic;
-        judgeKind = 'anthropic';
-      }
-    } catch {
-      // Settings lookup failed — fall through to env vars
-    }
-
-    // Env var fallback (headless/CI)
-    if (!judgeApiKey && process.env.CHANL_OPENAI_API_KEY) {
-      judgeApiKey = process.env.CHANL_OPENAI_API_KEY;
-      judgeKind = 'openai';
-    } else if (!judgeApiKey && process.env.CHANL_ANTHROPIC_API_KEY) {
-      judgeApiKey = process.env.CHANL_ANTHROPIC_API_KEY;
-      judgeKind = 'anthropic';
-    }
-
-    const llmEvaluate = judgeApiKey
-      ? buildLlmJudge({ kind: judgeKind, apiKey: judgeApiKey })
-      : undefined;
+    const llmEvaluate =
+      judgeApiKey || judgeBaseUrl
+        ? buildLlmJudge({
+            kind: judgeKind,
+            // Self-hosted OpenAI-compatible servers accept any bearer token.
+            apiKey: judgeApiKey || 'not-needed',
+            baseUrl: judgeBaseUrl,
+          })
+        : undefined;
 
     // 4. Calculate first-response latency metric
     const firstAgentStep = conversationSteps.find((s) => s.role === 'agent');

@@ -335,10 +335,11 @@ export class ExecutionProcessor {
               },
               toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
               groundTruth: scenario.groundTruth || undefined,
+              // Same resolver the persona uses, so judge and persona agree on which key, model and
+              // host the *simulation* half runs on — previously the judge silently borrowed the
+              // agent-under-test's key and was pinned to the provider's public host.
               llmEvaluate: buildLlmJudge(
-                adapterConfig.apiKey
-                  ? { kind: (adapterType === 'anthropic' ? 'anthropic' : 'openai') as 'openai' | 'anthropic', apiKey: adapterConfig.apiKey, model: adapterConfig.model }
-                  : undefined,
+                resolveLlmConfigSync(adapterType, adapterConfig) ?? undefined,
               ),
             },
             { scenarioExecutionId: data.executionId },

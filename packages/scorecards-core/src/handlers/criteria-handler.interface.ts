@@ -51,12 +51,17 @@ export interface EvaluationContext {
       min?: number;
       max?: number;
     };
+    /** Draw k independent samples and vote (self-consistency). Default 1. */
+    selfConsistency?: number;
   }) => Promise<{
-    result: boolean | number;
+    result: boolean | number | null;
     passed: boolean;
     reasoning: string;
     evidence: string[];
+    /** Inter-sample agreement 0-1, present when more than one sample was drawn. */
     confidence?: number;
+    /** Set when no verdict could be produced — treat as unknown, never as a low score. */
+    error?: string;
   }>;
 }
 
@@ -90,4 +95,10 @@ export interface CriteriaHandlerResult {
   evidence: string[];
   /** When true, this criterion was skipped (no ground truth, no tools, etc.) — should display as N/A, not pass/fail */
   notApplicable?: boolean;
+  /**
+   * How much to trust this verdict, 0-1. Currently emitted by LLM-judge criteria running with
+   * self-consistency: the share of samples that agreed. Deterministic handlers omit it (they have
+   * no sampling variance to report).
+   */
+  confidence?: number;
 }

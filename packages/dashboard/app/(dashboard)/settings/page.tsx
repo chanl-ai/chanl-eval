@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageLayout } from '@/components/shared/page-layout';
 import { LlmConfigCard } from '@/components/settings/llm-config-card';
+import { ProviderKeysCard } from '@/components/settings/provider-keys-card';
 import { useEvalConfig } from '@/lib/eval-config';
 import { EvalClient } from '@chanl/eval-sdk';
 
@@ -18,10 +19,8 @@ export default function SettingsPage() {
     baseUrl, setBaseUrl,
     apiKey, setApiKey,
     adapterType, setAdapterType,
-    agentApiKey, setAgentApiKey,
     agentModel, setAgentModel,
     agentBaseUrl, setAgentBaseUrl,
-    simApiKey, setSimApiKey,
     simModel, setSimModel,
   } = useEvalConfig();
 
@@ -122,19 +121,19 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* LLM provider keys — stored server-side, used by every run */}
+        <ProviderKeysCard />
+
         {/* Agent Under Test */}
         <LlmConfigCard
           title="Agent Under Test"
-          description="The LLM being evaluated. Model and provider are saved per Prompt. API key is resolved server-side from environment variables."
+          description="The LLM being evaluated. Model and provider are saved per Prompt; the API key comes from the provider keys above."
           provider={adapterType}
           onProviderChange={setAdapterType}
           showProvider
           model={agentModel}
           onModelChange={setAgentModel}
           modelHint="The exact model your agent runs in production. Select a preset or type any model ID."
-          apiKey={agentApiKey}
-          onApiKeyChange={setAgentApiKey}
-          apiKeyHint="Optional override. Server resolves from CHANL_OPENAI_API_KEY / CHANL_ANTHROPIC_API_KEY if empty."
           baseUrl={agentBaseUrl}
           onBaseUrlChange={setAgentBaseUrl}
           showBaseUrl
@@ -152,11 +151,7 @@ export default function SettingsPage() {
           model={simModel}
           onModelChange={setSimModel}
           modelPlaceholder="gpt-4o-mini"
-          modelHint="gpt-4o-mini recommended — fast and cheap. Used for persona utterances and scorecard criteria evaluation."
-          apiKey={simApiKey}
-          onApiKeyChange={setSimApiKey}
-          apiKeyPlaceholder={agentApiKey ? 'Leave empty to reuse Agent key' : 'sk-...'}
-          apiKeyHint="Optional override. Falls back to agent key, then server environment variables."
+          modelHint="gpt-4o-mini recommended — fast and cheap. Used for persona utterances and scorecard criteria evaluation. Set its host under provider keys above."
         />
 
         {/* API Docs */}
