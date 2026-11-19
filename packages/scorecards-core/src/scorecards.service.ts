@@ -473,6 +473,17 @@ export class ScorecardsService {
     return this.resultModel.find({ scenarioExecutionId: executionId });
   }
 
+  /** Results for many executions at once, newest first, so callers can keep the latest per execution. */
+  async findResultsByExecutions(
+    executionIds: string[],
+  ): Promise<ScorecardResult[]> {
+    if (executionIds.length === 0) return [];
+    return this.resultModel
+      .find({ scenarioExecutionId: { $in: executionIds } })
+      .sort({ createdAt: -1 })
+      .lean();
+  }
+
   async deleteResult(
     resultId: string,
   ): Promise<boolean> {

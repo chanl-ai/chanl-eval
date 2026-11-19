@@ -11,3 +11,4 @@ export * from './generation';
 
 export { SIMULATION_CONFIG_PROVIDER } from './execution/simulation-config.provider';
 export type { SimulationConfigProvider } from './execution/simulation-config.provider';
+export * from './run-sets';
