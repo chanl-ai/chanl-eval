@@ -32,6 +32,27 @@ function envApiKey(): string {
 
 export type AdapterType = 'openai' | 'anthropic' | 'http';
 
+/**
+ * Same-origin route that forwards to the attendee's seat server and adds its key server-side.
+ * Absolute, because axios joins a root-relative request path onto a relative base URL.
+ */
+function cloudBaseUrl(): string {
+  return typeof window === 'undefined' ? '/api/eval' : `${window.location.origin}/api/eval`;
+}
+
+export interface RoomUser {
+  name: string;
+  email: string;
+  seat: string;
+}
+
+export interface RoomInfo {
+  /** True when the dashboard runs as the shared workshop room (CHANL_EVAL_MODE=cloud). */
+  cloud: boolean;
+  user: RoomUser | null;
+  facilitator: boolean;
+}
+
 interface EvalConfigContextValue {
   // Server
   baseUrl: string;
@@ -53,6 +74,7 @@ interface EvalConfigContextValue {
   // SDK client
   client: EvalClient;
   hydrated: boolean;
+  room: RoomInfo;
 }
 
 const EvalConfigContext = createContext<EvalConfigContextValue | null>(null);
@@ -67,10 +89,19 @@ function makeSetter(
   };
 }
 
-export function EvalConfigProvider({ children }: { children: React.ReactNode }) {
-  // Server
-  const [baseUrl, setBaseUrlState] = useState(() => envServer());
-  const [apiKey, setApiKeyState] = useState(() => envApiKey());
+const LOCAL_ROOM: RoomInfo = { cloud: false, user: null, facilitator: false };
+
+export function EvalConfigProvider({
+  children,
+  room = LOCAL_ROOM,
+}: {
+  children: React.ReactNode;
+  room?: RoomInfo;
+}) {
+  const cloud = room.cloud;
+  // Server. In cloud mode the browser only ever talks to the same-origin proxy and holds no key.
+  const [baseUrl, setBaseUrlState] = useState(() => (cloud ? cloudBaseUrl() : envServer()));
+  const [apiKey, setApiKeyState] = useState(() => (cloud ? '' : envApiKey()));
   // Agent Under Test
   const [adapterType, setAdapterTypeState] = useState<AdapterType>('openai');
   const [agentModel, setAgentModelState] = useState('gpt-4o-mini');
@@ -82,12 +113,14 @@ export function EvalConfigProvider({ children }: { children: React.ReactNode }) 
   // Hydrate from localStorage
   useEffect(() => {
     try {
-      const b = localStorage.getItem(STORAGE_BASE);
-      const k = localStorage.getItem(STORAGE_KEY);
       const a = localStorage.getItem(STORAGE_ADAPTER) as AdapterType | null;
-      if (b !== null && b !== '') setBaseUrlState(b);
-      if (k !== null && k !== '') setApiKeyState(k);
-      else if (k === '' && envApiKey()) setApiKeyState(envApiKey());
+      if (!cloud) {
+        const b = localStorage.getItem(STORAGE_BASE);
+        const k = localStorage.getItem(STORAGE_KEY);
+        if (b !== null && b !== '') setBaseUrlState(b);
+        if (k !== null && k !== '') setApiKeyState(k);
+        else if (k === '' && envApiKey()) setApiKeyState(envApiKey());
+      }
       if (a === 'openai' || a === 'anthropic' || a === 'http') setAdapterTypeState(a);
       const am = localStorage.getItem(STORAGE_AGENT_MODEL);
       if (am !== null && am !== '') setAgentModelState(am);
@@ -102,11 +135,14 @@ export function EvalConfigProvider({ children }: { children: React.ReactNode }) 
       /* ignore */
     }
     setHydrated(true);
-  }, []);
+  }, [cloud]);
 
   // Stable setters
-  const setBaseUrl = useCallback(makeSetter(setBaseUrlState, STORAGE_BASE), []);
-  const setApiKey = useCallback(makeSetter(setApiKeyState, STORAGE_KEY), []);
+  const noop = useCallback(() => {}, []);
+  const setBaseUrlLocal = useCallback(makeSetter(setBaseUrlState, STORAGE_BASE), []);
+  const setApiKeyLocal = useCallback(makeSetter(setApiKeyState, STORAGE_KEY), []);
+  const setBaseUrl = cloud ? noop : setBaseUrlLocal;
+  const setApiKey = cloud ? noop : setApiKeyLocal;
   const setAdapterType = useCallback((v: AdapterType) => {
     setAdapterTypeState(v);
     try { localStorage.setItem(STORAGE_ADAPTER, v); } catch { /* ignore */ }
@@ -128,7 +164,7 @@ export function EvalConfigProvider({ children }: { children: React.ReactNode }) 
       agentModel, setAgentModel,
       agentBaseUrl, setAgentBaseUrl,
       simModel, setSimModel,
-      client, hydrated,
+      client, hydrated, room,
     }),
     [
       baseUrl, setBaseUrl, apiKey, setApiKey,
@@ -136,7 +172,7 @@ export function EvalConfigProvider({ children }: { children: React.ReactNode }) 
       agentModel, setAgentModel,
       agentBaseUrl, setAgentBaseUrl,
       simModel, setSimModel,
-      client, hydrated,
+      client, hydrated, room,
     ],
   );
 

@@ -22,7 +22,9 @@ export default function SettingsPage() {
     agentModel, setAgentModel,
     agentBaseUrl, setAgentBaseUrl,
     simModel, setSimModel,
+    room,
   } = useEvalConfig();
+  const cloud = room.cloud;
 
   const [isTesting, setIsTesting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -52,7 +54,17 @@ export default function SettingsPage() {
       description="Configure your eval server connection and LLM credentials"
     >
       <div className="space-y-6 max-w-2xl">
+        {cloud && (
+          <Card data-testid="room-settings-note">
+            <CardContent className="py-4 text-sm text-muted-foreground">
+              You are in a workshop room. Your eval server and the model key are set up by the
+              facilitator, so they are not shown here.
+            </CardContent>
+          </Card>
+        )}
+
         {/* Server Connection */}
+        {!cloud && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-medium">Eval Server</CardTitle>
@@ -120,9 +132,10 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* LLM provider keys — stored server-side, used by every run */}
-        <ProviderKeysCard />
+        {!cloud && <ProviderKeysCard />}
 
         {/* Agent Under Test */}
         <LlmConfigCard
@@ -136,7 +149,7 @@ export default function SettingsPage() {
           modelHint="The exact model your agent runs in production. Select a preset or type any model ID."
           baseUrl={agentBaseUrl}
           onBaseUrlChange={setAgentBaseUrl}
-          showBaseUrl
+          showBaseUrl={!cloud}
           baseUrlPlaceholder={adapterType === 'http' ? 'https://your-agent.com/chat' : 'Leave empty for default provider URL'}
           baseUrlHint={adapterType === 'http'
             ? 'Required — your agent\'s chat endpoint.'
@@ -155,6 +168,7 @@ export default function SettingsPage() {
         />
 
         {/* API Docs */}
+        {!cloud && (
         <Card>
           <CardContent className="flex items-center justify-between py-4">
             <div>
@@ -169,6 +183,7 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+        )}
       </div>
     </PageLayout>
   );

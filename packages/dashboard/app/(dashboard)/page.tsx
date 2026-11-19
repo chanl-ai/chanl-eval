@@ -189,7 +189,7 @@ function FeatureSection({ title, description, items }: {
 // ---------------------------------------------------------------------------
 
 export default function HomePage() {
-  const { baseUrl, apiKey } = useEvalConfig();
+  const { baseUrl, apiKey, room } = useEvalConfig();
   const [serverOk, setServerOk] = useState<boolean | null>(null);
   const [hasLlmKey, setHasLlmKey] = useState<boolean | null>(null);
 
@@ -206,6 +206,11 @@ export default function HomePage() {
         if (!cancelled) setServerOk(false);
         return;
       }
+      // In a workshop room the facilitator sets the model key, and /settings is not reachable.
+      if (room.cloud) {
+        if (!cancelled) setHasLlmKey(true);
+        return;
+      }
       try {
         const status = await c.settings.status();
         if (!cancelled) setHasLlmKey(status.hasAnyKey);
@@ -214,7 +219,7 @@ export default function HomePage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [baseUrl, apiKey]);
+  }, [baseUrl, apiKey, room.cloud]);
 
   return (
     <PageLayout

@@ -4,10 +4,15 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEvalConfig } from '@/lib/eval-config';
 import {
   ArrowUpRight,
   Beaker,
+  Bot,
   ClipboardList,
+  LogOut,
+  Repeat,
+  Presentation,
   Database,
   FileText,
   Home,
@@ -39,7 +44,9 @@ const primaryNav = [
 ];
 
 const dataNav = [
+  { title: 'Agents', href: '/agents', icon: Bot },
   { title: 'Runs', href: '/executions', icon: ScrollText },
+  { title: 'Run sets', href: '/run-sets', icon: Repeat },
   { title: 'Scenarios', href: '/scenarios', icon: FileText },
   { title: 'Personas', href: '/personas', icon: UserCircle },
   { title: 'Tool Fixtures', href: '/tool-fixtures', icon: Wrench },
@@ -58,6 +65,12 @@ function isActive(pathname: string, href: string): boolean {
 
 export function EvalAppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const { room } = useEvalConfig();
+
+  async function logout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  }
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -144,6 +157,34 @@ export function EvalAppSidebar({ ...props }: React.ComponentProps<typeof Sidebar
       </SidebarContent>
 
       <SidebarFooter>
+        {room.cloud ? (
+          <SidebarMenu>
+            {room.facilitator && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Room wall">
+                  <Link href="/wall">
+                    <Presentation />
+                    <span>Room wall</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            {room.user && (
+              <SidebarMenuItem>
+                <div className="px-2 py-1.5 text-xs group-data-[collapsible=icon]:hidden" data-testid="room-user">
+                  <p className="font-medium truncate">{room.user.name}</p>
+                  <p className="text-muted-foreground truncate">{room.user.email}</p>
+                </div>
+              </SidebarMenuItem>
+            )}
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={logout} tooltip="Log out" data-testid="logout">
+                <LogOut />
+                <span>Log out</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        ) : (
         <a
           href="https://chanl.ai?ref=eval-dashboard"
           target="_blank"
@@ -165,6 +206,7 @@ export function EvalAppSidebar({ ...props }: React.ComponentProps<typeof Sidebar
             </div>
           </div>
         </a>
+        )}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
