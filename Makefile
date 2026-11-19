@@ -178,3 +178,32 @@ db-shell: ## Open MongoDB shell
 db-reset: ## Drop database and re-seed
 	mongosh mongodb://localhost:27217/chanl-eval --eval "db.dropDatabase()" && \
 	$(MAKE) seed
+
+# ─── Workshop room (Fly org chanl-dev) ───────────────────────────────────────
+# Credentials: ~/.chanl-eval-room.env (outside the repo). Seats are private; these targets reach
+# them through `fly proxy`. Spec: one seat machine per attendee, each with its own Mongo db.
+
+.PHONY: room-up room-seed room-status room-reset-seat room-deploy-dashboard room-loadtest
+
+ROOM_SEATS ?= 40
+
+room-up: ## Build the seat image from HEAD and create/update seat-01..seat-$(ROOM_SEATS)
+	cd $(CURDIR)/deploy/room && ./room.sh secrets && ./room.sh build && ./room.sh up $(ROOM_SEATS)
+
+room-seed: ## Seed every seat with the starter kit and write the seat directory (db room)
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts seed --seats 1-$(ROOM_SEATS)
+
+room-status: ## Health of every seat
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts status --seats 1-$(ROOM_SEATS)
+
+room-reset-seat: ## Wipe and reseed one seat, keeping its attendee: make room-reset-seat SEAT=07
+ifndef SEAT
+	$(error SEAT is required, e.g. SEAT=07)
+endif
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts reset $(SEAT)
+
+room-deploy-dashboard: ## Deploy packages/dashboard as chanl-eval-lab (cloud mode)
+	cd $(CURDIR)/deploy/room && ./room.sh deploy-dashboard
+
+room-loadtest: ## Queue K runs of the Acme scenario on every seat at once: make room-loadtest K=5
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts loadtest --seats 1-$(ROOM_SEATS) --k $(or $(K),5)
