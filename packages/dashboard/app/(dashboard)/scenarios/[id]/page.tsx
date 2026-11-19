@@ -3,7 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Info, Play, Trash2 } from 'lucide-react';
+import { Info, Play, Repeat, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { DeleteDialog } from '@/components/shared/delete-dialog';
 import { PageLayout } from '@/components/shared/page-layout';
+import { RunSetDialog } from '@/components/run-sets/run-set-dialog';
 import { useEvalConfig } from '@/lib/eval-config';
 import { toast } from 'sonner';
 import type { Persona, Scorecard } from '@chanl/eval-sdk';
@@ -89,6 +90,7 @@ export default function ScenarioDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const [runSetOpen, setRunSetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -126,6 +128,10 @@ export default function ScenarioDetailPage() {
             <Button size="sm" variant="outline" onClick={() => router.push(`/playground?scenario=${id}`)}>
               <Play className="mr-2 h-3.5 w-3.5" />
               Run
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setRunSetOpen(true)} data-testid="run-x5">
+              <Repeat className="mr-2 h-3.5 w-3.5" />
+              Run ×5
             </Button>
             <Button size="sm" variant="outline" onClick={() => setDeleteOpen(true)} data-testid="delete-scenario-button">
               <Trash2 className="mr-2 h-3.5 w-3.5" />
@@ -313,6 +319,15 @@ export default function ScenarioDetailPage() {
           </Card>
         </div>
       ) : null}
+
+      <RunSetDialog
+        open={runSetOpen}
+        onOpenChange={setRunSetOpen}
+        kind="reliability"
+        scenarioId={id}
+        personaId={q.data?.personaIds?.[0]}
+        scorecardId={q.data?.scorecardId}
+      />
 
       <DeleteDialog
         open={deleteOpen}

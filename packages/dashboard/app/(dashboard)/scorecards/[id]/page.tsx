@@ -8,6 +8,7 @@ import {
   Edit,
   FolderOpen,
   Layers,
+  ListOrdered,
   Loader2,
   MessageSquareText,
   Plus,
@@ -46,6 +47,16 @@ import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  EMPTY_TOOL_CHECK,
+  ToolCallFields,
+  ToolOrderFields,
+  toolCallSettings,
+  toolCheckFromSettings,
+  toolOrderSettings,
+  type ToolCheckState,
+} from '@/components/scorecard/tool-check-fields';
+import { DuplicateScorecardButton } from '@/components/scorecard/duplicate-scorecard-button';
 import type { ScorecardCategory, ScorecardCriteria } from '@chanl/eval-sdk';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +67,8 @@ const CRITERIA_TYPE_MAP: Record<string, { label: string; icon: typeof Type; desc
   keyword:       { label: 'Keyword',       icon: Type,               description: 'Check for specific words or phrases' },
   prompt:        { label: 'LLM Judge',     icon: MessageSquareText,  description: 'LLM evaluates against a rubric' },
   response_time: { label: 'Response Time', icon: Timer,              description: 'Check agent responds within time limit' },
-  tool_call:     { label: 'Tool Call',     icon: Wrench,             description: 'Verify agent called a specific tool' },
+  tool_call:     { label: 'Tool Call',     icon: Wrench,             description: 'Verify agent called (or never called) a tool' },
+  tool_order:    { label: 'Tool Order',    icon: ListOrdered,        description: 'Verify one tool is called before another' },
 };
 
 const CRITERIA_TYPES = Object.entries(CRITERIA_TYPE_MAP).map(([value, meta]) => ({ value, ...meta }));
@@ -85,7 +97,7 @@ function CriterionDialog({
   const [matchType, setMatchType] = useState('any');
   const [rubric, setRubric] = useState('');
   const [maxMs, setMaxMs] = useState('5000');
-  const [toolName, setToolName] = useState('');
+  const [toolCheck, setToolCheck] = useState<ToolCheckState>(EMPTY_TOOL_CHECK);
 
   useEffect(() => {
     if (editingCriterion) {
@@ -97,10 +109,10 @@ function CriterionDialog({
       setMatchType((s.matchType as string) ?? 'any');
       setRubric((s.rubric as string) ?? '');
       setMaxMs(String((s.maxMs as number) ?? 5000));
-      setToolName((s.toolName as string) ?? '');
+      setToolCheck(toolCheckFromSettings(s));
     } else {
       setName(''); setDescription(''); setType('keyword');
-      setKeywords(''); setMatchType('any'); setRubric(''); setMaxMs('5000'); setToolName('');
+      setKeywords(''); setMatchType('any'); setRubric(''); setMaxMs('5000'); setToolCheck(EMPTY_TOOL_CHECK);
     }
   }, [editingCriterion, open]);
 
@@ -109,7 +121,8 @@ function CriterionDialog({
       case 'keyword': return { keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean), matchType };
       case 'prompt': return { rubric };
       case 'response_time': return { maxMs: parseInt(maxMs) || 5000 };
-      case 'tool_call': return { toolName };
+      case 'tool_call': return toolCallSettings(toolCheck);
+      case 'tool_order': return toolOrderSettings(toolCheck);
       default: return {};
     }
   }
@@ -205,12 +218,8 @@ function CriterionDialog({
               <Input type="number" value={maxMs} onChange={(e) => setMaxMs(e.target.value)} />
             </div>
           )}
-          {type === 'tool_call' && (
-            <div className="space-y-2">
-              <Label>Expected Tool Name</Label>
-              <Input value={toolName} onChange={(e) => setToolName(e.target.value)} placeholder="e.g. check_order_status" />
-            </div>
-          )}
+          {type === 'tool_call' && <ToolCallFields value={toolCheck} onChange={setToolCheck} />}
+          {type === 'tool_order' && <ToolOrderFields value={toolCheck} onChange={setToolCheck} />}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
@@ -338,7 +347,14 @@ function CriterionCard({ criterion, scorecardId, onEdit, onDeleted }: {
     }
     case 'prompt': summary = ((settings.rubric as string) ?? '').slice(0, 100) + ((settings.rubric as string)?.length > 100 ? '...' : ''); break;
     case 'response_time': summary = `Max ${settings.maxMs}ms`; break;
-    case 'tool_call': summary = `Tool: ${settings.toolName}`; break;
+    case 'tool_call': {
+      const tool = settings.expectedTool ?? settings.toolName;
+      summary = `${settings.mode === 'never_called' ? 'Never calls' : 'Calls'}: ${Array.isArray(tool) ? tool.join(', ') : tool}`;
+      const args = Object.keys((settings.expectedArgs as object) ?? {});
+      if (args.length) summary += ` (${args.join(', ')})`;
+      break;
+    }
+    case 'tool_order': summary = `${settings.first} → ${settings.then}`; break;
   }
 
   return (
@@ -469,7 +485,8 @@ export default function ScorecardDetailPage() {
       title={scorecard?.name ?? 'Scorecard'}
       description={scorecard?.description ?? 'Loading...'}
       actions={scorecard ? (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DuplicateScorecardButton scorecard={scorecard} />
           <Button size="sm" onClick={() => { setActiveCategoryId(selectedCategoryId ?? categories[0]?.id ?? ''); setEditingCriterion(null); setCriterionDialogOpen(true); }} disabled={categories.length === 0} data-testid="add-criterion-top">
             <Plus className="mr-2 h-3.5 w-3.5" />Add Criterion
           </Button>

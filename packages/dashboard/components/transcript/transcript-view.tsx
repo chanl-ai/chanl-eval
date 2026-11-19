@@ -39,6 +39,8 @@ interface TranscriptViewProps {
   messages: TranscriptMessage[];
   personaName?: string;
   className?: string;
+  /** Judge evidence quotes; matching text in the transcript is highlighted. */
+  evidence?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +68,39 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
+/** Evidence quotes, cleaned of wrapping quote marks and too-short fragments that would match anywhere. */
+function evidencePhrases(evidence: string[] | undefined): string[] {
+  return (evidence ?? [])
+    .map((e) => e.trim().replace(/^["“'‘]+|["”'’.…]+$/g, '').trim())
+    .filter((e) => e.length >= 8);
+}
+
+function highlightEvidence(text: string, phrases: string[]): React.ReactNode {
+  const lower = text.toLowerCase();
+  const ranges: Array<[number, number]> = [];
+  for (const p of phrases) {
+    const at = lower.indexOf(p.toLowerCase());
+    if (at >= 0) ranges.push([at, at + p.length]);
+  }
+  if (ranges.length === 0) return text;
+  ranges.sort((a, b) => a[0] - b[0]);
+  const out: React.ReactNode[] = [];
+  let pos = 0;
+  ranges.forEach(([start, end], i) => {
+    if (start < pos) start = pos;
+    if (end <= start) return;
+    out.push(text.slice(pos, start));
+    out.push(
+      <mark key={i} data-testid="evidence-highlight" className="bg-amber-300/50 dark:bg-amber-500/30 rounded-sm px-0.5 underline decoration-amber-600 decoration-2 underline-offset-2">
+        {text.slice(start, end)}
+      </mark>,
+    );
+    pos = end;
+  });
+  out.push(text.slice(pos));
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Message Bubble
 // ---------------------------------------------------------------------------
@@ -74,10 +109,12 @@ function MessageBubble({
   message,
   personaName,
   searchQuery,
+  evidence = [],
 }: {
   message: TranscriptMessage;
   personaName: string;
   searchQuery: string;
+  evidence?: string[];
 }) {
   const isAgent = message.role === 'agent';
   const duration = formatDuration(message.duration);
@@ -128,7 +165,11 @@ function MessageBubble({
           )}
         >
           <p className="whitespace-pre-wrap">
-            {searchQuery ? highlightText(message.content, searchQuery) : message.content}
+            {searchQuery
+              ? highlightText(message.content, searchQuery)
+              : evidence.length > 0
+                ? highlightEvidence(message.content, evidence)
+                : message.content}
           </p>
         </div>
       </div>
@@ -258,8 +299,9 @@ function TranscriptSearchHeader({
 // Main Component
 // ---------------------------------------------------------------------------
 
-export function TranscriptView({ messages, personaName = 'Persona', className }: TranscriptViewProps) {
+export function TranscriptView({ messages, personaName = 'Persona', className, evidence }: TranscriptViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const phrases = useMemo(() => evidencePhrases(evidence), [evidence]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Search logic
@@ -329,6 +371,7 @@ export function TranscriptView({ messages, personaName = 'Persona', className }:
               message={msg}
               personaName={personaName}
               searchQuery={searchQuery}
+              evidence={phrases}
             />
           )
         )}

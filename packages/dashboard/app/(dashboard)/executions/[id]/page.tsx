@@ -41,12 +41,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageLayout } from '@/components/shared/page-layout';
 import { DeleteDialog } from '@/components/shared/delete-dialog';
 import { TranscriptView, type TranscriptMessage } from '@/components/transcript/transcript-view';
+import { BugReportButton } from '@/components/bug-report/bug-report-dialog';
 import { ScorecardWidget } from '@/components/scorecard/scorecard-widget';
 import { ShareResults } from '@/components/share-results';
 import { useFirstRunPrompt } from '@/components/first-run-prompt';
 import { useEvalConfig } from '@/lib/eval-config';
-import type { ScoreMetric, ScorecardCriterionDisplay } from '@/components/scorecard/types';
-import type { Execution, Scorecard, ScorecardResult } from '@chanl/eval-sdk';
+import { embeddedResultsToMetrics, scorecardResultToMetrics } from '@/lib/scorecard-metrics';
+import type { Execution, Scorecard } from '@chanl/eval-sdk';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -148,95 +149,6 @@ function executionToMessages(execution: Execution): TranscriptMessage[] {
         status: step.status,
       };
     });
-}
-
-// ---------------------------------------------------------------------------
-// Data mapping: ScorecardResult → ScoreMetric[] (real scorecard evaluation)
-// ---------------------------------------------------------------------------
-
-function scorecardResultToMetrics(result: ScorecardResult): ScoreMetric[] {
-  const criteriaResults = result.criteriaResults || [];
-  if (criteriaResults.length === 0) return [];
-
-  // Group by category (like chanl-admin's scorecard-view)
-  const categoryMap = new Map<string, { name: string; criteria: ScorecardCriterionDisplay[] }>();
-
-  for (const cr of criteriaResults) {
-    const catId = cr.categoryId || 'uncategorized';
-    if (!categoryMap.has(catId)) {
-      categoryMap.set(catId, { name: cr.categoryName || 'General', criteria: [] });
-    }
-    categoryMap.get(catId)!.criteria.push({
-      name: cr.criteriaName,
-      criteriaId: cr.criteriaId,
-      result: (cr as any).result,
-      passed: cr.passed,
-      explanation: cr.reasoning,
-      evidence: cr.evidence?.length > 0 ? cr.evidence.slice(0, 2) : undefined,
-      notApplicable: (cr as any).notApplicable ?? false,
-      notApplicableReason: (cr as any).notApplicable ? cr.reasoning : undefined,
-    });
-  }
-
-  return Array.from(categoryMap.values()).map(({ name, criteria }) => {
-    const applicable = criteria.filter((c) => !c.notApplicable);
-    const passed = applicable.filter((c) => c.passed).length;
-    return {
-      name,
-      score: passed,
-      maxScore: applicable.length,
-      status: applicable.length === 0 ? 'pass' as const : passed > applicable.length * 0.5 ? 'pass' as const : 'fail' as const,
-      criteria,
-    };
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Data mapping: embedded scorecardResults → ScoreMetric[]
-// ---------------------------------------------------------------------------
-
-function embeddedResultsToMetrics(result: {
-  criteriaResults: Array<{
-    criteriaId: string;
-    criteriaName?: string;
-    categoryId?: string;
-    categoryName?: string;
-    passed: boolean;
-    reasoning?: string;
-    evidence?: string[];
-  }>;
-}): ScoreMetric[] {
-  if (!result.criteriaResults?.length) return [];
-
-  const categoryMap = new Map<string, { name: string; criteria: ScorecardCriterionDisplay[] }>();
-  for (const cr of result.criteriaResults) {
-    const catId = cr.categoryId || 'uncategorized';
-    if (!categoryMap.has(catId)) {
-      categoryMap.set(catId, { name: cr.categoryName || 'General', criteria: [] });
-    }
-    categoryMap.get(catId)!.criteria.push({
-      name: cr.criteriaName || cr.criteriaId,
-      criteriaId: cr.criteriaId,
-      result: (cr as any).result,
-      passed: cr.passed,
-      explanation: cr.reasoning,
-      evidence: cr.evidence?.length ? cr.evidence.slice(0, 2) : undefined,
-      notApplicable: (cr as any).notApplicable ?? false,
-      notApplicableReason: (cr as any).notApplicable ? cr.reasoning : undefined,
-    });
-  }
-
-  return Array.from(categoryMap.values()).map(({ name, criteria }) => {
-    const applicable = criteria.filter((c) => !c.notApplicable);
-    const passed = applicable.filter((c) => c.passed).length;
-    return {
-      name,
-      score: passed,
-      maxScore: applicable.length,
-      status: applicable.length === 0 ? 'pass' as const : passed > applicable.length * 0.5 ? 'pass' as const : 'fail' as const,
-      criteria,
-    };
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -450,6 +362,12 @@ export default function RunDetailPage() {
   const scorecardSummary = (execution as any)?.scorecardSummary as string | undefined;
 
   const messages = execution ? executionToMessages(execution) : [];
+  const failedChecks = metrics
+    .flatMap((m) => m.criteria ?? [])
+    .filter((c) => !c.passed && !c.notApplicable)
+    .map((c) => ({ name: c.name, reason: c.explanation, evidence: c.evidence, needsReview: c.needsReview }));
+  const failedEvidence = failedChecks.flatMap((c) => c.evidence ?? []);
+  const isFailedRun = !isActive && (execution?.status === 'failed' || failedChecks.length > 0);
 
   // Evaluate mutation — server resolves API key from env vars
   const evaluateMutation = useMutation({
@@ -511,6 +429,9 @@ export default function RunDetailPage() {
               turnCount={messages.length}
               duration={formatDuration(execution.duration ?? (execution.endTime && execution.startTime ? new Date(execution.endTime).getTime() - new Date(execution.startTime).getTime() : undefined))}
             />
+            {isFailedRun && (
+              <BugReportButton execution={execution} scenarioName={scenarioName} failedChecks={failedChecks} messages={messages} />
+            )}
             <Button variant="outline" size="sm" onClick={() => router.push('/playground')} disabled={isActive}>
               <RotateCcw className="mr-2 h-3.5 w-3.5" />
               Run Again
@@ -551,7 +472,7 @@ export default function RunDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <TranscriptView messages={messages} />
+                <TranscriptView messages={messages} evidence={failedEvidence} />
               </CardContent>
             </Card>
 

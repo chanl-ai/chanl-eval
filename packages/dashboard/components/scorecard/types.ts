@@ -16,6 +16,8 @@ export interface ScorecardCriterionDisplay {
   criteriaId?: string;
   /** The judge's raw verdict: boolean for pass/fail criteria, 0-10 for scored ones. */
   result?: boolean | number;
+  /** The judge failed this but could not quote evidence, so a person has to decide. */
+  needsReview?: boolean;
 }
 
 /** A human verdict already recorded against a criterion. */

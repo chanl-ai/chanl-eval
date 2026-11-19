@@ -319,6 +319,11 @@ function CriterionRow({
               Yes
             </div>
           </>
+        ) : item.needsReview ? (
+          <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300 whitespace-nowrap" data-testid="needs-review">
+            <AlertCircle className="mr-1 size-3" />
+            Needs review
+          </Badge>
         ) : (
           <>
             <XCircle className="size-4" style={{ color: SCORECARD_COLORS.fail.solid }} />
