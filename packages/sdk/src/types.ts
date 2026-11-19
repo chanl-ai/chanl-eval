@@ -467,6 +467,10 @@ export interface ScorecardCriteriaResult {
   evidence: string[];
   criteriaVersion?: number;
   categoryVersion?: number;
+  /** Criterion could not be evaluated (no ground truth, judge unavailable); excluded from the score. */
+  notApplicable?: boolean;
+  /** Verdict not trustworthy as given (judge cited no quote); show as "Needs review". */
+  needsReview?: boolean;
 }
 
 export interface ScorecardResult {
@@ -788,4 +792,130 @@ export interface EvalClientConfig {
   baseUrl: string;
   /** API key when the server has CHANL_EVAL_REQUIRE_API_KEY=true */
   apiKey?: string;
+}
+
+// ============================================================================
+// Criteria settings
+// ============================================================================
+
+export type CriteriaType =
+  | 'prompt'
+  | 'keyword'
+  | 'pattern'
+  | 'response_time'
+  | 'tool_call'
+  | 'tool_order'
+  | 'hallucination'
+  | 'knowledge_retention'
+  | 'conversation_completeness'
+  | 'role_adherence'
+  | 'rag_faithfulness';
+
+export interface ToolArgExpectation {
+  op: 'equals' | 'contains' | 'regex';
+  value: unknown;
+}
+
+export interface ToolCallCriteriaSettings {
+  expectedTool: string | string[];
+  /** Default 'called'. A run with zero tool calls fails 'called' and passes 'never_called'. */
+  mode?: 'called' | 'never_called';
+  expectedArgs?: Record<string, ToolArgExpectation>;
+}
+
+export interface ToolOrderCriteriaSettings {
+  first: string;
+  then: string;
+  requireFirstSuccess?: boolean;
+}
+
+// ============================================================================
+// Run sets
+// ============================================================================
+
+export type RunSetKind = 'reliability' | 'redteam' | 'compare';
+
+export interface CreateRunSetDto {
+  kind: RunSetKind;
+  scenarioId: string;
+  promptId: string;
+  personaIds: string[];
+  scorecardId?: string;
+  toolFixtureIds?: string[];
+  /** Runs per persona, 1-10. Default 5. */
+  k?: number;
+  baselineRunSetId?: string;
+}
+
+export interface ListRunSetsParams {
+  scenarioId?: string;
+  promptId?: string;
+  kind?: RunSetKind;
+}
+
+export interface RunSetFailedCheck {
+  key: string;
+  name: string;
+  reasoning: string;
+  evidence: string[];
+  needsReview?: boolean;
+}
+
+export interface RunSetRun {
+  executionId: string;
+  personaId: string;
+  status: string;
+  /** null while the run is queued or running. */
+  passed: boolean | null;
+  failedChecks: RunSetFailedCheck[];
+}
+
+export interface RunSetPersona {
+  personaId: string;
+  personaName: string;
+  runs: number;
+  passed: number;
+  /** null until one of the persona's runs has finished. */
+  verdict: 'Held' | 'Broken' | 'Needs review' | null;
+  evidence: string | null;
+}
+
+export interface RunSet {
+  id: string;
+  kind: RunSetKind;
+  scenarioId: string;
+  promptId: string;
+  personaIds: string[];
+  k: number;
+  status: 'running' | 'completed';
+  total: number;
+  completed: number;
+  passed: number;
+  passK: boolean;
+  passAtK: boolean;
+  label: 'Reliable' | 'Flaky' | 'Broken' | null;
+  mostFailedCheck: { key: string; name: string; failed: number } | null;
+  isBaseline: boolean;
+  baselineRunSetId?: string;
+  createdAt?: string;
+  runs: RunSetRun[];
+  byPersona: RunSetPersona[];
+}
+
+export interface RunSetComparison {
+  before: { passed: number; k: number; passK: boolean };
+  after: { passed: number; k: number; passK: boolean };
+  checks: Array<{
+    key: string;
+    name: string;
+    beforeFailed: number;
+    afterFailed: number;
+    change: 'improved' | 'regressed' | 'same';
+  }>;
+}
+
+export interface RoomStats {
+  runsLast10Min: number;
+  topFailingChecks: Array<{ name: string; failed: number; total: number }>;
+  redteamBroken: Array<{ personaName: string; count: number }>;
 }

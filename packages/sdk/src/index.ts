@@ -16,6 +16,8 @@ export { LabelsModule } from './modules/labels';
 export { ChatModule } from './modules/chat';
 export { DatasetsModule } from './modules/datasets';
 export { GenerationModule } from './modules/generation';
+export { RunSetsModule } from './modules/run-sets';
+export { StatsModule } from './modules/stats';
 export type {
   GenerateOptions,
   GeneratedScenario,
@@ -110,6 +112,21 @@ export type {
   ChatSession,
   ChatRequest,
   ChatResponse,
+  // Criteria settings
+  CriteriaType,
+  ToolArgExpectation,
+  ToolCallCriteriaSettings,
+  ToolOrderCriteriaSettings,
+  // Run sets
+  RunSetKind,
+  CreateRunSetDto,
+  ListRunSetsParams,
+  RunSet,
+  RunSetRun,
+  RunSetPersona,
+  RunSetFailedCheck,
+  RunSetComparison,
+  RoomStats,
 } from './types';
 
 export { normalizeVerdict, verdictOf } from './verdict';
