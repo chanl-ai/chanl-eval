@@ -1,0 +1,8 @@
+# Build config for the seat image. Seat machines are created one per seat by room.sh with
+# `fly machine run`, not by `fly deploy`, because each seat's URL embeds its machine id and
+# each machine carries its own SEAT env. No [http_service]: seats are private-network only.
+app = "chanl-eval-room"
+primary_region = "ewr"
+
+[build]
+  dockerfile = "seat.Dockerfile"
