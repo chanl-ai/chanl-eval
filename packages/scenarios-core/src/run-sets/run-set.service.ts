@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ScorecardsService } from '@chanl/scorecards-core';
+import { ScorecardResult, ScorecardsService } from '@chanl/scorecards-core';
 import { RunSet, RunSetDocument } from './schemas/run-set.schema';
 import { CreateRunSetDto, ListRunSetsQuery } from './dto/create-run-set.dto';
 import {
@@ -217,9 +217,9 @@ export class RunSetService {
         .lean(),
       this.scorecardsService.findResultsByExecutions(executionIds),
     ]);
-    const latest = new Map<string, any>();
-    for (const r of results as any[]) {
-      if (r.status === 'completed' && !latest.has(r.scenarioExecutionId)) {
+    const latest = new Map<string, ScorecardResult>();
+    for (const r of results) {
+      if (r.status === 'completed' && r.scenarioExecutionId && !latest.has(r.scenarioExecutionId)) {
         latest.set(r.scenarioExecutionId, r);
       }
     }
