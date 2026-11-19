@@ -30,17 +30,27 @@ export const defaultJobOptions = {
 };
 
 /**
- * Worker/concurrency settings per queue.
+ * Per-server execution throughput. One server serves one user, so the limit protects the
+ * provider rate limit rather than sharing capacity: a reliability run of 5 personas x 5 runs
+ * queues 25 conversations at once, and 10/minute made that take minutes before any ran.
  */
-export const workerOptions: Record<
-  QueueName,
-  { concurrency: number; maxPerMinute: number }
-> = {
-  [QUEUE_NAMES.SCENARIO_EXECUTION]: {
-    concurrency: 5,
-    maxPerMinute: 10,
-  },
+export interface ExecutionQueueLimits {
+  /** Conversations run at the same time. */
+  concurrency: number;
+  /** Conversations started per minute. */
+  maxPerMinute: number;
+}
+
+export const DEFAULT_EXECUTION_QUEUE_LIMITS: ExecutionQueueLimits = {
+  concurrency: 5,
+  maxPerMinute: 60,
 };
+
+/**
+ * Optional injection token: the host application supplies limits from its own configuration.
+ * Without it the defaults above apply.
+ */
+export const EXECUTION_QUEUE_LIMITS = Symbol('EXECUTION_QUEUE_LIMITS');
 
 /**
  * Default maximum turns for a conversation loop.

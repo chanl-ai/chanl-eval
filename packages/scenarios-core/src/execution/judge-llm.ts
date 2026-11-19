@@ -58,7 +58,7 @@ Rules:
 - Evaluate SUBSTANCE, not rigid formulas.
 - Be STRICT about template placeholders — if the agent outputs "[insert X here]", "etc.]", or similar unfilled templates, that is a FAILURE for clarity/resolution.
 - Reasoning: 1-2 sentences max. State the verdict and the key reason. No filler.
-- Evidence: max 2 short quotes (under 15 words each). Pick the most relevant.
+- Evidence: 1-2 short verbatim quotes copied exactly from the transcript (under 15 words each) that support the verdict. Always give at least one; a verdict without a quote is treated as unverified.
 - For scores: 7+ = good, 5-6 = mediocre, below 5 = bad.
 
 Respond with JSON only: {"result": boolean|number, "passed": boolean, "reasoning": string, "evidence": string[]}`;

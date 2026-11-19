@@ -8,8 +8,10 @@ import {
   PersonaModule,
   ScenarioModule,
   ToolFixtureModule,
+  RunSetModule,
   SIMULATION_CONFIG_PROVIDER,
 } from '@chanl/scenarios-core';
+import { ExecutionQueueLimitsModule } from './config/execution-queue-limits.module';
 import { SettingsModule } from './settings/settings.module';
 import { SettingsService } from './settings/settings.service';
 import { createSimulationConfigProvider } from './settings/simulation-config.factory';
@@ -50,11 +52,14 @@ import { GenerationModule } from './generation/generation.module';
       }),
     }),
 
+    ExecutionQueueLimitsModule,
+
     // Core packages
     PersonaModule,
     ScenarioModule,
     ToolFixtureModule,
     ScorecardsModule,
+    RunSetModule,
 
     // Server modules
     HealthModule,

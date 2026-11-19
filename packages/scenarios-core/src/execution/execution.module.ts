@@ -22,7 +22,14 @@ import { QueueProducerService } from './queue-producer.service';
 import { ExecutionProcessor } from './execution-processor';
 import { ExecutionService } from './execution.service';
 import { AgentConfigResolver } from './agent-config-resolver';
-import { QUEUE_NAMES, defaultJobOptions } from './queues.config';
+import { ExecutionWorker } from './execution-worker';
+import {
+  QUEUE_NAMES,
+  defaultJobOptions,
+  DEFAULT_EXECUTION_QUEUE_LIMITS,
+  EXECUTION_QUEUE_LIMITS,
+  ExecutionQueueLimits,
+} from './queues.config';
 
 @Module({
   imports: [
@@ -33,9 +40,16 @@ import { QUEUE_NAMES, defaultJobOptions } from './queues.config';
       { name: ScenarioExecution.name, schema: ScenarioExecutionSchema },
       { name: Persona.name, schema: PersonaSchema },
     ]),
-    BullModule.registerQueue({
+    BullModule.registerQueueAsync({
       name: QUEUE_NAMES.SCENARIO_EXECUTION,
-      defaultJobOptions,
+      inject: [{ token: EXECUTION_QUEUE_LIMITS, optional: true }],
+      useFactory: (limits?: ExecutionQueueLimits) => ({
+        defaultJobOptions,
+        limiter: {
+          max: limits?.maxPerMinute ?? DEFAULT_EXECUTION_QUEUE_LIMITS.maxPerMinute,
+          duration: 60_000,
+        },
+      }),
     }),
   ],
   providers: [
@@ -45,6 +59,7 @@ import { QUEUE_NAMES, defaultJobOptions } from './queues.config';
     PersonaStrategyRegistry,
     QueueProducerService,
     ExecutionProcessor,
+    ExecutionWorker,
     ExecutionService,
   ],
   exports: [ExecutionService, QueueProducerService, AdapterRegistry, AgentConfigResolver, PersonaStrategyRegistry],

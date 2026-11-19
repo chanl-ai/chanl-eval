@@ -34,6 +34,17 @@ export class AdapterRegistry implements OnModuleInit {
     return adapter;
   }
 
+  /**
+   * A new adapter of this type for one conversation. Adapters hold their connection config and
+   * connected flag, so runs that execute at the same time must not share the registered instance:
+   * one run's disconnect() would cut off the other mid-conversation.
+   */
+  create(type: string): AgentAdapter {
+    const registered = this.getOrThrow(type);
+    const Ctor = registered.constructor as new () => AgentAdapter;
+    return new Ctor();
+  }
+
   list(): AgentAdapter[] {
     return Array.from(this.adapters.values());
   }

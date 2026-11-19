@@ -1,4 +1,4 @@
-import { Processor, Process, OnQueueActive, OnQueueCompleted, OnQueueFailed } from '@nestjs/bull';
+import { Processor, OnQueueActive, OnQueueCompleted, OnQueueFailed } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -9,6 +9,8 @@ import {
   ScenarioExecutionResult,
   TranscriptEntry,
 } from './interfaces/job-data.interface';
+
+type TranscriptToolCall = NonNullable<TranscriptEntry['toolCalls']>[number];
 import {
   ScenarioExecution,
   ScenarioExecutionDocument,
@@ -62,8 +64,8 @@ export class ExecutionProcessor {
 
   /**
    * Main job handler. Dequeues, runs the conversation loop, and stores results.
+   * Registered on the queue by ExecutionWorker, which applies the configured concurrency.
    */
-  @Process('execute')
   async processExecution(
     job: Job<ScenarioExecutionJobData>,
   ): Promise<ScenarioExecutionResult> {
@@ -191,7 +193,7 @@ export class ExecutionProcessor {
         tools: toolDefs,
       });
 
-      const adapter = this.adapterRegistry.getOrThrow(adapterType);
+      const adapter = this.adapterRegistry.create(adapterType);
       await adapter.connect(adapterConfig);
 
       await job.progress(50);
@@ -313,15 +315,22 @@ export class ExecutionProcessor {
 
       this.logger.debug(`Scorecard check: scorecardId=${scenario.scorecardId}, evaluationService=${!!this.evaluationService}`);
       let scorecardSummary: string | undefined;
-      if (scenario.scorecardId && this.evaluationService) {
+      const scorecardId = data.scorecardId || scenario.scorecardId?.toString();
+      if (scorecardId && this.evaluationService) {
         try {
-          // Extract tool calls from transcript for RAG faithfulness evaluation
-          const allToolCalls = transcript
-            .filter((t) => t.toolCalls?.length)
-            .flatMap((t) => t.toolCalls!);
+          // Tool calls in the order made, each tagged with the persona turn it happened in so a
+          // failed check can point at the turn.
+          const allToolCalls: Array<TranscriptToolCall & { turn: number }> = [];
+          let personaTurns = 0;
+          for (const entry of transcript) {
+            if (entry.role === 'persona') personaTurns++;
+            for (const call of entry.toolCalls || []) {
+              allToolCalls.push({ ...call, turn: personaTurns });
+            }
+          }
 
           const evalResult = await this.evaluationService.evaluate(
-            scenario.scorecardId.toString(),
+            scorecardId,
             {
               transcriptText,
               segments: transcript.map((t) => ({

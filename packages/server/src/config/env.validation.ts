@@ -43,6 +43,16 @@ export class EnvironmentVariables {
   @IsString()
   CHANL_ANTHROPIC_API_KEY?: string;
 
+  /** Conversations one server runs at the same time (default 5). */
+  @IsOptional()
+  @IsNumberString({}, { message: 'CHANL_EXECUTION_CONCURRENCY must be a number' })
+  CHANL_EXECUTION_CONCURRENCY?: string;
+
+  /** Conversations one server starts per minute (default 60). */
+  @IsOptional()
+  @IsNumberString({}, { message: 'CHANL_EXECUTION_MAX_PER_MINUTE must be a number' })
+  CHANL_EXECUTION_MAX_PER_MINUTE?: string;
+
   @IsOptional()
   @IsUrl(
     { require_tld: false, require_protocol: true },

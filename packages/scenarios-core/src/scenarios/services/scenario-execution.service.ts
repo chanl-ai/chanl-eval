@@ -87,6 +87,7 @@ export class ScenarioExecutionService {
   async execute(
     scenarioId: string,
     executeDto: ExecuteScenarioDto,
+    internal: { runSetId?: string } = {},
   ): Promise<ScenarioExecution> {
     try {
       // Verify scenario exists and is active
@@ -118,6 +119,7 @@ export class ScenarioExecutionService {
         triggerId: executeDto.triggerId
           ? new Types.ObjectId(executeDto.triggerId)
           : undefined,
+        ...(internal.runSetId ? { runSetId: internal.runSetId } : {}),
         status: 'queued',
         startTime: new Date(),
         triggeredBy: 'system',
@@ -138,6 +140,8 @@ export class ScenarioExecutionService {
           executeDto.personaId || scenario.personaIds?.[0]?.toString(),
         parameters: executeDto.parameters,
         toolFixtureIds: executeDto.toolFixtureIds,
+        scorecardId:
+          executeDto.scorecardId || scenario.scorecardId?.toString() || undefined,
       });
 
       this.logger.log(
@@ -542,6 +546,17 @@ export class ScenarioExecutionService {
       text: s.actualResponse || '',
     }));
 
+    // Tool calls in order, tagged with the persona turn they happened in, so tool checks see the
+    // same input on re-evaluation as they did when the run was first scored.
+    const toolCalls: Array<{ name: string; arguments: any; result: any; turn: number }> = [];
+    let personaTurns = 0;
+    for (const step of execution.stepResults) {
+      if (step.role === 'persona') personaTurns++;
+      for (const call of step.toolCalls || []) {
+        toolCalls.push({ name: call.name, arguments: call.arguments, result: call.result, turn: personaTurns });
+      }
+    }
+
     // 3. Resolve credentials for the LLM judge.
     // Priority: operator-configured settings > env vars (headless/CI fallback).
     const { judgeApiKey, judgeKind, judgeBaseUrl } = await this.resolveJudgeConfig();
@@ -570,6 +585,7 @@ export class ScenarioExecutionService {
           transcriptText,
           segments,
           metrics: { firstResponseLatency },
+          toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
           llmEvaluate,
         },
         { scenarioExecutionId: execution.executionId },
@@ -592,6 +608,8 @@ export class ScenarioExecutionService {
           result: cr.result,
           reasoning: cr.reasoning,
           evidence: cr.evidence,
+          ...(cr.needsReview ? { needsReview: true } : {}),
+          ...(cr.notApplicable ? { notApplicable: true } : {}),
         })),
         evaluatedAt: new Date(),
       };

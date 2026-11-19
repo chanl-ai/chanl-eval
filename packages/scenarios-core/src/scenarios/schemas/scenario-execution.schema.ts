@@ -100,6 +100,10 @@ export class ScenarioExecution {
   @Prop({ type: String, index: true })
   batchId?: string;
 
+  /** Run set this execution belongs to (k repeated runs scored together). */
+  @Prop({ type: String, index: true })
+  runSetId?: string;
+
   /** Human-readable name for the dataset batch */
   @Prop({ type: String })
   batchName?: string;
