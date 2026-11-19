@@ -15,6 +15,7 @@ export enum CriteriaType {
   ROLE_ADHERENCE = 'role_adherence',
   RAG_FAITHFULNESS = 'rag_faithfulness',
   PATTERN = 'pattern',
+  TOOL_ORDER = 'tool_order',
 }
 
 // ========== SETTINGS INTERFACES ==========
@@ -59,9 +60,25 @@ export interface ResponseTimeCriteriaSettings {
   participant: 'agent' | 'customer' | 'both';
 }
 
+export interface ToolArgExpectation {
+  op: 'equals' | 'contains' | 'regex';
+  value: unknown;
+}
+
 export interface ToolCallCriteriaSettings {
   expectedTool: string | string[];
+  /** 'called' (default) passes when an expected tool was called; 'never_called' passes when none was. */
+  mode?: 'called' | 'never_called';
+  /** Per-argument expectations; a call only counts as a match when every listed argument matches. */
+  expectedArgs?: Record<string, ToolArgExpectation>;
   executionCondition?: string;
+}
+
+export interface ToolOrderCriteriaSettings {
+  first: string;
+  then: string;
+  /** Also fail when the `first` call's result looks like an error, mismatch or not-found. */
+  requireFirstSuccess?: boolean;
 }
 
 export interface HallucinationCriteriaSettings {
@@ -96,6 +113,7 @@ export type CriteriaSettings =
   | PatternCriteriaSettings
   | ResponseTimeCriteriaSettings
   | ToolCallCriteriaSettings
+  | ToolOrderCriteriaSettings
   | HallucinationCriteriaSettings
   | KnowledgeRetentionCriteriaSettings
   | ConversationCompletenessCriteriaSettings
@@ -168,6 +186,7 @@ export function getEvaluationType(
   if (
     criteria.type === CriteriaType.KEYWORD ||
     criteria.type === CriteriaType.TOOL_CALL ||
+    criteria.type === CriteriaType.TOOL_ORDER ||
     criteria.type === CriteriaType.PATTERN
   ) {
     return 'boolean';

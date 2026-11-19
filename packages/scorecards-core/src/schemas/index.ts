@@ -21,6 +21,8 @@ export {
   PatternCriteriaSettings,
   ResponseTimeCriteriaSettings,
   ToolCallCriteriaSettings,
+  ToolOrderCriteriaSettings,
+  ToolArgExpectation,
   HallucinationCriteriaSettings,
   KnowledgeRetentionCriteriaSettings,
   ConversationCompletenessCriteriaSettings,

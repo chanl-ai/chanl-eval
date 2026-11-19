@@ -21,6 +21,8 @@ export { PromptHandler } from './prompt.handler';
 export { RagFaithfulnessHandler } from './rag-faithfulness.handler';
 export { ResponseTimeHandler } from './response-time.handler';
 export { ToolCallHandler } from './tool-call.handler';
+export { ToolOrderHandler } from './tool-order.handler';
+export { normalizeToolCalls } from './tool-call-utils';
 
 // Multi-turn conversation metric handlers
 export { KnowledgeRetentionHandler } from './knowledge-retention.handler';

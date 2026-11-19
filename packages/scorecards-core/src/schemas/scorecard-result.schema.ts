@@ -16,6 +16,8 @@ export interface CriteriaResult {
   reasoning: string;
   evidence: string[];
   notApplicable?: boolean;
+  /** The verdict could not be trusted as given (e.g. judge cited no quote); a person should look. */
+  needsReview?: boolean;
   /** Judge agreement 0-1 when the criterion ran with self-consistency sampling. */
   confidence?: number;
 }
@@ -79,6 +81,10 @@ export class ScorecardResult {
 
   @Prop({ type: Number, min: 0, max: 10 })
   overallScore?: number;
+
+  /** Overall verdict against the scorecard's passing threshold, stored so readers need not recompute it. */
+  @Prop({ type: Boolean })
+  passed?: boolean;
 
   @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
   categoryScores!: Record<string, number>;

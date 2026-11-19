@@ -127,6 +127,7 @@ export class EvaluationService {
             reasoning: handlerResult.reasoning,
             evidence: handlerResult.evidence,
             ...(handlerResult.notApplicable ? { notApplicable: true } : {}),
+            ...(handlerResult.needsReview ? { needsReview: true } : {}),
             ...(handlerResult.confidence !== undefined
               ? { confidence: handlerResult.confidence }
               : {}),
@@ -200,6 +201,7 @@ export class EvaluationService {
       await this.resultModel.findByIdAndUpdate(result._id, {
         status: 'completed',
         overallScore,
+        passed,
         categoryScores,
         criteriaResults,
         analysisMetadata: {

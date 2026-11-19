@@ -89,6 +89,21 @@ export class PromptHandler implements CriteriaHandler {
         };
       }
 
+      // A verdict the judge cannot back with a quote from the transcript is unverifiable, so it is
+      // neither a pass nor a clean fail: a person has to read the conversation.
+      const quotes = (llmResult.evidence || []).filter(
+        (e) => typeof e === 'string' && e.trim().length > 0,
+      );
+      if (quotes.length === 0) {
+        return {
+          result: llmResult.result,
+          passed: false,
+          needsReview: true,
+          reasoning: `Needs review: judge gave no quote. ${llmResult.reasoning || ''}`.trim(),
+          evidence: [],
+        };
+      }
+
       return {
         result: llmResult.result,
         passed: llmResult.passed ?? checkThreshold(criteria, llmResult.result),

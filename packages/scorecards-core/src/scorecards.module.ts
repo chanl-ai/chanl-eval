@@ -27,6 +27,7 @@ import {
   RagFaithfulnessHandler,
   ResponseTimeHandler,
   ToolCallHandler,
+  ToolOrderHandler,
   KnowledgeRetentionHandler,
   ConversationCompletenessHandler,
   RoleAdherenceHandler,
@@ -42,6 +43,7 @@ function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
   registry.register(new ResponseTimeHandler());
   registry.register(new RagFaithfulnessHandler());
   registry.register(new ToolCallHandler());
+  registry.register(new ToolOrderHandler());
   registry.register(new KnowledgeRetentionHandler());
   registry.register(new ConversationCompletenessHandler());
   registry.register(new RoleAdherenceHandler());
