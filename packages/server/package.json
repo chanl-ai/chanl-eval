@@ -19,6 +19,7 @@
     "@chanl/scorecards-core": "workspace:*",
     "@nestjs/bull": "^10.0.0",
     "@nestjs/common": "^10.0.0",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^10.0.0",
     "@nestjs/mongoose": "^10.0.0",
     "@nestjs/platform-express": "^10.0.0",
