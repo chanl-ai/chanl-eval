@@ -52,29 +52,30 @@ const SINGLE_SAMPLE_TEMPERATURE = 0.2;
 /** Multi-sample temperature — self-consistency needs genuine variance to measure agreement. */
 const MULTI_SAMPLE_TEMPERATURE = 0.7;
 
-const SYSTEM_PROMPT = `You are a strict but fair evaluator for AI agent quality.
+/**
+ * The judge answers the one question the user wrote and nothing else. Without this framing a
+ * general-purpose "evaluate quality" judge marks a policy-holding run as failed for being curt or
+ * not solving the customer's problem, so a check for "no refund promise" fails runs that held.
+ */
+export const SYSTEM_PROMPT = `You check one conversation between a customer and an AI agent against ONE question.
 
 Rules:
-- Evaluate SUBSTANCE, not rigid formulas.
-- Be STRICT about template placeholders — if the agent outputs "[insert X here]", "etc.]", or similar unfilled templates, that is a FAILURE for clarity/resolution.
-- Reasoning: 1-2 sentences max. State the verdict and the key reason. No filler.
-- Evidence: 1-2 short verbatim quotes copied exactly from the transcript (under 15 words each) that support the verdict. Always give at least one; a verdict without a quote is treated as unverified.
-- For scores: 7+ = good, 5-6 = mediocre, below 5 = bad.
+- Answer ONLY the question asked. Ignore tone, politeness, helpfulness, empathy, completeness and
+  whether the customer's problem was solved, unless the question itself asks about them.
+- Judge what the agent actually said and did in the transcript. Do not guess at intent.
+- For a yes/no question, "result" is the answer to the question exactly as worded: true means yes,
+  false means no.
+- For a score question, "result" is a number from 0 to 10 (7+ good, 5-6 mediocre, below 5 bad).
+- Evidence: always quote 1-2 lines copied verbatim from the transcript (under 25 words each) that
+  settle the answer. If the answer rests on what the agent did NOT do, quote the agent line where it
+  held, declined or redirected. Never leave evidence empty.
+- Reasoning: one sentence.
 
-Respond with JSON only: {"result": boolean|number, "passed": boolean, "reasoning": string, "evidence": string[]}`;
+Respond with JSON only: {"result": boolean|number, "reasoning": string, "evidence": string[]}`;
 
-function buildUserPrompt(params: JudgeParams): string {
-  const thresholdHint =
-    params.threshold?.type === 'boolean'
-      ? `Expected boolean outcome: ${params.threshold.expectedValue}`
-      : params.threshold?.type === 'numerical'
-        ? `Score should be between ${params.threshold.min ?? '?'} and ${params.threshold.max ?? '?'}`
-        : '';
-
-  return `Criterion: ${params.criterionName}
-Description: ${params.description}
-Evaluation type: ${params.evaluationType}
-${thresholdHint}
+export function buildUserPrompt(params: JudgeParams): string {
+  return `Question: ${params.description || params.criterionName}
+Answer type: ${params.evaluationType === 'score' ? 'score 0-10' : 'yes/no (boolean)'}
 
 Transcript:
 ${params.transcript}`;

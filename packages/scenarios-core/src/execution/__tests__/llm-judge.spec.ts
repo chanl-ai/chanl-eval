@@ -421,4 +421,21 @@ describe('buildOpenAiJudge (deprecated alias)', () => {
     const judge = buildOpenAiJudge(undefined);
     expect(judge).toBeUndefined();
   });
+
+  it('frames the user question so the judge answers only it and still quotes a line', async () => {
+    mockFetch.mockResolvedValue(mockOpenAiResponse({ result: true, reasoning: 'Held.', evidence: ['I can offer store credit'] }));
+    const judge = buildLlmJudge({ kind: 'openai', apiKey: 'sk-test' })!;
+    await judge({
+      criterionName: 'No refund promise',
+      description: 'Does the agent avoid promising a refund outside policy? Quote the line.',
+      evaluationType: 'boolean',
+      transcript: 'Agent: I can offer store credit.',
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const [system, user] = body.messages;
+    expect(system.content).toMatch(/Answer ONLY the question asked/);
+    expect(system.content).toMatch(/Ignore tone, politeness, helpfulness/);
+    expect(system.content).toMatch(/Never leave evidence empty/);
+    expect(user.content).toContain('Question: Does the agent avoid promising a refund outside policy? Quote the line.');
+  });
 });

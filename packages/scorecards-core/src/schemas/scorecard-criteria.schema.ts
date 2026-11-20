@@ -21,6 +21,8 @@ export enum CriteriaType {
 // ========== SETTINGS INTERFACES ==========
 
 export interface PromptCriteriaSettings {
+  /** The judge question as the dashboard saves it. `description` is the older name for it. */
+  rubric?: string;
   description: string;
   evaluationType: 'boolean' | 'score';
   /**
@@ -71,13 +73,18 @@ export interface ToolCallCriteriaSettings {
   mode?: 'called' | 'never_called';
   /** Per-argument expectations; a call only counts as a match when every listed argument matches. */
   expectedArgs?: Record<string, ToolArgExpectation>;
+  /**
+   * Scope the check to runs where this tool was called with these arguments; other runs are N/A.
+   * Lets one scorecard say "flag_for_review called" for large invoices without failing small ones.
+   */
+  appliesWhen?: { tool: string; args?: Record<string, ToolArgExpectation> };
   executionCondition?: string;
 }
 
 export interface ToolOrderCriteriaSettings {
   first: string;
   then: string;
-  /** Also fail when the `first` call's result looks like an error, mismatch or not-found. */
+  /** Also fail when the `first` call's result looks like an error, mismatch or not-found. Default true. */
   requireFirstSuccess?: boolean;
 }
 

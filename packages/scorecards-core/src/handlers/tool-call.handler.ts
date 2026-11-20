@@ -33,6 +33,21 @@ export class ToolCallHandler implements CriteriaHandler {
     const hasArgRules = Object.keys(expectedArgs).length > 0;
 
     const calls = normalizeToolCalls(context.toolCalls);
+    if (settings.appliesWhen?.tool) {
+      const scope = settings.appliesWhen;
+      const inScope = calls.some(
+        (c) => c.name === scope.tool && argsMatch(c, scope.args || {}).ok,
+      );
+      if (!inScope) {
+        return {
+          result: null,
+          passed: true,
+          notApplicable: true,
+          reasoning: `Not applicable: no ${scope.tool} call matched this check's scope`,
+          evidence: [],
+        };
+      }
+    }
     const nameMatches = calls.filter((c) => expectedTools.includes(c.name));
     const fullMatches = nameMatches.filter((c) => argsMatch(c, expectedArgs).ok);
     const toolList = expectedTools.join(', ');

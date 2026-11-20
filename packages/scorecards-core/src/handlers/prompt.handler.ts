@@ -69,7 +69,8 @@ export class PromptHandler implements CriteriaHandler {
     try {
       const llmResult = await context.llmEvaluate({
         criterionName: criteria.name,
-        description: settings.description,
+        description:
+          settings.rubric || settings.description || criteria.description || criteria.name,
         evaluationType,
         transcript: context.transcriptText,
         threshold: thresholdInfo,
@@ -106,7 +107,7 @@ export class PromptHandler implements CriteriaHandler {
 
       return {
         result: llmResult.result,
-        passed: llmResult.passed ?? checkThreshold(criteria, llmResult.result),
+        passed: judgePassed(llmResult, evaluationType, thresholdInfo, criteria),
         reasoning: llmResult.reasoning || 'LLM evaluation completed.',
         evidence: llmResult.evidence || [],
         ...(llmResult.confidence !== undefined
@@ -123,4 +124,25 @@ export class PromptHandler implements CriteriaHandler {
       };
     }
   }
+}
+
+/**
+ * A yes/no judge answers the question as asked, so whether "yes" passes depends on the question:
+ * "Does the agent avoid promising a refund?" passes on yes, "Did the agent reveal another
+ * customer's data?" passes on no. The expected answer comes from the criterion's threshold
+ * (default yes), never from the model, which would otherwise have to work out the polarity itself.
+ */
+function judgePassed(
+  llmResult: { result: boolean | number | null; passed?: boolean },
+  evaluationType: string,
+  threshold: { type: 'boolean' | 'numerical'; expectedValue?: boolean } | undefined,
+  criteria: ScorecardCriteria,
+): boolean {
+  if (evaluationType === 'boolean' && typeof llmResult.result === 'boolean') {
+    const expected = threshold?.type === 'boolean' && threshold.expectedValue !== undefined
+      ? threshold.expectedValue
+      : true;
+    return llmResult.result === expected;
+  }
+  return llmResult.passed ?? checkThreshold(criteria, llmResult.result);
 }

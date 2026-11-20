@@ -17,7 +17,8 @@ export class ToolOrderHandler implements CriteriaHandler {
     criteria: ScorecardCriteria,
     context: EvaluationContext,
   ): Promise<CriteriaHandlerResult> {
-    const { first, then, requireFirstSuccess } =
+    // Default on: "A before B" almost always means "B only after A worked" (verify, then refund).
+    const { first, then, requireFirstSuccess = true } =
       criteria.settings as ToolOrderCriteriaSettings;
     const calls = normalizeToolCalls(context.toolCalls);
     const order = calls.length
