@@ -9,7 +9,7 @@ import {
   SIMULATION_CONFIG_PROVIDER,
   SimulationConfigProvider,
 } from '../../execution/simulation-config.provider';
-import { EvaluationService } from '@chanl/scorecards-core';
+import { EvaluationService, ScorecardsService } from '@chanl/scorecards-core';
 import {
   ScenarioExecution,
   ScenarioExecutionSchema,
@@ -63,6 +63,7 @@ describe('ScenarioExecutionService', () => {
         ScenarioExecutionService,
         { provide: QueueProducerService, useValue: { enqueueExecution: enqueue } },
         { provide: EvaluationService, useValue: { evaluate: jest.fn() } },
+        { provide: ScorecardsService, useValue: { findResultsByExecutions: jest.fn().mockResolvedValue([]) } },
         { provide: SIMULATION_CONFIG_PROVIDER, useValue: simulationConfig },
       ],
     }).compile();

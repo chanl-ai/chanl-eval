@@ -25,7 +25,7 @@ import {
   EvaluateExecutionDto,
 } from '../dto/execute-scenario.dto';
 import { QueueProducerService } from '../../execution/queue-producer.service';
-import { EvaluationService } from '@chanl/scorecards-core';
+import { EvaluationService, ScorecardsService } from '@chanl/scorecards-core';
 import { buildLlmJudge } from '../../execution/judge-llm';
 
 
@@ -40,6 +40,7 @@ export class ScenarioExecutionService {
     private scenarioModel: Model<ScenarioDocument>,
     private readonly queueProducer: QueueProducerService,
     private readonly evaluationService: EvaluationService,
+    private readonly scorecardsService: ScorecardsService,
     @Optional()
     @Inject(SIMULATION_CONFIG_PROVIDER)
     private readonly simulationConfig?: SimulationConfigProvider,
@@ -78,6 +79,32 @@ export class ScenarioExecutionService {
       this.logger.warn(`Simulation config lookup failed: ${error?.message}`);
       return { judgeKind: 'openai' };
     }
+  }
+
+  /**
+   * Adds each run's verdict from its newest completed scorecard result, in one query per page.
+   * Playground runs and re-scored runs keep their verdict only in scorecard_results, so a list
+   * that read the execution alone would show them unscored.
+   */
+  private async withVerdicts<T extends { executionId?: string }>(
+    executions: T[],
+  ): Promise<Array<T & { passed: boolean | null; scorePercent: number | null }>> {
+    const ids = executions.map((e) => e.executionId).filter((id): id is string => !!id);
+    const results = await this.scorecardsService.findResultsByExecutions(ids);
+    const latest = new Map<string, { passed?: boolean; overallScore?: number }>();
+    for (const r of results) {
+      if (r.status === 'completed' && r.scenarioExecutionId && !latest.has(r.scenarioExecutionId)) {
+        latest.set(r.scenarioExecutionId, r);
+      }
+    }
+    return executions.map((e) => {
+      const r = e.executionId ? latest.get(e.executionId) : undefined;
+      return {
+        ...e,
+        passed: r ? !!r.passed : null,
+        scorePercent: r && typeof r.overallScore === 'number' ? Math.round(r.overallScore * 10) : null,
+      };
+    });
   }
 
   /**
@@ -177,7 +204,7 @@ export class ScenarioExecutionService {
         );
       }
 
-      return execution.toJSON();
+      return (await this.withVerdicts([execution.toJSON()]))[0];
     } catch (error: any) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -215,7 +242,7 @@ export class ScenarioExecutionService {
       const total = await this.executionModel.countDocuments(query);
 
       return {
-        executions: executions.map((e) => e.toJSON()),
+        executions: await this.withVerdicts(executions.map((e) => e.toJSON())),
         total,
       };
     } catch (error: any) {
@@ -303,7 +330,7 @@ export class ScenarioExecutionService {
       const total = await this.executionModel.countDocuments(query);
 
       return {
-        executions: executions.map((e) => e.toJSON()),
+        executions: await this.withVerdicts(executions.map((e) => e.toJSON())),
         total,
       };
     } catch (error: any) {

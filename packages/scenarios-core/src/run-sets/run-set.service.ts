@@ -26,6 +26,8 @@ export type RunSetView = {
   scenarioId: string;
   promptId: string;
   personaIds: string[];
+  scenarioName: string | null;
+  promptName: string | null;
   scorecardId: string | null;
   toolFixtureIds: string[];
   k: number;
@@ -40,6 +42,11 @@ export interface RoomStats {
   since: string;
   topFailingChecks: Array<{ name: string; failed: number; total: number }>;
   redteamBroken: Array<{ personaName: string; count: number }>;
+}
+
+interface EntityNames {
+  scenarios: Map<string, string>;
+  prompts: Map<string, string>;
 }
 
 const DEFAULT_K = 5;
@@ -130,12 +137,27 @@ export class RunSetService {
     if (query.scenarioId) filter.scenarioId = query.scenarioId;
     if (query.promptId) filter.promptId = query.promptId;
     if (query.kind) filter.kind = query.kind;
-    const sets = await this.runSetModel.find(filter).sort({ createdAt: -1 }).limit(50).lean();
-    return Promise.all(sets.map((s) => this.view(s as RunSet)));
+    const sets = (await this.runSetModel.find(filter).sort({ createdAt: -1 }).limit(50).lean()) as RunSet[];
+    const names = await this.entityNames(sets);
+    return Promise.all(sets.map((s) => this.view(s, names)));
   }
 
   async get(id: string): Promise<RunSetView> {
-    return this.view(await this.load(id));
+    const runSet = await this.load(id);
+    return this.view(runSet, await this.entityNames([runSet]));
+  }
+
+  /** Scenario and agent names for a page of run sets, one query each. */
+  private async entityNames(sets: RunSet[]): Promise<EntityNames> {
+    const ids = (key: 'scenarioId' | 'promptId') =>
+      [...new Set(sets.map((s) => s[key]))].filter((id) => Types.ObjectId.isValid(id)).map((id) => new Types.ObjectId(id));
+    const [scenarios, prompts] = await Promise.all([
+      this.scenarioModel.find({ _id: { $in: ids('scenarioId') } }).select('name').lean(),
+      // Prompts live in the server package; their collection is read by name, as the worker does.
+      this.scenarioModel.db.collection('prompts').find({ _id: { $in: ids('promptId') } }, { projection: { name: 1 } }).toArray(),
+    ]);
+    const toMap = (docs: any[]) => new Map(docs.map((d) => [d._id.toString(), d.name as string]));
+    return { scenarios: toMap(scenarios), prompts: toMap(prompts) };
   }
 
   /** Marks this set the baseline for its scenario and persona set, unmarking the previous one. */
@@ -236,7 +258,7 @@ export class RunSetService {
     return runSet as RunSet;
   }
 
-  private async view(runSet: RunSet): Promise<RunSetView> {
+  private async view(runSet: RunSet, entities: EntityNames): Promise<RunSetView> {
     const [runs, names] = await Promise.all([
       this.loadRuns(runSet.executionIds),
       this.personaNames(runSet.personaIds),
@@ -246,6 +268,8 @@ export class RunSetService {
       kind: runSet.kind,
       scenarioId: runSet.scenarioId,
       promptId: runSet.promptId,
+      scenarioName: entities.scenarios.get(runSet.scenarioId) ?? null,
+      promptName: entities.prompts.get(runSet.promptId) ?? null,
       personaIds: runSet.personaIds,
       scorecardId: runSet.scorecardId || null,
       toolFixtureIds: runSet.toolFixtureIds || [],
