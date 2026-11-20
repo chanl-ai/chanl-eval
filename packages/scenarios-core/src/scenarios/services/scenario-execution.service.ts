@@ -596,6 +596,9 @@ export class ScenarioExecutionService {
             // Self-hosted OpenAI-compatible servers accept any bearer token.
             apiKey: judgeApiKey || 'not-needed',
             baseUrl: judgeBaseUrl,
+            ...(judgeKind === 'openai' && this.simulationConfig?.getJudgeModel?.()
+              ? { model: this.simulationConfig.getJudgeModel() }
+              : {}),
           })
         : undefined;
 

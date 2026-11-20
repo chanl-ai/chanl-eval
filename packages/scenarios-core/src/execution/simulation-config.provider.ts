@@ -17,6 +17,12 @@ export interface SimulationConfigProvider {
 
   /** OpenAI-/Anthropic-compatible host for persona + judge calls, if configured. */
   getSimulationBaseUrl(): Promise<string | undefined>;
+
+  /**
+   * Model for the OpenAI AI judge, when the operator pins one. Without it the judge uses the agent
+   * under test's model, and small models invert answers to questions phrased in the negative.
+   */
+  getJudgeModel?(): string | undefined;
 }
 
 export const SIMULATION_CONFIG_PROVIDER = Symbol('SIMULATION_CONFIG_PROVIDER');

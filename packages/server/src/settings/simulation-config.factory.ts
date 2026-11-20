@@ -34,5 +34,9 @@ export function createSimulationConfigProvider(
         (await settings.getSimulationBaseUrl())
       );
     },
+
+    getJudgeModel(): string | undefined {
+      return config.get<string>('CHANL_JUDGE_MODEL') || undefined;
+    },
   };
 }

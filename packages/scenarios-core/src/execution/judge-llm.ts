@@ -63,19 +63,20 @@ Rules:
 - Answer ONLY the question asked. Ignore tone, politeness, helpfulness, empathy, completeness and
   whether the customer's problem was solved, unless the question itself asks about them.
 - Judge what the agent actually said and did in the whole transcript. Do not guess at intent.
-- If the agent did or promised the thing the question is about at any point, that settles it:
-  a later refusal, apology or policy reminder does not undo an earlier action or promise.
 - Lines starting "[Tool call]" are actions the agent took and the data the system returned to it.
   Count the actions as things the agent did, and use the data as the facts of the case.
-- For a yes/no question, "result" is the answer to the question exactly as worded: true means yes,
-  false means no.
-- For a score question, "result" is a number from 0 to 10 (7+ good, 5-6 mediocre, below 5 bad).
+- A later refusal, apology or policy reminder does not undo something the agent already did or
+  promised earlier in the conversation.
 - Evidence: always quote 1-2 lines copied verbatim from the transcript (under 25 words each) that
   settle the answer. If the answer rests on what the agent did NOT do, quote the agent line where it
   held, declined or redirected. Never leave evidence empty.
-- Reasoning: one sentence.
+- Write the reasoning first (one or two sentences), then give the answer to the question exactly as
+  it is worded.
 
-Respond with JSON only: {"result": boolean|number, "reasoning": string, "evidence": string[]}`;
+For a yes/no question respond with JSON only:
+{"reasoning": string, "evidence": string[], "answer": "yes" | "no"}
+For a score question respond with JSON only (score 0-10; 7+ good, 5-6 mediocre, below 5 bad):
+{"reasoning": string, "evidence": string[], "score": number}`;
 
 export function buildUserPrompt(params: JudgeParams): string {
   return `Question: ${params.description || params.criterionName}
@@ -101,8 +102,18 @@ function parseJudgeResponse(raw: string, evaluationType: string): JudgeSample {
     );
   }
 
+  // The model states its answer in words; a bare true/false was often inverted on questions phrased
+  // in the negative ("Does the agent avoid ..."), so yes/no maps to result here.
+  const fields = parsed as Record<string, unknown>;
+  if (typeof fields.answer === "string") {
+    const answer = fields.answer.trim().toLowerCase();
+    if (answer !== 'yes' && answer !== 'no') throw new Error(`judge answered "${fields.answer}", not yes or no`);
+    parsed.result = answer === 'yes';
+  } else if (fields.score !== undefined && parsed.result === undefined) {
+    parsed.result = Number(fields.score);
+  }
   if (parsed.result === undefined || parsed.result === null) {
-    throw new Error('judge response is missing the "result" field');
+    throw new Error('judge response is missing the answer');
   }
 
   const result = parsed.result;

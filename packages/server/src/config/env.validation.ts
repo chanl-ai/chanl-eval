@@ -44,6 +44,11 @@ export class EnvironmentVariables {
   @IsString()
   CHANL_OPENAI_API_KEY?: string;
 
+  /** Model for the OpenAI AI judge, e.g. gpt-4o. Default: the agent under test's model. */
+  @IsOptional()
+  @IsString()
+  CHANL_JUDGE_MODEL?: string;
+
   @IsOptional()
   @IsString()
   CHANL_ANTHROPIC_API_KEY?: string;

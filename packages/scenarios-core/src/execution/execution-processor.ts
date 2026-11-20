@@ -1,5 +1,5 @@
 import { Processor, OnQueueActive, OnQueueCompleted, OnQueueFailed } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Job } from 'bull';
@@ -29,6 +29,7 @@ import {
   generatePersonaUtterance,
 } from './persona-llm';
 import { judgeTranscript } from './judge-transcript';
+import { SIMULATION_CONFIG_PROVIDER, SimulationConfigProvider } from './simulation-config.provider';
 import { buildLlmJudge } from './judge-llm';
 import { AgentConfigResolver, PromptConfig } from './agent-config-resolver';
 import { resolveLlmConfigSync } from './llm-config-resolver';
@@ -61,6 +62,9 @@ export class ExecutionProcessor {
     private readonly toolFixtureService: ToolFixtureService,
     private readonly mockResolver: MockResolver,
     private readonly personaStrategyRegistry: PersonaStrategyRegistry,
+    @Optional()
+    @Inject(SIMULATION_CONFIG_PROVIDER)
+    private readonly simulationConfig?: SimulationConfigProvider,
   ) {}
 
   /**
@@ -352,7 +356,10 @@ export class ExecutionProcessor {
               // host the *simulation* half runs on — previously the judge silently borrowed the
               // agent-under-test's key and was pinned to the provider's public host.
               llmEvaluate: buildLlmJudge(
-                resolveLlmConfigSync(adapterType, adapterConfig) ?? undefined,
+                withJudgeModel(
+                  resolveLlmConfigSync(adapterType, adapterConfig) ?? undefined,
+                  this.simulationConfig?.getJudgeModel?.(),
+                ),
               ),
             },
             { scenarioExecutionId: data.executionId },
@@ -705,4 +712,13 @@ Write a critical 2-3 sentence summary. Focus on what went wrong (if anything) an
       error.stack,
     );
   }
+}
+
+/** A pinned judge model applies to OpenAI-compatible judges only; others keep the agent's model. */
+function withJudgeModel<T extends { kind: string; model?: string }>(
+  config: T | undefined,
+  judgeModel: string | undefined,
+): T | undefined {
+  if (!config || !judgeModel || config.kind !== 'openai') return config;
+  return { ...config, model: judgeModel };
 }
