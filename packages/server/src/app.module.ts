@@ -9,12 +9,10 @@ import {
   ScenarioModule,
   ToolFixtureModule,
   RunSetModule,
-  SIMULATION_CONFIG_PROVIDER,
 } from '@chanl/scenarios-core';
 import { ExecutionQueueLimitsModule } from './config/execution-queue-limits.module';
 import { SettingsModule } from './settings/settings.module';
-import { SettingsService } from './settings/settings.service';
-import { createSimulationConfigProvider } from './settings/simulation-config.factory';
+import { SimulationConfigModule } from './settings/simulation-config.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { validateEnvironment, CONFIG_DEFAULTS } from './config/env.validation';
 import { ScorecardsModule } from '@chanl/scorecards-core';
@@ -53,6 +51,9 @@ import { GenerationModule } from './generation/generation.module';
     }),
 
     ExecutionQueueLimitsModule,
+    // scenarios-core reads operator-configured credentials through this seam rather than querying
+    // the settings collection itself, keeping the dependency direction one-way.
+    SimulationConfigModule,
 
     // Core packages
     PersonaModule,
@@ -75,13 +76,6 @@ import { GenerationModule } from './generation/generation.module';
     {
       provide: APP_GUARD,
       useClass: ApiKeyGuard,
-    },
-    {
-      // scenarios-core reads operator-configured credentials through this seam rather than
-      // querying the settings collection itself, keeping the dependency direction one-way.
-      provide: SIMULATION_CONFIG_PROVIDER,
-      inject: [SettingsService, ConfigService],
-      useFactory: createSimulationConfigProvider,
     },
   ],
 })
