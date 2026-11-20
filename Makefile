@@ -183,7 +183,7 @@ db-reset: ## Drop database and re-seed
 # Credentials: ~/.chanl-eval-room.env (outside the repo). Seats are private; these targets reach
 # them through `fly proxy`. Spec: one seat machine per attendee, each with its own Mongo db.
 
-.PHONY: room-up room-seed room-status room-reset-seat room-reset-password room-deploy-dashboard room-loadtest room-clear-runs
+.PHONY: room-up room-seed room-status room-reset-seat room-reset-all room-reset-password room-deploy-dashboard room-loadtest room-clear-runs
 
 ROOM_SEATS ?= 40
 
@@ -201,6 +201,9 @@ ifndef SEAT
 	$(error SEAT is required, e.g. SEAT=07)
 endif
 	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts reset $(SEAT)
+
+room-reset-all: ## Before the workshop: wipe and reseed every seat, delete every account, free every seat
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts reset-all --seats 1-$(ROOM_SEATS)
 
 room-reset-password: ## Set an attendee's password: make room-reset-password EMAIL=a@b.co PASSWORD=newpass123
 ifndef EMAIL

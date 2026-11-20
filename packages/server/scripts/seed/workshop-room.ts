@@ -8,6 +8,7 @@
  *   npx tsx scripts/seed/workshop-room.ts status
  *   npx tsx scripts/seed/workshop-room.ts reset 07              wipe, reseed and free the seat
  *   npx tsx scripts/seed/workshop-room.ts reset-password <email> <password>
+ *   npx tsx scripts/seed/workshop-room.ts reset-all [--seats 1-40]   wipe, reseed and free every seat
  *   npx tsx scripts/seed/workshop-room.ts loadtest [--seats 1-40] [--k 5]
  *   npx tsx scripts/seed/workshop-room.ts clear-runs [--seats 1-40] [--release]
  */
@@ -194,6 +195,42 @@ async function cmdReset(argv: string[]) {
   await cmdSeed(['--seats', `${n}-${n}`]);
 }
 
+/**
+ * The pre-workshop reset: every listed seat's database is dropped, every account deleted and every
+ * seat freed, then the machines restart (rebuilding indexes and the first-boot key) and are reseeded.
+ */
+async function cmdResetAll(argv: string[]) {
+  const seats = parseSeats(argv);
+  const ms = machines();
+  const mongo = await openMongo(loadSecrets());
+  try {
+    const room = mongo.client.db('room');
+    const gone = await room.collection('accounts').deleteMany({});
+    await room.collection('seats').updateMany({}, { $set: { assignedTo: null } });
+    console.log(`${gone.deletedCount} account(s) deleted, all seats free`);
+    for (const n of seats) await mongo.client.db(seatName(n)).dropDatabase();
+    console.log(`${seats.length} seat databases dropped, restarting machines`);
+    for (let i = 0; i < seats.length; i += 8) {
+      await Promise.all(seats.slice(i, i + 8).map(async (n) => {
+        const m = ms.get(seatName(n));
+        if (!m) throw new Error(`no machine for ${seatName(n)}`);
+        await new Promise<void>((res, rej) => {
+          const p = spawn('fly', ['machine', 'restart', m.id, '-a', SEAT_APP], { stdio: 'ignore' });
+          p.on('exit', (code) => (code === 0 ? res() : rej(new Error(`restart ${seatName(n)} exited ${code}`))));
+        });
+      }));
+    }
+    for (const n of seats) {
+      for (let i = 0; i < 60 && !(await mongo.client.db(seatName(n)).collection('api_keys').findOne({})); i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+  } finally {
+    await mongo.close();
+  }
+  await cmdSeed(argv);
+}
+
 async function cmdLoadtest(argv: string[]) {
   const k = argValue(argv, '--k', 5);
   const secrets = loadSecrets();
@@ -301,7 +338,7 @@ function report(results: Record<string, unknown>) {
 
 const [cmd, ...rest] = process.argv.slice(2);
 const commands: Record<string, (a: string[]) => Promise<void>> = {
-  seed: cmdSeed, status: cmdStatus, reset: cmdReset, 'reset-password': cmdResetPassword, loadtest: cmdLoadtest, 'clear-runs': cmdClearRuns,
+  seed: cmdSeed, status: cmdStatus, reset: cmdReset, 'reset-password': cmdResetPassword, 'reset-all': cmdResetAll, loadtest: cmdLoadtest, 'clear-runs': cmdClearRuns,
 };
 if (!commands[cmd]) {
   console.error('usage: workshop-room.ts seed|status|reset <n>|loadtest [--seats a-b] [--k 5]');
