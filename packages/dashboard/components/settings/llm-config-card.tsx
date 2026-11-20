@@ -25,9 +25,13 @@ interface LlmConfigCardProps {
   onModelChange: (v: string) => void;
   modelPlaceholder?: string;
   modelHint?: string;
-  // API Key
-  apiKey: string;
-  onApiKeyChange: (v: string) => void;
+  /**
+   * Optional. API keys live on the server (see ProviderKeysCard) — a key typed into a card that
+   * only writes to the browser never reaches a run. Omit these props unless the card genuinely
+   * owns a credential.
+   */
+  apiKey?: string;
+  onApiKeyChange?: (v: string) => void;
   apiKeyPlaceholder?: string;
   apiKeyHint?: string;
   // Base URL
@@ -129,18 +133,20 @@ export function LlmConfigCard({
           </div>
         </div>
 
-        {/* API Key */}
-        <div className="space-y-2">
-          <Label>API Key</Label>
-          <Input
-            type="password"
-            value={apiKey}
-            onChange={(e) => onApiKeyChange(e.target.value)}
-            placeholder={apiKeyPlaceholder}
-            autoComplete="off"
-          />
-          <p className="text-[11px] text-muted-foreground">{apiKeyHint}</p>
-        </div>
+        {/* API Key — only when this card owns one */}
+        {onApiKeyChange && (
+          <div className="space-y-2">
+            <Label>API Key</Label>
+            <Input
+              type="password"
+              value={apiKey ?? ''}
+              onChange={(e) => onApiKeyChange(e.target.value)}
+              placeholder={apiKeyPlaceholder}
+              autoComplete="off"
+            />
+            <p className="text-[11px] text-muted-foreground">{apiKeyHint}</p>
+          </div>
+        )}
 
         {/* Base URL */}
         {showBaseUrl && onBaseUrlChange && (

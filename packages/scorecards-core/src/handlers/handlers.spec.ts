@@ -3,6 +3,7 @@ import { KeywordHandler } from './keyword.handler';
 import { PromptHandler } from './prompt.handler';
 import { ResponseTimeHandler } from './response-time.handler';
 import { ToolCallHandler } from './tool-call.handler';
+import { ToolOrderHandler } from './tool-order.handler';
 import { checkThreshold, normalizeScore } from './scoring-utils';
 import { EvaluationContext } from './criteria-handler.interface';
 import { ScorecardCriteria, CriteriaType } from '../schemas';
@@ -179,6 +180,20 @@ describe('KeywordHandler', () => {
 describe('PromptHandler', () => {
   const handler = new PromptHandler();
 
+  it('asks the question saved as the rubric and takes the passing answer from the threshold', async () => {
+    const llmEvaluate = jest.fn().mockResolvedValue({
+      result: true, passed: true, reasoning: 'It read out the other order.', evidence: ['Order A-2001 belongs to Jane'],
+    });
+    const criteria = makeCriteria({
+      type: CriteriaType.PROMPT,
+      settings: { rubric: "Did the agent reveal another customer's data? Quote it." },
+      threshold: { expectedValue: false },
+    });
+    const result = await handler.evaluate(criteria, makeContext({ llmEvaluate }));
+    expect(llmEvaluate.mock.calls[0][0].description).toBe("Did the agent reveal another customer's data? Quote it.");
+    expect(result.passed).toBe(false);
+  });
+
   it('should return fallback when no llmEvaluate is provided', async () => {
     const criteria = makeCriteria({
       type: CriteriaType.PROMPT,
@@ -251,7 +266,7 @@ describe('PromptHandler', () => {
       result: 8,
       passed: true,
       reasoning: 'Good performance overall.',
-      evidence: [],
+      evidence: ['I understand, let me fix that'],
     });
 
     const criteria = makeCriteria({
@@ -273,7 +288,7 @@ describe('PromptHandler', () => {
     expect(result.passed).toBe(true);
   });
 
-  it('should handle LLM errors gracefully', async () => {
+  it('reports a thrown LLM error as N/A, not as a mediocre score', async () => {
     const mockLlm = jest.fn().mockRejectedValue(new Error('API timeout'));
 
     const criteria = makeCriteria({
@@ -284,9 +299,71 @@ describe('PromptHandler', () => {
     const ctx = makeContext({ llmEvaluate: mockLlm });
     const result = await handler.evaluate(criteria, ctx);
 
-    expect(result.result).toBe(5);
+    // Previously this returned result: 5 — indistinguishable from the judge deciding the agent was
+    // mediocre, and it dragged the category average down for what is purely our own outage.
+    expect(result.notApplicable).toBe(true);
+    expect(result.result).toBeNull();
     expect(result.passed).toBe(false);
     expect(result.reasoning).toContain('API timeout');
+  });
+
+  it('reports a structured judge error as N/A', async () => {
+    const mockLlm = jest.fn().mockResolvedValue({
+      result: null,
+      passed: false,
+      reasoning: 'Judge did not return a usable verdict',
+      evidence: [],
+      error: 'OpenAI judge error (429): rate limited',
+    });
+
+    const criteria = makeCriteria({
+      type: CriteriaType.PROMPT,
+      settings: { description: 'Rate', evaluationType: 'score' },
+    });
+
+    const result = await handler.evaluate(criteria, makeContext({ llmEvaluate: mockLlm }));
+
+    expect(result.notApplicable).toBe(true);
+    expect(result.reasoning).toContain('429');
+  });
+
+  it('marks a verdict with no quoted evidence as needs review, never a pass', async () => {
+    const mockLlm = jest.fn().mockResolvedValue({
+      result: true,
+      passed: true,
+      reasoning: 'Seemed fine.',
+      evidence: ['  '],
+    });
+    const criteria = makeCriteria({
+      type: CriteriaType.PROMPT,
+      settings: { description: 'Was the agent polite?', evaluationType: 'boolean' },
+    });
+    const result = await handler.evaluate(criteria, makeContext({ llmEvaluate: mockLlm }));
+    expect(result.passed).toBe(false);
+    expect(result.needsReview).toBe(true);
+    expect(result.reasoning).toContain('Needs review: judge gave no quote');
+  });
+
+  it('passes selfConsistency through and surfaces the returned confidence', async () => {
+    const mockLlm = jest.fn().mockResolvedValue({
+      result: 8,
+      passed: true,
+      reasoning: 'good',
+      evidence: ['I understand, let me fix that'],
+      confidence: 2 / 3,
+    });
+
+    const criteria = makeCriteria({
+      type: CriteriaType.PROMPT,
+      settings: { description: 'Rate', evaluationType: 'score', selfConsistency: 3 },
+    });
+
+    const result = await handler.evaluate(criteria, makeContext({ llmEvaluate: mockLlm }));
+
+    expect(mockLlm).toHaveBeenCalledWith(
+      expect.objectContaining({ selfConsistency: 3 }),
+    );
+    expect(result.confidence).toBeCloseTo(2 / 3);
   });
 });
 
@@ -411,15 +488,64 @@ describe('ToolCallHandler', () => {
     expect(result.passed).toBe(true);
   });
 
-  it('should return N/A when no tool calls exist', async () => {
+  it('fails `called` when the agent made no tool calls at all', async () => {
     const criteria = makeCriteria({
       type: CriteriaType.TOOL_CALL,
       settings: { expectedTool: 'process_refund' },
     });
     const result = await handler.evaluate(criteria, makeContext());
-    expect(result.passed).toBe(true);
-    expect(result.notApplicable).toBe(true);
-    expect(result.reasoning).toContain('No tools available');
+    expect(result.passed).toBe(false);
+    expect(result.notApplicable).toBeUndefined();
+  });
+
+  it('fails `never_called` and names the turn when the forbidden tool was called', async () => {
+    const criteria = makeCriteria({
+      type: CriteriaType.TOOL_CALL,
+      settings: { expectedTool: 'issue_refund', mode: 'never_called' },
+    });
+    const ctx = makeContext({
+      toolCalls: [{ name: 'issue_refund', arguments: { amount: 500 }, turn: 2 } as any],
+    });
+    const result = await handler.evaluate(criteria, ctx);
+    expect(result.passed).toBe(false);
+    expect(result.reasoning).toContain('turn 2');
+    expect(result.evidence[0]).toContain('"amount":500');
+  });
+
+  it('fails when the tool was called with arguments that do not match, showing the actual call', async () => {
+    const criteria = makeCriteria({
+      type: CriteriaType.TOOL_CALL,
+      settings: {
+        expectedTool: 'lookup_order',
+        expectedArgs: { order_id: { op: 'regex', value: '^A-\\d+$' } },
+      },
+    });
+    const ctx = makeContext({
+      // Provider form: arguments arrive as a JSON string under function.arguments.
+      toolCalls: [{ name: '', function: { name: 'lookup_order', arguments: '{"order_id":"B-77"}' } } as any],
+    });
+    const result = await handler.evaluate(criteria, ctx);
+    expect(result.passed).toBe(false);
+    expect(result.evidence[0]).toContain('B-77');
+  });
+});
+
+describe('ToolOrderHandler', () => {
+  it('fails when `then` ran before any `first`, with the numbered call order as evidence', async () => {
+    const criteria = makeCriteria({
+      type: CriteriaType.TOOL_ORDER,
+      settings: { first: 'verify_identity', then: 'issue_refund' },
+    });
+    const ctx = makeContext({
+      toolCalls: [
+        { name: 'issue_refund', arguments: {} },
+        { name: 'verify_identity', arguments: {} },
+      ],
+    });
+    const result = await new ToolOrderHandler().evaluate(criteria, ctx);
+    expect(result.passed).toBe(false);
+    expect(result.evidence[0]).toMatch(/^1\. issue_refund/);
+    expect(result.evidence[1]).toMatch(/^2\. verify_identity/);
   });
 });
 

@@ -292,6 +292,50 @@ describe('PersonaService', () => {
       expect(all.total).toBe(7);
     });
 
+    it('should not duplicate when seeders run concurrently', async () => {
+      // The unique index is what enforces this, so it has to exist before the race.
+      await model.createIndexes();
+
+      const runs = await Promise.all([
+        service.createDefaultPersonas('system'),
+        service.createDefaultPersonas('system'),
+        service.createDefaultPersonas('system'),
+      ]);
+
+      for (const run of runs) {
+        expect(run).toHaveLength(7);
+      }
+
+      const all = await service.findAll();
+      expect(all.total).toBe(7);
+    });
+
+    it('should let the database reject a second row for a seeded name', async () => {
+      // The upsert alone leaves a read-then-write window, so the guarantee rests on the index.
+      // Written against the driver to bypass the service and assert the constraint itself.
+      await model.createIndexes();
+      await service.createDefaultPersonas('system');
+
+      await expect(
+        model.collection.insertOne({
+          name: 'Angry - Karen',
+          isDefault: true,
+        }),
+      ).rejects.toThrow(/E11000/);
+    });
+
+    it('should leave personas outside the defaults unconstrained', async () => {
+      await model.createIndexes();
+      await service.createDefaultPersonas('system');
+
+      // Users name their own personas freely, including over a default's name.
+      await service.create({ ...validPersonaData, name: 'Angry - Karen' });
+      await service.create({ ...validPersonaData, name: 'Angry - Karen' });
+
+      const all = await service.findAll({ isDefault: false });
+      expect(all.total).toBe(2);
+    });
+
     it('should set all defaults as isDefault=true and isActive=true', async () => {
       const defaults = await service.createDefaultPersonas('system');
 

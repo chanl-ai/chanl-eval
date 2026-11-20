@@ -28,8 +28,11 @@ export function PageLayout({
   backHref,
   children,
 }: PageLayoutProps) {
+  // Bottom padding is deliberately larger than the top and sides. Symmetric padding leaves the last
+  // card flush against the viewport edge once a page scrolls, which reads as truncated content.
+  // Applied here so every page inherits it rather than each adding its own.
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+    <div className="flex flex-1 flex-col gap-6 p-4 pb-12 lg:p-6 lg:pb-16">
       {/* Header */}
       <div
         className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3"
@@ -71,7 +74,7 @@ export function PageLayout({
         </div>
 
         {actions && (
-          <div className="flex items-center gap-2 shrink-0">{actions}</div>
+          <div className="flex max-w-full basis-full flex-wrap items-center gap-2 sm:basis-auto">{actions}</div>
         )}
       </div>
 

@@ -1,13 +1,19 @@
 import {
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   BadRequestException,
   InternalServerErrorException,
+  Optional,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { randomUUID } from 'crypto';
+import {
+  SIMULATION_CONFIG_PROVIDER,
+  SimulationConfigProvider,
+} from '../../execution/simulation-config.provider';
 import {
   ScenarioExecution,
   ScenarioExecutionDocument,
@@ -19,8 +25,9 @@ import {
   EvaluateExecutionDto,
 } from '../dto/execute-scenario.dto';
 import { QueueProducerService } from '../../execution/queue-producer.service';
-import { EvaluationService } from '@chanl/scorecards-core';
+import { EvaluationService, ScorecardsService } from '@chanl/scorecards-core';
 import { buildLlmJudge } from '../../execution/judge-llm';
+import { judgeTranscript } from '../../execution/judge-transcript';
 
 
 @Injectable()
@@ -34,7 +41,72 @@ export class ScenarioExecutionService {
     private scenarioModel: Model<ScenarioDocument>,
     private readonly queueProducer: QueueProducerService,
     private readonly evaluationService: EvaluationService,
+    private readonly scorecardsService: ScorecardsService,
+    @Optional()
+    @Inject(SIMULATION_CONFIG_PROVIDER)
+    private readonly simulationConfig?: SimulationConfigProvider,
   ) {}
+
+  /**
+   * Judge credentials, resolved entirely through the injected provider.
+   *
+   * Config resolution lives in the application layer so this package reads no environment variables
+   * of its own and can be tested by supplying a stub.
+   */
+  private async resolveJudgeConfig(): Promise<{
+    judgeApiKey?: string;
+    judgeKind: 'openai' | 'anthropic';
+    judgeBaseUrl?: string;
+  }> {
+    if (!this.simulationConfig) {
+      return { judgeKind: 'openai' };
+    }
+
+    try {
+      const [openai, anthropic, baseUrl] = await Promise.all([
+        this.simulationConfig.getApiKey('openai'),
+        this.simulationConfig.getApiKey('anthropic'),
+        this.simulationConfig.getSimulationBaseUrl(),
+      ]);
+
+      if (openai) {
+        return { judgeApiKey: openai, judgeKind: 'openai', judgeBaseUrl: baseUrl };
+      }
+      if (anthropic) {
+        return { judgeApiKey: anthropic, judgeKind: 'anthropic', judgeBaseUrl: baseUrl };
+      }
+      return { judgeKind: 'openai', judgeBaseUrl: baseUrl };
+    } catch (error: any) {
+      this.logger.warn(`Simulation config lookup failed: ${error?.message}`);
+      return { judgeKind: 'openai' };
+    }
+  }
+
+  /**
+   * Adds each run's verdict from its newest completed scorecard result, in one query per page.
+   * Playground runs and re-scored runs keep their verdict only in scorecard_results, so a list
+   * that read the execution alone would show them unscored.
+   */
+  private async withVerdicts<T extends { executionId?: string }>(
+    executions: T[],
+  ): Promise<Array<T & { passed: boolean | null; scorePercent: number | null }>> {
+    const ids = executions.map((e) => e.executionId).filter((id): id is string => !!id);
+    const results = await this.scorecardsService.findResultsByExecutions(ids);
+    const latest = new Map<string, { passed?: boolean; overallScore?: number }>();
+    for (const r of results) {
+      if (r.status === 'completed' && r.scenarioExecutionId && !latest.has(r.scenarioExecutionId)) {
+        latest.set(r.scenarioExecutionId, r);
+      }
+    }
+    return executions.map((e) => {
+      const r = e.executionId ? latest.get(e.executionId) : undefined;
+      return {
+        ...e,
+        passed: r ? !!r.passed : null,
+        scorePercent: r && typeof r.overallScore === 'number' ? Math.round(r.overallScore * 10) : null,
+      };
+    });
+  }
 
   /**
    * Create and queue a scenario execution.
@@ -43,6 +115,7 @@ export class ScenarioExecutionService {
   async execute(
     scenarioId: string,
     executeDto: ExecuteScenarioDto,
+    internal: { runSetId?: string } = {},
   ): Promise<ScenarioExecution> {
     try {
       // Verify scenario exists and is active
@@ -74,6 +147,7 @@ export class ScenarioExecutionService {
         triggerId: executeDto.triggerId
           ? new Types.ObjectId(executeDto.triggerId)
           : undefined,
+        ...(internal.runSetId ? { runSetId: internal.runSetId } : {}),
         status: 'queued',
         startTime: new Date(),
         triggeredBy: 'system',
@@ -94,6 +168,8 @@ export class ScenarioExecutionService {
           executeDto.personaId || scenario.personaIds?.[0]?.toString(),
         parameters: executeDto.parameters,
         toolFixtureIds: executeDto.toolFixtureIds,
+        scorecardId:
+          executeDto.scorecardId || scenario.scorecardId?.toString() || undefined,
       });
 
       this.logger.log(
@@ -129,7 +205,7 @@ export class ScenarioExecutionService {
         );
       }
 
-      return execution.toJSON();
+      return (await this.withVerdicts([execution.toJSON()]))[0];
     } catch (error: any) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -167,7 +243,7 @@ export class ScenarioExecutionService {
       const total = await this.executionModel.countDocuments(query);
 
       return {
-        executions: executions.map((e) => e.toJSON()),
+        executions: await this.withVerdicts(executions.map((e) => e.toJSON())),
         total,
       };
     } catch (error: any) {
@@ -255,7 +331,7 @@ export class ScenarioExecutionService {
       const total = await this.executionModel.countDocuments(query);
 
       return {
-        executions: executions.map((e) => e.toJSON()),
+        executions: await this.withVerdicts(executions.map((e) => e.toJSON())),
         total,
       };
     } catch (error: any) {
@@ -498,38 +574,33 @@ export class ScenarioExecutionService {
       text: s.actualResponse || '',
     }));
 
-    // 3. Resolve an API key for the LLM judge
-    // Priority: Settings DB (UI-configured) > env vars (headless/CI fallback)
-    let judgeApiKey: string | undefined;
-    let judgeKind: 'openai' | 'anthropic' = 'openai';
-
-    // Settings DB first — this is where the Settings UI saves keys
-    try {
-      const settingsDoc = await this.executionModel.db.collection('settings').findOne({});
-      const providerKeys: Record<string, string> = settingsDoc?.providerKeys ?? {};
-      if (providerKeys.openai) {
-        judgeApiKey = providerKeys.openai;
-        judgeKind = 'openai';
-      } else if (providerKeys.anthropic) {
-        judgeApiKey = providerKeys.anthropic;
-        judgeKind = 'anthropic';
+    // Tool calls in order, tagged with the persona turn they happened in, so tool checks see the
+    // same input on re-evaluation as they did when the run was first scored.
+    const toolCalls: Array<{ name: string; arguments: any; result: any; turn: number }> = [];
+    let personaTurns = 0;
+    for (const step of execution.stepResults) {
+      if (step.role === 'persona') personaTurns++;
+      for (const call of step.toolCalls || []) {
+        toolCalls.push({ name: call.name, arguments: call.arguments, result: call.result, turn: personaTurns });
       }
-    } catch {
-      // Settings lookup failed — fall through to env vars
     }
 
-    // Env var fallback (headless/CI)
-    if (!judgeApiKey && process.env.CHANL_OPENAI_API_KEY) {
-      judgeApiKey = process.env.CHANL_OPENAI_API_KEY;
-      judgeKind = 'openai';
-    } else if (!judgeApiKey && process.env.CHANL_ANTHROPIC_API_KEY) {
-      judgeApiKey = process.env.CHANL_ANTHROPIC_API_KEY;
-      judgeKind = 'anthropic';
-    }
+    // 3. Resolve credentials for the LLM judge.
+    // Priority: operator-configured settings > env vars (headless/CI fallback).
+    const { judgeApiKey, judgeKind, judgeBaseUrl } = await this.resolveJudgeConfig();
 
-    const llmEvaluate = judgeApiKey
-      ? buildLlmJudge({ kind: judgeKind, apiKey: judgeApiKey })
-      : undefined;
+    const llmEvaluate =
+      judgeApiKey || judgeBaseUrl
+        ? buildLlmJudge({
+            kind: judgeKind,
+            // Self-hosted OpenAI-compatible servers accept any bearer token.
+            apiKey: judgeApiKey || 'not-needed',
+            baseUrl: judgeBaseUrl,
+            ...(judgeKind === 'openai' && this.simulationConfig?.getJudgeModel?.()
+              ? { model: this.simulationConfig.getJudgeModel() }
+              : {}),
+          })
+        : undefined;
 
     // 4. Calculate first-response latency metric
     const firstAgentStep = conversationSteps.find((s) => s.role === 'agent');
@@ -543,8 +614,12 @@ export class ScenarioExecutionService {
         dto.scorecardId,
         {
           transcriptText,
+          judgeTranscriptText: judgeTranscript(
+            execution.stepResults.map((st) => ({ role: st.role, text: st.actualResponse, toolCalls: st.toolCalls })),
+          ),
           segments,
           metrics: { firstResponseLatency },
+          toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
           llmEvaluate,
         },
         { scenarioExecutionId: execution.executionId },
@@ -567,6 +642,8 @@ export class ScenarioExecutionService {
           result: cr.result,
           reasoning: cr.reasoning,
           evidence: cr.evidence,
+          ...(cr.needsReview ? { needsReview: true } : {}),
+          ...(cr.notApplicable ? { notApplicable: true } : {}),
         })),
         evaluatedAt: new Date(),
       };

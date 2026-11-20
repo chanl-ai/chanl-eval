@@ -1,5 +1,5 @@
-import { Processor, Process, OnQueueActive, OnQueueCompleted, OnQueueFailed } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
+import { Processor, OnQueueActive, OnQueueCompleted, OnQueueFailed } from '@nestjs/bull';
+import { Inject, Logger, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Job } from 'bull';
@@ -9,6 +9,8 @@ import {
   ScenarioExecutionResult,
   TranscriptEntry,
 } from './interfaces/job-data.interface';
+
+type TranscriptToolCall = NonNullable<TranscriptEntry['toolCalls']>[number];
 import {
   ScenarioExecution,
   ScenarioExecutionDocument,
@@ -26,6 +28,8 @@ import {
   generatePersonaOpening,
   generatePersonaUtterance,
 } from './persona-llm';
+import { judgeTranscript } from './judge-transcript';
+import { SIMULATION_CONFIG_PROVIDER, SimulationConfigProvider } from './simulation-config.provider';
 import { buildLlmJudge } from './judge-llm';
 import { AgentConfigResolver, PromptConfig } from './agent-config-resolver';
 import { resolveLlmConfigSync } from './llm-config-resolver';
@@ -58,12 +62,15 @@ export class ExecutionProcessor {
     private readonly toolFixtureService: ToolFixtureService,
     private readonly mockResolver: MockResolver,
     private readonly personaStrategyRegistry: PersonaStrategyRegistry,
+    @Optional()
+    @Inject(SIMULATION_CONFIG_PROVIDER)
+    private readonly simulationConfig?: SimulationConfigProvider,
   ) {}
 
   /**
    * Main job handler. Dequeues, runs the conversation loop, and stores results.
+   * Registered on the queue by ExecutionWorker, which applies the configured concurrency.
    */
-  @Process('execute')
   async processExecution(
     job: Job<ScenarioExecutionJobData>,
   ): Promise<ScenarioExecutionResult> {
@@ -191,7 +198,7 @@ export class ExecutionProcessor {
         tools: toolDefs,
       });
 
-      const adapter = this.adapterRegistry.getOrThrow(adapterType);
+      const adapter = this.adapterRegistry.create(adapterType);
       await adapter.connect(adapterConfig);
 
       await job.progress(50);
@@ -313,17 +320,27 @@ export class ExecutionProcessor {
 
       this.logger.debug(`Scorecard check: scorecardId=${scenario.scorecardId}, evaluationService=${!!this.evaluationService}`);
       let scorecardSummary: string | undefined;
-      if (scenario.scorecardId && this.evaluationService) {
+      const scorecardId = data.scorecardId || scenario.scorecardId?.toString();
+      if (scorecardId && this.evaluationService) {
         try {
-          // Extract tool calls from transcript for RAG faithfulness evaluation
-          const allToolCalls = transcript
-            .filter((t) => t.toolCalls?.length)
-            .flatMap((t) => t.toolCalls!);
+          // Tool calls in the order made, each tagged with the persona turn it happened in so a
+          // failed check can point at the turn.
+          const allToolCalls: Array<TranscriptToolCall & { turn: number }> = [];
+          let personaTurns = 0;
+          for (const entry of transcript) {
+            if (entry.role === 'persona') personaTurns++;
+            for (const call of entry.toolCalls || []) {
+              allToolCalls.push({ ...call, turn: personaTurns });
+            }
+          }
 
           const evalResult = await this.evaluationService.evaluate(
-            scenario.scorecardId.toString(),
+            scorecardId,
             {
               transcriptText,
+              judgeTranscriptText: judgeTranscript(
+                transcript.map((t) => ({ role: t.role, text: t.content, toolCalls: t.toolCalls })),
+              ),
               segments: transcript.map((t) => ({
                 speaker: t.role === 'agent' ? 'agent' : 'customer',
                 text: t.content,
@@ -335,10 +352,14 @@ export class ExecutionProcessor {
               },
               toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
               groundTruth: scenario.groundTruth || undefined,
+              // Same resolver the persona uses, so judge and persona agree on which key, model and
+              // host the *simulation* half runs on — previously the judge silently borrowed the
+              // agent-under-test's key and was pinned to the provider's public host.
               llmEvaluate: buildLlmJudge(
-                adapterConfig.apiKey
-                  ? { kind: (adapterType === 'anthropic' ? 'anthropic' : 'openai') as 'openai' | 'anthropic', apiKey: adapterConfig.apiKey, model: adapterConfig.model }
-                  : undefined,
+                withJudgeModel(
+                  resolveLlmConfigSync(adapterType, adapterConfig) ?? undefined,
+                  this.simulationConfig?.getJudgeModel?.(),
+                ),
               ),
             },
             { scenarioExecutionId: data.executionId },
@@ -691,4 +712,13 @@ Write a critical 2-3 sentence summary. Focus on what went wrong (if anything) an
       error.stack,
     );
   }
+}
+
+/** A pinned judge model applies to OpenAI-compatible judges only; others keep the agent's model. */
+function withJudgeModel<T extends { kind: string; model?: string }>(
+  config: T | undefined,
+  judgeModel: string | undefined,
+): T | undefined {
+  if (!config || !judgeModel || config.kind !== 'openai') return config;
+  return { ...config, model: judgeModel };
 }

@@ -27,6 +27,7 @@ export {
   CriteriaSettings,
   PromptCriteriaSettings,
   KeywordCriteriaSettings,
+  PatternCriteriaSettings,
   ResponseTimeCriteriaSettings,
   ToolCallCriteriaSettings,
   Threshold,
@@ -63,10 +64,15 @@ export {
   checkThreshold,
   normalizeScore,
   KeywordHandler,
+  PatternHandler,
+  PATTERN_LIBRARY,
+  PATTERN_PRESET_NAMES,
+  isPatternPresetName,
   PromptHandler,
   ResponseTimeHandler,
   ToolCallHandler,
 } from './handlers';
+export type { PatternPresetName, LibraryPattern } from './handlers';
 
 // Evaluation
 export {
@@ -74,3 +80,36 @@ export {
   EvaluateOptions,
   EvaluationResult,
 } from './evaluation';
+
+// Human-in-the-loop benchmarking
+export {
+  HumanLabel,
+  HumanLabelDocument,
+  HumanLabelSchema,
+} from './schemas';
+export {
+  LabelsService,
+  LabelsController,
+  CreateLabelDto,
+  AgreementQueryDto,
+  agreementFor,
+  overallAgreement,
+  booleanAgreement,
+  scoreAgreement,
+  confidenceCalibration,
+  interpret,
+  MIN_LABELS_FOR_KAPPA,
+} from './labels';
+export type {
+  CreateLabelInput,
+  CriterionAgreement,
+  AgreementReport,
+  AgreementStats,
+  OverallAgreement,
+  Pair,
+  Interpretation,
+} from './labels';
+
+// Verdict normalisation
+export { normalizeVerdict, verdictOf, isScoreVerdict } from './verdict';
+export type { CriterionVerdict } from './verdict';

@@ -294,7 +294,7 @@ export default function ToolFixtureDetailPage() {
       });
     },
     onSuccess: () => {
-      toast.success('Tool fixture saved');
+      toast.success('Mock tool saved');
       void qc.invalidateQueries({ queryKey: ['tool-fixture', id] });
       void qc.invalidateQueries({ queryKey: ['tool-fixtures'] });
     },
@@ -306,7 +306,7 @@ export default function ToolFixtureDetailPage() {
     setIsDeleting(true);
     try {
       await client.toolFixtures.remove(id);
-      toast.success('Tool fixture deleted');
+      toast.success('Mock tool deleted');
       void qc.invalidateQueries({ queryKey: ['tool-fixtures'] });
       router.push('/tool-fixtures');
     } catch (e: unknown) {
@@ -362,7 +362,7 @@ export default function ToolFixtureDetailPage() {
   return (
     <PageLayout
       backHref="/tool-fixtures"
-      title={q.data?.name ?? 'Tool Fixture'}
+      title={q.data?.name ?? 'Mock Tool'}
       description={q.data?.description ?? 'Loading...'}
       actions={
         q.data ? (
@@ -668,7 +668,7 @@ export default function ToolFixtureDetailPage() {
       <DeleteDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        entityType="Tool Fixture"
+        entityType="Mock Tool"
         entityName={q.data?.name}
         onConfirm={handleDelete}
         isLoading={isDeleting}

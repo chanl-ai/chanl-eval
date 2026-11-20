@@ -18,6 +18,13 @@ export class Prompt {
   @Prop({ type: [String], default: [] })
   tags!: string[];
 
+  /**
+   * The agent's own tools: runs and playground chats that name no tools use these, and fall back to
+   * every active tool when this is empty.
+   */
+  @Prop({ type: [String], default: [] })
+  toolFixtureIds!: string[];
+
   @Prop({ type: Object })
   adapterConfig?: {
     adapterType?: string;
@@ -29,6 +36,11 @@ export class Prompt {
 
 export type PromptDocument = Prompt & Document;
 export const PromptSchema = SchemaFactory.createForClass(Prompt);
+
+// Seeding upserts defaults by name. Without this index two replicas booting together would each
+// pass the upsert's read phase and insert a duplicate — the index is what actually makes seeding
+// idempotent under concurrency, not the upsert on its own.
+PromptSchema.index({ name: 1 }, { unique: true });
 
 // Add virtual id
 PromptSchema.set('toJSON', {

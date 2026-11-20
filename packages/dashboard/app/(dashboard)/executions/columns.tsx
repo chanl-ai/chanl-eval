@@ -9,7 +9,11 @@ import { DataTableColumnHeader } from '@/components/shared/data-table-column-hea
 export interface ExecutionRow {
   id: string;
   scenarioName: string;
-  score: number | undefined;
+  personaName: string;
+  agentName: string;
+  /** Scorecard verdict; null when no scorecard has judged the run. */
+  passed: boolean | null;
+  score: number | null;
   status: string;
   duration: number | undefined;
   createdAt: string | undefined;
@@ -61,6 +65,18 @@ function getScoreColor(score: number | undefined): string {
   if (score >= 80) return 'text-chart-6';
   if (score >= 60) return 'text-warning';
   return 'text-destructive';
+}
+
+/** The run's scorecard verdict, as the server returns it on the run list. */
+function ScorecardCell({ row }: { row: ExecutionRow }) {
+  const { passed, score } = row;
+  if (passed == null) return <span className="text-xs text-muted-foreground">Not scored</span>;
+  return (
+    <span className={`text-sm font-semibold tabular-nums whitespace-nowrap ${getScoreColor(passed ? 100 : 0)}`} data-testid="run-result">
+      {passed ? 'Passed' : 'Failed'}
+      {score != null && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{score}%</span>}
+    </span>
+  );
 }
 
 // --- Column definitions ---
@@ -122,22 +138,25 @@ export const columns: ColumnDef<ExecutionRow>[] = [
     ),
   },
 
-  // Score (color-coded)
   {
-    accessorKey: 'score',
+    accessorKey: 'personaName',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Persona" />,
+    cell: ({ row }) => <span className="text-sm truncate max-w-[160px] block">{row.original.personaName}</span>,
+  },
+  {
+    accessorKey: 'agentName',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Agent" />,
+    cell: ({ row }) => <span className="text-sm truncate max-w-[180px] block">{row.original.agentName}</span>,
+  },
+
+  // Scorecard result: one verdict per run, with the score beside it.
+  {
+    id: 'scorecard',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Score" />
+      <DataTableColumnHeader column={column} title="Scorecard" />
     ),
-    cell: ({ row }) => {
-      const score = row.getValue('score') as number | undefined;
-      return (
-        <span
-          className={`text-sm font-semibold tabular-nums ${getScoreColor(score)}`}
-        >
-          {score != null ? `${score}%` : '--'}
-        </span>
-      );
-    },
+    enableSorting: false,
+    cell: ({ row }) => <ScorecardCell row={row.original} />,
   },
 
   // Status badge

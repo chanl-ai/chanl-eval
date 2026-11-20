@@ -35,6 +35,8 @@ export interface Prompt {
   content: string;
   status?: string;
   tags?: string[];
+  /** Mock tools this agent uses when a run or chat names none. */
+  toolFixtureIds?: string[];
   adapterConfig?: {
     adapterType?: string;
     model?: string;
@@ -51,6 +53,7 @@ export interface CreatePromptDto {
   content: string;
   status?: 'active' | 'draft' | 'archived';
   tags?: string[];
+  toolFixtureIds?: string[];
   adapterConfig?: {
     adapterType?: string;
     model?: string;
@@ -467,6 +470,10 @@ export interface ScorecardCriteriaResult {
   evidence: string[];
   criteriaVersion?: number;
   categoryVersion?: number;
+  /** Criterion could not be evaluated (no ground truth, judge unavailable); excluded from the score. */
+  notApplicable?: boolean;
+  /** Verdict not trustworthy as given (judge cited no quote); show as "Needs review". */
+  needsReview?: boolean;
 }
 
 export interface ScorecardResult {
@@ -622,13 +629,33 @@ export interface Settings {
     anthropic?: string;
     http?: string;
   };
+  /** OpenAI-/Anthropic-compatible host for persona + judge calls. */
+  simulationBaseUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface UpdateSettingsDto {
   providerKeys?: Record<string, string>;
+  simulationBaseUrl?: string;
 }
+
+/** Where a provider's key is resolved from — null means the engine cannot reach that provider. */
+export type KeySource = 'settings' | 'env' | null;
+
+export interface SettingsStatus {
+  /** Keys are masked (••••abcd). Never send a masked value back on update. */
+  settings: Settings;
+  keySources: Record<string, KeySource>;
+  /** False means no run can reach an LLM — the first-run blocker worth surfacing prominently. */
+  hasAnyKey: boolean;
+}
+
+/**
+ * A criterion verdict: pass/fail, or a 0-10 score. Values written before normalisation may still be
+ * strings ("pass"/"fail"), so read them through `normalizeVerdict`.
+ */
+export type CriterionVerdict = boolean | number;
 
 // ============================================================================
 // CHAT
@@ -664,3 +691,41 @@ export interface EvalClientConfig {
   /** API key when the server has CHANL_EVAL_REQUIRE_API_KEY=true */
   apiKey?: string;
 }
+
+// ============================================================================
+// Criteria settings
+// ============================================================================
+
+export type CriteriaType =
+  | 'prompt'
+  | 'keyword'
+  | 'pattern'
+  | 'response_time'
+  | 'tool_call'
+  | 'tool_order'
+  | 'hallucination'
+  | 'knowledge_retention'
+  | 'conversation_completeness'
+  | 'role_adherence'
+  | 'rag_faithfulness';
+
+export interface ToolArgExpectation {
+  op: 'equals' | 'contains' | 'regex';
+  value: unknown;
+}
+
+export interface ToolCallCriteriaSettings {
+  expectedTool: string | string[];
+  /** Default 'called'. A run with zero tool calls fails 'called' and passes 'never_called'. */
+  mode?: 'called' | 'never_called';
+  expectedArgs?: Record<string, ToolArgExpectation>;
+}
+
+export interface ToolOrderCriteriaSettings {
+  first: string;
+  then: string;
+  requireFirstSuccess?: boolean;
+}
+
+export * from './benchmark-types';
+export * from './run-set-types';

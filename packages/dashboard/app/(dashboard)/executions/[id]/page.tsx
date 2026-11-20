@@ -21,7 +21,7 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Hash,
+  User,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,12 +41,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageLayout } from '@/components/shared/page-layout';
 import { DeleteDialog } from '@/components/shared/delete-dialog';
 import { TranscriptView, type TranscriptMessage } from '@/components/transcript/transcript-view';
+import { BugReportButton } from '@/components/bug-report/bug-report-dialog';
 import { ScorecardWidget } from '@/components/scorecard/scorecard-widget';
 import { ShareResults } from '@/components/share-results';
 import { useFirstRunPrompt } from '@/components/first-run-prompt';
 import { useEvalConfig } from '@/lib/eval-config';
-import type { ScoreMetric, ScorecardCriterionDisplay } from '@/components/scorecard/types';
-import type { Execution, Scorecard, ScorecardResult } from '@chanl/eval-sdk';
+import { embeddedResultsToMetrics, scorecardResultToMetrics } from '@/lib/scorecard-metrics';
+import { stepsToLines } from '@/lib/workshop';
+import { playgroundHref } from '@/lib/playground-link';
+import type { Execution, Scorecard } from '@chanl/eval-sdk';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -104,201 +107,56 @@ function getStatusIcon(status: string) {
 // ---------------------------------------------------------------------------
 
 function executionToMessages(execution: Execution): TranscriptMessage[] {
-  if (!execution.stepResults || execution.stepResults.length === 0) return [];
-
-  return execution.stepResults
-    .filter((step) => step.actualResponse || (step as Record<string, unknown>).role === 'tool')
-    .map((step, i) => {
-      const stepAny = step as Record<string, unknown>;
-      const role = stepAny.role as string | undefined;
-
-      // Tool call step — use structured toolCalls data
-      if (role === 'tool') {
-        const toolCalls = stepAny.toolCalls as Array<{ name: string; arguments: Record<string, unknown>; result: unknown }> | undefined;
-        if (toolCalls?.length) {
-          return {
-            id: `${step.stepId}-${i}`,
-            role: 'tool' as const,
-            content: '',
-            toolCalls: toolCalls.map((tc) => ({ name: tc.name, arguments: tc.arguments, result: tc.result })),
-          };
-        }
-        // Fallback: parse JSON from actualResponse
-        try {
-          const parsed = JSON.parse(step.actualResponse || '{}');
-          return {
-            id: `${step.stepId}-${i}`,
-            role: 'tool' as const,
-            content: '',
-            toolCalls: [{ name: parsed.name, arguments: parsed.arguments, result: parsed.result }],
-          };
-        } catch {
-          // Can't parse — show as raw text
-        }
-      }
-
-      // Persona or agent step
-      const isPersona = role === 'persona' || (step.stepId?.includes('persona') ?? false);
-      return {
-        id: `${step.stepId}-${i}`,
-        role: (isPersona ? 'persona' : 'agent') as 'agent' | 'persona',
-        content: step.actualResponse!,
-        duration: step.duration,
-        score: step.score,
-        status: step.status,
-      };
-    });
-}
-
-// ---------------------------------------------------------------------------
-// Data mapping: ScorecardResult → ScoreMetric[] (real scorecard evaluation)
-// ---------------------------------------------------------------------------
-
-function scorecardResultToMetrics(result: ScorecardResult): ScoreMetric[] {
-  const criteriaResults = result.criteriaResults || [];
-  if (criteriaResults.length === 0) return [];
-
-  // Group by category (like chanl-admin's scorecard-view)
-  const categoryMap = new Map<string, { name: string; criteria: ScorecardCriterionDisplay[] }>();
-
-  for (const cr of criteriaResults) {
-    const catId = cr.categoryId || 'uncategorized';
-    if (!categoryMap.has(catId)) {
-      categoryMap.set(catId, { name: cr.categoryName || 'General', criteria: [] });
-    }
-    categoryMap.get(catId)!.criteria.push({
-      name: cr.criteriaName,
-      passed: cr.passed,
-      explanation: cr.reasoning,
-      evidence: cr.evidence?.length > 0 ? cr.evidence.slice(0, 2) : undefined,
-      notApplicable: (cr as any).notApplicable ?? false,
-      notApplicableReason: (cr as any).notApplicable ? cr.reasoning : undefined,
-    });
-  }
-
-  return Array.from(categoryMap.values()).map(({ name, criteria }) => {
-    const applicable = criteria.filter((c) => !c.notApplicable);
-    const passed = applicable.filter((c) => c.passed).length;
-    return {
-      name,
-      score: passed,
-      maxScore: applicable.length,
-      status: applicable.length === 0 ? 'pass' as const : passed > applicable.length * 0.5 ? 'pass' as const : 'fail' as const,
-      criteria,
-    };
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Data mapping: embedded scorecardResults → ScoreMetric[]
-// ---------------------------------------------------------------------------
-
-function embeddedResultsToMetrics(result: {
-  criteriaResults: Array<{
-    criteriaId: string;
-    criteriaName?: string;
-    categoryId?: string;
-    categoryName?: string;
-    passed: boolean;
-    reasoning?: string;
-    evidence?: string[];
-  }>;
-}): ScoreMetric[] {
-  if (!result.criteriaResults?.length) return [];
-
-  const categoryMap = new Map<string, { name: string; criteria: ScorecardCriterionDisplay[] }>();
-  for (const cr of result.criteriaResults) {
-    const catId = cr.categoryId || 'uncategorized';
-    if (!categoryMap.has(catId)) {
-      categoryMap.set(catId, { name: cr.categoryName || 'General', criteria: [] });
-    }
-    categoryMap.get(catId)!.criteria.push({
-      name: cr.criteriaName || cr.criteriaId,
-      passed: cr.passed,
-      explanation: cr.reasoning,
-      evidence: cr.evidence?.length ? cr.evidence.slice(0, 2) : undefined,
-      notApplicable: (cr as any).notApplicable ?? false,
-      notApplicableReason: (cr as any).notApplicable ? cr.reasoning : undefined,
-    });
-  }
-
-  return Array.from(categoryMap.values()).map(({ name, criteria }) => {
-    const applicable = criteria.filter((c) => !c.notApplicable);
-    const passed = applicable.filter((c) => c.passed).length;
-    return {
-      name,
-      score: passed,
-      maxScore: applicable.length,
-      status: applicable.length === 0 ? 'pass' as const : passed > applicable.length * 0.5 ? 'pass' as const : 'fail' as const,
-      criteria,
-    };
-  });
+  return stepsToLines((execution.stepResults ?? []) as Array<Record<string, unknown>>).map((line, i) => ({
+    id: `${line.role}-${i}`,
+    role: line.role,
+    content: line.content,
+    duration: line.latencyMs,
+    toolCalls: line.toolCalls,
+  }));
 }
 
 // ---------------------------------------------------------------------------
 // Stat Cards
 // ---------------------------------------------------------------------------
 
-function StatCards({ execution }: { execution: Execution }) {
-  const steps = execution.stepResults || [];
-  const passedSteps = steps.filter(
-    (s) => s.status === 'completed' || (s.score != null && s.score > 0),
-  ).length;
-  const failedSteps = steps.filter(
-    (s) => s.status === 'failed' || s.status === 'timeout' || s.status === 'skipped',
-  ).length;
+function Stat({ icon, label, value, testId }: { icon: React.ReactNode; label: string; value: React.ReactNode; testId?: string }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 min-w-0">
+          {icon}
+          <div className="min-w-0">
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div className="text-base font-semibold break-words sm:text-lg" data-testid={testId}>{value}</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
+/**
+ * One result per run: the scorecard's pass or fail. Step counts are left out because every
+ * finished step reads as "passed", which contradicted a failing scorecard.
+ */
+function StatCards({ execution, personaName, agentName, passed, checksPassed, checksTotal }: {
+  execution: Execution; personaName?: string; agentName?: string;
+  passed: boolean | undefined; checksPassed: number; checksTotal: number;
+}) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <Hash className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <div className="text-xs text-muted-foreground">Steps</div>
-              <div className="text-lg font-semibold tabular-nums">{steps.length}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <div>
-              <div className="text-xs text-muted-foreground">Passed</div>
-              <div className="text-lg font-semibold tabular-nums">{passedSteps}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-            <div>
-              <div className="text-xs text-muted-foreground">Failed</div>
-              <div className="text-lg font-semibold tabular-nums">{failedSteps}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <div className="text-xs text-muted-foreground">Duration</div>
-              <div className="text-lg font-semibold tabular-nums">
-                {formatDuration(execution.duration)}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Stat
+        icon={passed === false
+          ? <XCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+          : <CheckCircle className={`h-4 w-4 shrink-0 ${passed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />}
+        label="Scorecard"
+        testId="run-verdict"
+        value={passed === undefined ? 'Not scored' : `${passed ? 'Passed' : 'Failed'} · ${checksPassed} of ${checksTotal} checks passed`}
+      />
+      <Stat icon={<User className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Persona" value={personaName ?? '--'} testId="run-persona" />
+      <Stat icon={<Bot className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Agent" value={agentName ?? '--'} testId="run-agent" />
+      <Stat icon={<Clock className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Duration" value={formatDuration(execution.duration)} />
     </div>
   );
 }
@@ -331,7 +189,7 @@ export default function RunDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = typeof params.id === 'string' ? params.id : '';
-  const { client } = useEvalConfig();
+  const { client, room } = useEvalConfig();
   const qc = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -357,9 +215,20 @@ export default function RunDetailPage() {
     enabled: !!execution?.scenarioId,
   });
   const scenarioName = scenarioQ.data?.name;
+  const personaQ = useQuery({
+    queryKey: ['persona', execution?.personaId],
+    queryFn: () => client.personas.get(execution!.personaId!),
+    enabled: !!execution?.personaId,
+  });
+  const agentQ = useQuery({
+    queryKey: ['prompt', execution?.promptId],
+    queryFn: () => client.prompts.get(execution!.promptId!),
+    enabled: !!execution?.promptId,
+  });
 
   // First-run star/follow prompt
-  useFirstRunPrompt(execution?.status === 'completed');
+  // The star prompt is for open-source users; workshop attendees get their own seat, not a repo.
+  useFirstRunPrompt(!room.cloud && execution?.status === 'completed');
 
   // Scorecard evaluation state
   const [selectedScorecardId, setSelectedScorecardId] = useState<string>('');
@@ -398,6 +267,37 @@ export default function RunDetailPage() {
   });
   const scorecardResult = scorecardQ.data?.[0] ?? null;
 
+  // Human verdicts for this run, attached inline to each criterion in the scorecard panel.
+  const labelsQ = useQuery({
+    queryKey: ['labels', scorecardResult?.id],
+    queryFn: () => client.labels.listForResult(scorecardResult!.id),
+    enabled: !!scorecardResult?.id,
+  });
+
+  const reviews = (labelsQ.data ?? []).reduce<Record<string, { agreed: boolean; humanResult: boolean | number; note?: string }>>(
+    (acc, l) => {
+      acc[l.criteriaId] = { agreed: l.agreed, humanResult: l.humanResult, note: l.note };
+      return acc;
+    },
+    {},
+  );
+
+  const reviewMutation = useMutation({
+    mutationFn: (input: { criteriaId: string; humanResult: boolean | number; note?: string }) =>
+      client.labels.create({
+        scorecardResultId: scorecardResult!.id,
+        criteriaId: input.criteriaId,
+        humanResult: input.humanResult,
+        note: input.note,
+      }),
+    onSuccess: (label) => {
+      void qc.invalidateQueries({ queryKey: ['labels', scorecardResult?.id] });
+      void qc.invalidateQueries({ queryKey: ['agreement'] });
+      toast.success(label.agreed ? 'Recorded: judge was right' : 'Recorded: you disagree');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Could not record verdict'),
+  });
+
   // Use embedded results first, fall back to separate collection
   const hasEvaluation = !!(embeddedResults || scorecardResult);
   const metrics = scorecardResult
@@ -410,11 +310,22 @@ export default function RunDetailPage() {
     ? Math.round(embeddedResults.overallScore * 10)
     : scorecardResult?.overallScore != null
       ? Math.round(scorecardResult.overallScore * 10)
-      : execution?.overallScore ?? undefined;
+      : undefined;
+  const scorePassed: boolean | undefined = embeddedResults?.passed ?? (scorecardResult as { passed?: boolean } | null)?.passed;
 
   const scorecardSummary = (execution as any)?.scorecardSummary as string | undefined;
 
   const messages = execution ? executionToMessages(execution) : [];
+  const applicableChecks = metrics.flatMap((m) => m.criteria ?? []).filter((c) => !c.notApplicable);
+  const failedChecks = metrics
+    .flatMap((m) => m.criteria ?? [])
+    .filter((c) => !c.passed && !c.notApplicable)
+    .map((c) => ({ name: c.name, criteriaId: c.criteriaId, reason: c.explanation, evidence: c.evidence, needsReview: c.needsReview }));
+  // One verdict for the header and the scorecard widget: the stored result's own `passed`.
+  const verdictPassed: boolean | undefined = hasEvaluation ? (scorePassed ?? failedChecks.length === 0) : undefined;
+
+  const failedEvidence = failedChecks.flatMap((c) => c.evidence ?? []);
+  const isFailedRun = !isActive && (execution?.status === 'failed' || failedChecks.length > 0);
 
   // Evaluate mutation — server resolves API key from env vars
   const evaluateMutation = useMutation({
@@ -448,10 +359,10 @@ export default function RunDetailPage() {
   return (
     <PageLayout
       backHref="/executions"
-      title={execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail'}
-      description={execution ? formatDate(execution.createdAt) : 'Loading...'}
+      title={scenarioName ?? (execution ? `Run ${id.slice(-8)}` : 'Run Detail')}
+      description={execution ? `Run ${id.slice(-8)} · ${formatDate(execution.createdAt)}` : 'Loading...'}
       titleExtra={
-        execution ? (
+        execution && !room.cloud ? (
           <div className="flex items-center gap-2">
             <Badge variant={getStatusVariant(execution.status)} className="gap-1">
               {isActive ? <Loader2 className="h-3 w-3 animate-spin" /> : getStatusIcon(execution.status)}
@@ -467,16 +378,19 @@ export default function RunDetailPage() {
       }
       actions={
         execution ? (
-          <div className="flex items-center gap-2">
-            <ShareResults
+          <div className="flex flex-wrap items-center gap-2">
+            {!room.cloud && <ShareResults
               metrics={metrics}
               overallScore={displayScore}
               scenarioName={scenarioName}
               executionDate={execution.createdAt}
               turnCount={messages.length}
               duration={formatDuration(execution.duration ?? (execution.endTime && execution.startTime ? new Date(execution.endTime).getTime() - new Date(execution.startTime).getTime() : undefined))}
-            />
-            <Button variant="outline" size="sm" onClick={() => router.push('/playground')} disabled={isActive}>
+            />}
+            {isFailedRun && (
+              <BugReportButton execution={execution} scenarioName={scenarioName} failedChecks={failedChecks} messages={messages} />
+            )}
+            <Button variant="outline" size="sm" onClick={() => router.push(playgroundHref({ scenarioId: execution.scenarioId, agentId: execution.promptId, personaId: execution.personaId }))} disabled={isActive}>
               <RotateCcw className="mr-2 h-3.5 w-3.5" />
               Run Again
             </Button>
@@ -503,7 +417,14 @@ export default function RunDetailPage() {
       ) : execution ? (
         <div className="space-y-6">
           {/* Stat cards */}
-          <StatCards execution={execution} />
+          <StatCards
+            execution={execution}
+            personaName={personaQ.data?.name}
+            agentName={agentQ.data?.name}
+            passed={verdictPassed}
+            checksPassed={applicableChecks.filter((c) => c.passed).length}
+            checksTotal={applicableChecks.length}
+          />
 
           {/* Main content: Transcript + Scorecard */}
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
@@ -516,7 +437,7 @@ export default function RunDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <TranscriptView messages={messages} />
+                <TranscriptView messages={messages} evidence={failedEvidence} personaName={personaQ.data?.name} />
               </CardContent>
             </Card>
 
@@ -525,7 +446,7 @@ export default function RunDetailPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base font-medium">Scorecard</CardTitle>
-                  {hasEvaluation && (
+                  {hasEvaluation && !room.cloud && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -567,7 +488,22 @@ export default function RunDetailPage() {
                   <ScorecardWidget
                     metrics={metrics}
                     overallScorePercentage={displayScore}
-                    summary={scorecardSummary}
+                    overallStatus={verdictPassed === undefined ? undefined : verdictPassed ? 'pass' : 'fail'}
+                    summary={room.cloud ? undefined : scorecardSummary}
+                    review={
+                      scorecardResult?.id
+                        ? {
+                            reviews,
+                            pending: reviewMutation.isPending,
+                            onReview: (criteriaId, humanResult, note) =>
+                              reviewMutation.mutate({ criteriaId, humanResult, note }),
+                            onEditCriterion: (criteriaId) =>
+                              router.push(
+                                `/scorecards/${scorecardResult.scorecardId}?criterion=${criteriaId}`,
+                              ),
+                          }
+                        : undefined
+                    }
                   />
                 ) : (
                   /* State 1: No evaluation — show picker */

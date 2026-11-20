@@ -331,6 +331,16 @@ export class Persona {
 
 export const PersonaSchema = SchemaFactory.createForClass(Persona);
 
+// Seeding upserts the default personas by name. Two replicas booting together would each pass the
+// upsert's read phase and insert a duplicate — this index is what makes seeding idempotent under
+// concurrency, not the upsert on its own.
+//
+// Scoped to the defaults: user personas legitimately share names.
+PersonaSchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { isDefault: true } },
+);
+
 // Add indexes for better query performance
 PersonaSchema.index({ isActive: 1 });
 PersonaSchema.index({ emotion: 1 });

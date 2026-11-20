@@ -22,6 +22,8 @@ const LABELS: Record<string, string> = {
   personas: 'Personas',
   scorecards: 'Scorecards',
   settings: 'Settings',
+  agents: 'Agents',
+  'run-sets': 'Run sets',
 };
 
 function capitalize(segment: string) {
@@ -54,6 +56,8 @@ function generateBreadcrumbs(pathname: string) {
     scenarios: 'Scenario',
     personas: 'Persona',
     scorecards: 'Scorecard',
+    agents: 'Agent',
+    'run-sets': 'Run set',
   };
 
   if (singularLabels[parent]) {

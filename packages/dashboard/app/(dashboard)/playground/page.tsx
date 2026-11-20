@@ -1,16 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUp,
   Beaker,
   Bot,
   BookOpen,
-  ChevronDown,
-  ChevronRight,
   FileText,
   Loader2,
   Plus,
@@ -58,6 +56,9 @@ import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
 import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig, type AdapterType } from '@/lib/eval-config';
 import type { Execution, Scenario, Persona, Prompt, ToolFixture } from '@chanl/eval-sdk';
+import { ToolCallList } from '@/components/shared/tool-call-list';
+import { agentForScenario, scenarioForAgent, scorecardPercent, stepsToLines, type ToolCallView } from '@/lib/workshop';
+import { readLastAgent, rememberLastAgent } from '@/lib/playground-link';
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -68,11 +69,7 @@ interface TranscriptMessage {
   content: string;
   stepId?: string;
   latencyMs?: number;
-  toolCalls?: Array<{
-    name: string;
-    arguments: Record<string, unknown>;
-    result: unknown;
-  }>;
+  toolCalls?: ToolCallView[];
 }
 
 function formatDuration(ms: number): string {
@@ -81,51 +78,7 @@ function formatDuration(ms: number): string {
 }
 
 function extractTranscript(execution: Execution): TranscriptMessage[] {
-  if (!execution.stepResults) return [];
-  const messages: TranscriptMessage[] = [];
-  for (const step of execution.stepResults) {
-    const stepAny = step as Record<string, unknown>;
-    const role = stepAny.role as string | undefined;
-    const isAgent = role === 'agent' || (typeof step.stepId === 'string' && step.stepId.includes('agent'));
-    const isTool = role === 'tool';
-
-    if (isTool) {
-      // Use structured toolCalls array from API if available, fall back to parsing JSON
-      const apiToolCalls = stepAny.toolCalls as Array<{ name: string; arguments: Record<string, unknown>; result: unknown }> | undefined;
-      if (apiToolCalls?.length) {
-        messages.push({
-          role: 'tool',
-          content: '',
-          stepId: step.stepId,
-          toolCalls: apiToolCalls.map((tc) => ({ name: tc.name, arguments: tc.arguments, result: tc.result })),
-        });
-      } else {
-        try {
-          const parsed = JSON.parse(stepAny.actualResponse as string || '{}');
-          messages.push({
-            role: 'tool',
-            content: '',
-            stepId: step.stepId,
-            toolCalls: [{ name: parsed.name, arguments: parsed.arguments, result: parsed.result }],
-          });
-        } catch {
-          messages.push({ role: 'tool', content: stepAny.actualResponse as string || '', stepId: step.stepId });
-        }
-      }
-      continue;
-    }
-
-    const actualResponse = stepAny.actualResponse as string | undefined;
-    if (actualResponse) {
-      messages.push({
-        role: isAgent ? 'agent' : 'persona',
-        content: actualResponse,
-        stepId: step.stepId,
-        latencyMs: typeof stepAny.duration === 'number' ? stepAny.duration : undefined,
-      });
-    }
-  }
-  return messages;
+  return stepsToLines((execution.stepResults ?? []) as Array<Record<string, unknown>>);
 }
 
 // Shared model options — imported from lib/model-options.ts
@@ -168,60 +121,8 @@ function MessageBubble({ message }: { message: TranscriptMessage }) {
 // ---------------------------------------------------------------------------
 
 function ToolCallBlock({ message }: { message: TranscriptMessage }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const call = message.toolCalls?.[0];
-  if (!call) return null;
-
-  return (
-    <Card
-      className="overflow-hidden border-primary/20"
-      data-testid="message-tool"
-    >
-      <CardHeader
-        className="cursor-pointer select-none bg-primary/5 py-2.5 px-3"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {isExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-            )}
-            <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-sm font-medium font-mono">{call.name}</span>
-          </div>
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-primary">
-            completed
-          </Badge>
-        </div>
-        {!isExpanded && call.arguments && (
-          <p className="mt-1 text-xs text-muted-foreground truncate pl-8">
-            {JSON.stringify(call.arguments)}
-          </p>
-        )}
-      </CardHeader>
-
-      {isExpanded && (
-        <CardContent className="pt-3 pb-3 space-y-3">
-          {call.arguments && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Arguments</p>
-              <pre className="text-xs font-mono bg-muted p-2 rounded-md overflow-x-auto whitespace-pre-wrap">
-                {JSON.stringify(call.arguments, null, 2)}
-              </pre>
-            </div>
-          )}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Result</p>
-            <pre className="text-xs font-mono bg-muted p-2 rounded-md overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">
-              {typeof call.result === 'string' ? call.result : JSON.stringify(call.result, null, 2)}
-            </pre>
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  );
+  if (!message.toolCalls?.length) return null;
+  return <ToolCallList calls={message.toolCalls} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +130,25 @@ function ToolCallBlock({ message }: { message: TranscriptMessage }) {
 // ---------------------------------------------------------------------------
 
 export default function PlaygroundPage() {
-  const { client, adapterType, setAdapterType } = useEvalConfig();
+  // useSearchParams needs a Suspense boundary or the static build bails out of the page.
+  return (
+    <Suspense>
+      <Playground />
+    </Suspense>
+  );
+}
+
+function Playground() {
+  const { client, adapterType, setAdapterType, room } = useEvalConfig();
+  const searchParams = useSearchParams();
+  // What the page was opened to run (scenario page "Run", agent page "Playground", run "Run again").
+  const linked = {
+    scenario: searchParams.get('scenario') ?? '',
+    agent: searchParams.get('agent') ?? '',
+    persona: searchParams.get('persona') ?? '',
+    scorecard: searchParams.get('scorecard') ?? '',
+  };
+  const hasLink = !!(linked.scenario || linked.agent);
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -246,6 +165,7 @@ export default function PlaygroundPage() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
+  const [selectedScorecardId, setSelectedScorecardId] = useState<string>('');
   const [sidebarTab, setSidebarTab] = useState('config');
 
   // Chat state
@@ -294,17 +214,21 @@ export default function PlaygroundPage() {
           content: systemPrompt,
           adapterConfig: { adapterType, model, temperature, maxTokens },
         } as any);
-        const session = await client.chat.createSession({ promptId: savedPromptId });
+        const session = await client.chat.createSession({
+          promptId: savedPromptId,
+          toolFixtureIds: selectedToolIds.length > 0 ? selectedToolIds : undefined,
+        });
         sid = session.sessionId;
         setChatSessionId(sid);
       }
 
       const response = await client.chat.sendMessage(sid, msg);
-      setChatMessages((prev) => [...prev, {
-        role: 'agent',
-        content: response.content,
-        latencyMs: response.latencyMs,
-      }]);
+      const calls = stepsToLines([{ role: 'agent', toolCalls: response.toolCalls }])[0]?.toolCalls ?? [];
+      setChatMessages((prev) => [
+        ...prev,
+        ...(calls.length > 0 ? [{ role: 'tool' as const, content: '', toolCalls: calls }] : []),
+        { role: 'agent', content: response.content, latencyMs: response.latencyMs },
+      ]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send message');
       // Remove the user message on error
@@ -313,7 +237,7 @@ export default function PlaygroundPage() {
       setIsChatLoading(false);
       chatInputRef.current?.focus();
     }
-  }, [chatInput, isChatLoading, chatSessionId, savedPromptId, systemPrompt, adapterType, model, temperature, maxTokens, client]);
+  }, [chatInput, isChatLoading, chatSessionId, savedPromptId, selectedToolIds, systemPrompt, adapterType, model, temperature, maxTokens, client]);
 
   const handleChatKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -334,28 +258,32 @@ export default function PlaygroundPage() {
     setChatInput('');
   }, [chatSessionId, client]);
 
-  // Load last active chat session on mount
+  // Load last active chat session on mount. A link to a scenario or agent starts fresh instead:
+  // the old session is bound to whichever agent and tools it was created with.
   const [chatRestored, setChatRestored] = useState(false);
+  const [restoredPromptId, setRestoredPromptId] = useState<string | null>(null);
   useEffect(() => {
     if (chatRestored) return;
     client.chat.getActiveSession().then((result) => {
-      if (result?.sessionId && result?.execution) {
-        setChatSessionId(result.sessionId);
-        // Restore messages from execution stepResults
-        const steps = result.execution.stepResults || [];
-        const msgs: TranscriptMessage[] = steps
-          .filter((s: any) => s.role === 'persona' || s.role === 'agent')
-          .map((s: any) => ({
-            role: s.role as 'persona' | 'agent',
-            content: s.actualResponse || '',
-            latencyMs: s.role === 'agent' ? s.duration : undefined,
-          }));
-        if (msgs.length > 0) {
-          setChatMessages(msgs);
-        }
+      if (!result?.sessionId || !result?.execution) return;
+      if (hasLink) {
+        client.chat.endSession(result.sessionId).catch(() => {});
+        return;
       }
+      setChatSessionId(result.sessionId);
+      const pid = result.execution.promptId;
+      if (pid) setRestoredPromptId(String(pid));
+      const msgs = stepsToLines(result.execution.stepResults || []);
+      if (msgs.length > 0) setChatMessages(msgs);
     }).catch(() => {}).finally(() => setChatRestored(true));
-  }, [chatRestored, client]);
+  }, [chatRestored, client, hasLink]);
+
+  /** A chat session keeps the agent and tools it started with, so changing either starts a new one. */
+  const restartChatFor = useCallback(() => {
+    if (chatSessionId) client.chat.endSession(chatSessionId).catch(() => {});
+    setChatSessionId(null);
+    setChatMessages([]);
+  }, [chatSessionId, client]);
 
   // End chat session (keeps transcript, marks execution complete)
   const handleEndChat = useCallback(async () => {
@@ -397,28 +325,12 @@ export default function PlaygroundPage() {
   });
   const savedPrompts = promptsQuery.data?.prompts ?? [];
 
-  // Load first saved prompt on mount
-  useEffect(() => {
-    if (savedPrompts.length > 0 && !savedPromptId) {
-      const first = savedPrompts[0] as any;
-      setSavedPromptId(first.id);
-      setSystemPrompt(first.content);
-      setPromptDirty(false);
-      if (first.adapterConfig) {
-        if (first.adapterConfig.adapterType) setAdapterType(first.adapterConfig.adapterType as AdapterType);
-        if (first.adapterConfig.model) setModel(first.adapterConfig.model);
-        if (first.adapterConfig.temperature != null) setTemperature(first.adapterConfig.temperature);
-        if (first.adapterConfig.maxTokens != null) setMaxTokens(first.adapterConfig.maxTokens);
-      }
-    }
-  }, [savedPrompts, savedPromptId]);
-
   function handlePromptChange(value: string) {
     setSystemPrompt(value);
     setPromptDirty(true);
   }
 
-  function handleSelectPrompt(promptId: string) {
+  function applyPrompt(promptId: string) {
     const p = savedPrompts.find((sp) => sp.id === promptId) as any;
     if (p) {
       setSavedPromptId(p.id);
@@ -432,6 +344,12 @@ export default function PlaygroundPage() {
         if (p.adapterConfig.maxTokens != null) setMaxTokens(p.adapterConfig.maxTokens);
       }
     }
+  }
+
+  function handleSelectPrompt(promptId: string) {
+    if (promptId !== savedPromptId) restartChatFor();
+    applyPrompt(promptId);
+    rememberLastAgent(promptId);
   }
 
   async function handleSavePrompt() {
@@ -486,9 +404,55 @@ export default function PlaygroundPage() {
   const personas = personasQuery.data?.personas ?? [];
   const toolFixtures = toolFixturesQuery.data?.toolFixtures ?? [];
 
-  // Auto-select first scenario/persona
-  useEffect(() => { if (scenarios.length > 0 && !selectedScenarioId) setSelectedScenarioId(scenarios[0].id); }, [scenarios, selectedScenarioId]);
-  useEffect(() => { if (personas.length > 0 && !selectedPersonaId) setSelectedPersonaId(personas[0].id); }, [personas, selectedPersonaId]);
+  // Pick the scenario, its persona, scorecard and agent once everything has loaded: from the link
+  // when there is one, else the restored chat's agent or the last agent picked.
+  const [initialized, setInitialized] = useState(false);
+  const dataReady = promptsQuery.isSuccess && scenariosQuery.isSuccess && personasQuery.isSuccess && chatRestored;
+  useEffect(() => {
+    if (initialized || !dataReady) return;
+    setInitialized(true);
+    const linkedAgent = savedPrompts.find((p) => p.id === linked.agent);
+    // Opened with no link (sidebar): start on the workshop's first exercise, not whichever record sorts first.
+    const bare = !linked.scenario && !linked.agent;
+    const defaultAgent = bare ? savedPrompts.find((p) => p.name === 'Acme Refund Agent') : undefined;
+    const defaultScenario = bare ? scenarios.find((s: Scenario) => s.name === 'Late Refund Request') : undefined;
+    const scenarioId = linked.scenario || defaultScenario?.id || scenarioForAgent(linkedAgent, scenarios);
+    const scenario = scenarios.find((s: Scenario) => s.id === scenarioId) ?? scenarios[0];
+    if (scenario) setSelectedScenarioId(scenario.id);
+    const personaId = linked.persona || scenario?.personaIds?.[0] || personas[0]?.id;
+    if (personaId) setSelectedPersonaId(personaId);
+    setSelectedScorecardId(linked.scorecard || scenario?.scorecardId || '');
+    const last = readLastAgent();
+    const has = (id: string | null | undefined) => !!id && savedPrompts.some((p) => p.id === id);
+    const agentId = has(linked.agent) ? linked.agent
+      : defaultAgent ? defaultAgent.id
+      : linked.scenario ? agentForScenario(scenario, savedPrompts, last) ?? savedPrompts[0]?.id
+      : has(restoredPromptId) ? restoredPromptId!
+      : has(last) ? last! : savedPrompts[0]?.id;
+    if (agentId) applyPrompt(agentId);
+    if (has(linked.agent)) rememberLastAgent(linked.agent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialized, dataReady]);
+
+  // The agent's own tools start ticked (every mock tool when it names none); the lesson is watching
+  // which ones the agent chooses to call.
+  const [toolsInitialized, setToolsInitialized] = useState(false);
+  useEffect(() => {
+    if (toolsInitialized || !toolFixturesQuery.isSuccess || !initialized) return;
+    setToolsInitialized(true);
+    const own = savedPrompts.find((p) => p.id === savedPromptId)?.toolFixtureIds ?? [];
+    const known = own.filter((id) => toolFixtures.some((t: ToolFixture) => t.id === id));
+    setSelectedToolIds(known.length > 0 ? known : toolFixtures.map((t: ToolFixture) => t.id));
+  }, [toolsInitialized, toolFixturesQuery.isSuccess, toolFixtures, initialized, savedPrompts, savedPromptId]);
+
+  function handleSelectScenario(id: string) {
+    setSelectedScenarioId(id);
+    const scenario = scenarios.find((s: Scenario) => s.id === id);
+    if (scenario?.personaIds?.[0]) setSelectedPersonaId(scenario.personaIds[0]);
+    setSelectedScorecardId(scenario?.scorecardId ?? '');
+    const agentId = agentForScenario(scenario, savedPrompts, readLastAgent());
+    if (agentId && agentId !== savedPromptId && !promptDirty) handleSelectPrompt(agentId);
+  }
 
   // Auto-scroll transcript
   useEffect(() => { transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [transcript]);
@@ -516,6 +480,7 @@ export default function PlaygroundPage() {
         promptId: savedPromptId,
         personaId: selectedPersonaId || undefined,
         toolFixtureIds: selectedToolIds.length > 0 ? selectedToolIds : undefined,
+        scorecardId: selectedScorecardId || undefined,
       });
 
       const execAny = execution as unknown as { executionId?: string; id: string };
@@ -529,11 +494,13 @@ export default function PlaygroundPage() {
       void queryClient.invalidateQueries({ queryKey: ['executions'] });
 
       if (completed.status === 'completed') {
-        toast.success(`Test completed${completed.overallScore != null ? ` — Score: ${completed.overallScore}%` : ''}`);
+        const score = (completed as Execution & { scorePercent?: number | null }).scorePercent
+          ?? scorecardPercent(completed as { scorecardResults?: { overallScore?: number } });
+        toast.success(`Test completed${score != null ? ` — Score: ${score}%` : ''}`);
       } else { toast.error(`Test ${completed.status}`); }
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Execution failed'); }
     finally { setIsRunning(false); }
-  }, [selectedScenarioId, savedPromptId, selectedPersonaId, selectedToolIds, adapterType, model, systemPrompt, temperature, maxTokens, client, queryClient]);
+  }, [selectedScenarioId, savedPromptId, selectedPersonaId, selectedToolIds, selectedScorecardId, adapterType, model, systemPrompt, temperature, maxTokens, client, queryClient]);
 
   const hasResults = transcript.length > 0 || completedExecution != null;
 
@@ -543,13 +510,13 @@ export default function PlaygroundPage() {
       title="Playground"
       description="Configure your agent prompt and run simulated conversations"
       actions={
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
             <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Scenario</Label>
             {scenariosQuery.isLoading ? (
               <Skeleton className="h-9 w-[180px]" />
             ) : (
-              <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
+              <Select value={selectedScenarioId} onValueChange={handleSelectScenario}>
                 <SelectTrigger className="w-[180px] h-9" data-testid="scenario-select">
                   <SelectValue placeholder="Select..." />
                 </SelectTrigger>
@@ -599,8 +566,8 @@ export default function PlaygroundPage() {
               <><Play className="mr-2 h-4 w-4" />Run Test</>
             )}
           </Button>
-          <div className="w-px h-9 bg-border" />
-          <Button
+          {!room.cloud && <div className="w-px h-9 bg-border" />}
+          {!room.cloud && <Button
             variant="outline"
             onClick={() => {
               const prompt = encodeURIComponent(systemPrompt);
@@ -610,12 +577,12 @@ export default function PlaygroundPage() {
             data-testid="generate-scenarios-button"
           >
             <Sparkles className="mr-2 h-4 w-4" />Generate Scenarios
-          </Button>
+          </Button>}
         </div>
       }
     >
       {/* Getting Started banner */}
-      {showBanner && (
+      {showBanner && !room.cloud && (
         <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 mb-2" data-testid="getting-started-banner">
           <div className="flex items-center gap-2.5">
             <BookOpen className="h-4 w-4 text-primary shrink-0" />
@@ -788,13 +755,13 @@ export default function PlaygroundPage() {
             {/* Tools */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Tools</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Mock tools</CardTitle>
               </CardHeader>
               <CardContent>
                 {toolFixturesQuery.isLoading ? (
                   <Skeleton className="h-9 w-full" />
                 ) : toolFixtures.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No tool fixtures yet. <Link href="/tool-fixtures" className="text-primary hover:underline">Create one</Link></p>
+                  <p className="text-xs text-muted-foreground">No mock tools yet. <Link href="/tool-fixtures" className="text-primary hover:underline">Create one</Link></p>
                 ) : (
                   <div className="space-y-1.5">
                     {toolFixtures.map((tf: ToolFixture) => (
@@ -805,6 +772,7 @@ export default function PlaygroundPage() {
                         <Checkbox
                           checked={selectedToolIds.includes(tf.id)}
                           onCheckedChange={(checked) => {
+                            restartChatFor();
                             setSelectedToolIds((prev) =>
                               checked ? [...prev, tf.id] : prev.filter((id) => id !== tf.id)
                             );
@@ -821,7 +789,7 @@ export default function PlaygroundPage() {
                         variant="ghost"
                         size="sm"
                         className="w-full text-xs h-7 mt-1"
-                        onClick={() => setSelectedToolIds([])}
+                        onClick={() => { restartChatFor(); setSelectedToolIds([]); }}
                         data-testid="clear-tools"
                       >
                         Clear all
@@ -880,21 +848,8 @@ export default function PlaygroundPage() {
                               <Wrench className="h-3 w-3" />
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex-1 min-w-0 space-y-1.5">
-                            {msg.toolCalls.map((tc, ti) => (
-                              <div key={ti} className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs space-y-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-mono font-medium">{tc.name}</span>
-                                  <Badge variant="outline" className="text-[9px] px-1 py-0 text-primary">tool</Badge>
-                                </div>
-                                {tc.arguments && Object.keys(tc.arguments).length > 0 && (
-                                  <pre className="text-[10px] font-mono text-muted-foreground overflow-x-auto">{JSON.stringify(tc.arguments)}</pre>
-                                )}
-                                {tc.result != null && (
-                                  <pre className="text-[10px] font-mono text-foreground/70 overflow-x-auto max-h-16 overflow-y-auto">{typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}</pre>
-                                )}
-                              </div>
-                            ))}
+                          <div className="flex-1 min-w-0">
+                            <ToolCallList calls={msg.toolCalls} compact />
                           </div>
                         </div>
                       ) : (

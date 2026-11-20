@@ -40,6 +40,7 @@ export const SCORECARDS: SeedScorecard[] = [
           { key: 'greeting', name: 'Greeting', description: 'Agent greets the customer appropriately', type: 'keyword', settings: { matchType: 'must_contain', keyword: ['hello', 'hi', 'welcome', 'good morning', 'good afternoon', 'hey there', 'thank you for'], caseSensitive: false }, threshold: { expectedValue: true }, version: 1, isActive: true },
           { key: 'empathy', name: 'Empathy & Tone', description: 'Agent acknowledges feelings and maintains professional tone', type: 'prompt', settings: { description: 'Did the agent acknowledge the customer\'s feelings, use empathetic language, and maintain a professional tone? Score 0-10.', evaluationType: 'score' }, threshold: { min: 7 }, version: 1, isActive: true },
           { key: 'clarity', name: 'Response Clarity', description: 'Responses are clear, concise, and easy to understand', type: 'prompt', settings: { description: 'Were the agent\'s responses clear and easy to understand? Score 0-10.', evaluationType: 'score' }, threshold: { min: 7 }, version: 1, isActive: true },
+          { key: 'no_template_leakage', name: 'No Template Leakage', description: 'Agent never sends unfilled placeholders, its own instructions, or internal identifiers to the customer', type: 'pattern', settings: { presets: ['placeholder', 'system_prompt_leak', 'internal_ids'], matchType: 'must_not_match', speaker: 'agent' }, threshold: { expectedValue: true }, version: 1, isActive: true },
         ],
       },
       {

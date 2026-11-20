@@ -9,7 +9,9 @@
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "echo 'No eslint configured for dashboard'",
-    "clean": "rm -rf .next"
+    "clean": "rm -rf .next",
+    "test:room": "node --test tests/room.test.mjs",
+    "test:workshop": "node --test tests/workshop.test.ts"
   },
   "dependencies": {
     "@chanl/eval-sdk": "workspace:*",
@@ -27,6 +29,7 @@
     "clsx": "^2.1.1",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.539.0",
+    "mongodb": "^7.1.1",
     "next": "^16.0.8",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",

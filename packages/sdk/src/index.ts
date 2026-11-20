@@ -12,9 +12,12 @@ export { ScorecardsModule } from './modules/scorecards';
 export { ExecutionsModule } from './modules/executions';
 export { ToolFixturesModule } from './modules/tool-fixtures';
 export { SettingsModule } from './modules/settings';
+export { LabelsModule } from './modules/labels';
 export { ChatModule } from './modules/chat';
 export { DatasetsModule } from './modules/datasets';
 export { GenerationModule } from './modules/generation';
+export { RunSetsModule } from './modules/run-sets';
+export { StatsModule } from './modules/stats';
 export type {
   GenerateOptions,
   GeneratedScenario,
@@ -94,9 +97,37 @@ export type {
   ToolFixtureStats,
   // Settings
   Settings,
+  SettingsStatus,
+  KeySource,
   UpdateSettingsDto,
+
+  // Human-in-the-loop benchmarking
+  HumanLabel,
+  CreateLabelDto,
+  AgreementStats,
+  OverallAgreement,
+  CriterionAgreement,
+  AgreementReport,
   // Chat
   ChatSession,
   ChatRequest,
   ChatResponse,
+  // Criteria settings
+  CriteriaType,
+  ToolArgExpectation,
+  ToolCallCriteriaSettings,
+  ToolOrderCriteriaSettings,
+  // Run sets
+  RunSetKind,
+  CreateRunSetDto,
+  ListRunSetsParams,
+  RunSet,
+  RunSetRun,
+  RunSetPersona,
+  RunSetFailedCheck,
+  RunSetComparison,
+  RoomStats,
 } from './types';
+
+export { normalizeVerdict, verdictOf } from './verdict';
+export type { CriterionVerdict } from './types';

@@ -9,10 +9,20 @@ export { checkThreshold, normalizeScore } from './scoring-utils';
 // Built-in handlers (text-only — voice handlers removed for OSS)
 export { HallucinationHandler } from './hallucination.handler';
 export { KeywordHandler } from './keyword.handler';
+export { PatternHandler } from './pattern.handler';
+export {
+  PATTERN_LIBRARY,
+  PATTERN_PRESET_NAMES,
+  isPatternPresetName,
+  resolvePresets,
+} from './pattern-library';
+export type { PatternPresetName, LibraryPattern } from './pattern-library';
 export { PromptHandler } from './prompt.handler';
 export { RagFaithfulnessHandler } from './rag-faithfulness.handler';
 export { ResponseTimeHandler } from './response-time.handler';
 export { ToolCallHandler } from './tool-call.handler';
+export { ToolOrderHandler } from './tool-order.handler';
+export { normalizeToolCalls } from './tool-call-utils';
 
 // Multi-turn conversation metric handlers
 export { KnowledgeRetentionHandler } from './knowledge-retention.handler';

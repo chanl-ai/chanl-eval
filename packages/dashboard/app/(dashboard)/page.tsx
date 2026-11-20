@@ -14,6 +14,7 @@ import {
   ScrollText,
   Settings,
   Terminal,
+  TriangleAlert,
   UserCircle,
 } from 'lucide-react';
 
@@ -188,23 +189,39 @@ function FeatureSection({ title, description, items }: {
 // ---------------------------------------------------------------------------
 
 export default function HomePage() {
-  const { baseUrl, apiKey } = useEvalConfig();
+  const { baseUrl, apiKey, room } = useEvalConfig();
   const [serverOk, setServerOk] = useState<boolean | null>(null);
+  const [hasLlmKey, setHasLlmKey] = useState<boolean | null>(null);
 
-  // Probe server health
+  // Probe server health + whether the engine can actually reach an LLM.
+  // A reachable server with no key still fails every run, so "healthy" alone is a misleading signal.
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const c = new EvalClient({ baseUrl, apiKey });
       try {
-        const c = new EvalClient({ baseUrl, apiKey });
         const h = await c.health();
         if (!cancelled) setServerOk(!!h?.status);
       } catch {
         if (!cancelled) setServerOk(false);
+        return;
+      }
+      // In a workshop room the facilitator sets the model key, and /settings is not reachable.
+      if (room.cloud) {
+        if (!cancelled) setHasLlmKey(true);
+        return;
+      }
+      try {
+        const status = await c.settings.status();
+        if (!cancelled) setHasLlmKey(status.hasAnyKey);
+      } catch {
+        if (!cancelled) setHasLlmKey(null);
       }
     })();
     return () => { cancelled = true; };
-  }, [baseUrl, apiKey]);
+  }, [baseUrl, apiKey, room.cloud]);
+
+  if (room.cloud) return <WorkshopLabs />;
 
   return (
     <PageLayout
@@ -220,6 +237,27 @@ export default function HomePage() {
         </Button>
       }
     >
+      {/* First-run blocker: the engine has no way to reach an LLM, so every run will fail. */}
+      {serverOk && hasLlmKey === false && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+              <div>
+                <p className="text-sm font-medium">No LLM key configured</p>
+                <p className="text-sm text-muted-foreground">
+                  Runs need an OpenAI or Anthropic key to drive the conversation and score it. Add one
+                  in Settings, or set <code>CHANL_OPENAI_API_KEY</code> on the server.
+                </p>
+              </div>
+            </div>
+            <Button asChild size="sm" className="shrink-0" data-testid="configure-llm-key">
+              <Link href="/settings">Add a key</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Hero banner */}
       <Card className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/20">
         <CardContent className="flex flex-col gap-3 py-6 sm:flex-row sm:items-center sm:justify-between">
@@ -259,7 +297,7 @@ export default function HomePage() {
         <FeatureSection
           title="Getting Started"
           description="Connect your API key and start testing agent performance"
-          items={GETTING_STARTED}
+          items={room.cloud ? GETTING_STARTED.filter((i) => i.href !== '/settings') : GETTING_STARTED}
         />
 
         <FeatureSection
@@ -275,6 +313,41 @@ export default function HomePage() {
         />
       </div>
 
+    </PageLayout>
+  );
+}
+
+/** The workshop's labs in order, each linking to the page its first step starts on. */
+const LABS = [
+  { n: 0, title: 'Join the lab and look around', href: '/agents', start: 'Agents' },
+  { n: 1, title: 'Meet your agent, then watch it break under pressure', href: '/agents', start: 'Agents → Acme Refund Agent' },
+  { n: 2, title: 'Build a scorecard that catches the broken promise', href: '/scorecards', start: 'Scorecards → Refund Policy v1' },
+  { n: 3, title: 'Run the same test five times', href: '/scenarios', start: 'Scenarios → Late Refund Request' },
+  { n: 4, title: 'Break the invoice workflow', href: '/agents', start: 'Agents → Invoice Workflow Agent' },
+  { n: 5, title: 'Run a red-team scan', href: '/agents', start: 'Agents → Acme Refund Agent' },
+  { n: 6, title: 'Fix the prompt and prove it', href: '/run-sets', start: 'Run sets → your Lab 3 run set' },
+] as const;
+
+function WorkshopLabs() {
+  return (
+    <PageLayout icon={BookOpen} title="Workshop labs" description="Follow the slide for each lab. Each one starts on the page below.">
+      <Card className="max-w-3xl py-0">
+        <CardContent className="p-0">
+          <ol className="divide-y" data-testid="workshop-labs">
+            {LABS.map((lab) => (
+              <li key={lab.n}>
+                <Link href={lab.href} className="flex items-center gap-4 px-4 py-3 hover:bg-accent transition-colors">
+                  <Badge variant="outline" className="shrink-0 tabular-nums">Lab {lab.n}</Badge>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">{lab.title}</span>
+                    <span className="block text-xs text-muted-foreground">Start: {lab.start}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
     </PageLayout>
   );
 }

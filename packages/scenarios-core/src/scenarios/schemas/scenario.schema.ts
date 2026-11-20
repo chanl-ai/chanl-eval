@@ -250,6 +250,18 @@ export const ScenarioSchema = SchemaFactory.createForClass(Scenario);
 // Apply virtual ID plugin for consistent _id -> id mapping
 ScenarioSchema.plugin(virtualIdPlugin);
 
+// Seeding upserts the default scenarios by name. Two replicas booting together would each pass the
+// upsert's read phase and insert a duplicate — this index is what makes seeding idempotent under
+// concurrency, not the upsert on its own.
+//
+// Scoped to the seeded rows: `createdBy` is only ever 'system' for those (the API never accepts it
+// from a caller), and user scenarios legitimately share names — importing the same YAML twice, or
+// cloning twice, both produce one.
+ScenarioSchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { createdBy: 'system' } },
+);
+
 // Add indexes for better query performance
 ScenarioSchema.index({ status: 1 });
 ScenarioSchema.index({ category: 1 });

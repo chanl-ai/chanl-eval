@@ -5,6 +5,7 @@ import {
   IsObject,
   IsBoolean,
 } from 'class-validator';
+import { CriteriaType } from '../schemas/scorecard-criteria.schema';
 
 export class CreateScorecardCriteriaDto {
   @IsString()
@@ -21,17 +22,9 @@ export class CreateScorecardCriteriaDto {
   @IsString()
   description?: string;
 
-  @IsEnum([
-    'prompt',
-    'keyword',
-    'response_time',
-    'tool_call',
-    'hallucination',
-    'knowledge_retention',
-    'conversation_completeness',
-    'role_adherence',
-    'rag_faithfulness',
-  ])
+  // Derived from CriteriaType so a new handler type can never be registered in the engine but
+  // rejected at the API — the hand-maintained copy of this list had already drifted.
+  @IsEnum(CriteriaType)
   type!: string;
 
   @IsObject()

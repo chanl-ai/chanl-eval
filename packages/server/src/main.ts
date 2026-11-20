@@ -1,4 +1,6 @@
 import 'reflect-metadata';
+import { ConfigService } from '@nestjs/config';
+import { CONFIG_DEFAULTS } from './config/env.validation';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -38,11 +40,12 @@ async function bootstrap() {
   // Graceful shutdown
   app.enableShutdownHooks();
 
-  const port = process.env.PORT || 18005;
+  const configService = app.get(ConfigService);
+  const port = configService.get<string>('PORT') ?? CONFIG_DEFAULTS.PORT;
   await app.listen(port);
   logger.log(`chanl-eval server running on port ${port}`);
   logger.log(`Swagger docs at http://localhost:${port}/api/docs`);
-  if (process.env.CHANL_EVAL_REQUIRE_API_KEY !== 'true') {
+  if (configService.get<string>('CHANL_EVAL_REQUIRE_API_KEY') !== 'true') {
     logger.warn(
       'X-API-Key not required (set CHANL_EVAL_REQUIRE_API_KEY=true to enforce in shared or production environments)',
     );

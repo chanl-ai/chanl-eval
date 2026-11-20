@@ -3,10 +3,13 @@ import {
   Logger,
   OnApplicationBootstrap,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PersonaService, Persona } from '@chanl/scenarios-core';
 import { ScenarioService } from '@chanl/scenarios-core';
 import { ScorecardsService } from '@chanl/scorecards-core';
 import { ApiKeyService } from '../auth/api-key.service';
+import { PromptsService } from '../prompts/prompts.service';
+import { IndexGuardService } from './index-guard.service';
 
 @Injectable()
 export class BootstrapService implements OnApplicationBootstrap {
@@ -18,6 +21,9 @@ export class BootstrapService implements OnApplicationBootstrap {
     private readonly scenarioService: ScenarioService,
     private readonly scorecardsService: ScorecardsService,
     private readonly apiKeyService: ApiKeyService,
+    private readonly promptsService: PromptsService,
+    private readonly indexGuard: IndexGuardService,
+    private readonly config: ConfigService,
   ) {}
 
   get isSeeded(): boolean {
@@ -36,8 +42,19 @@ export class BootstrapService implements OnApplicationBootstrap {
     }
   }
 
+  /**
+   * Seeds default data on every boot.
+   *
+   * Seeding is per-entity upsert keyed on a natural key, which cannot distinguish "the user deleted
+   * this default" from "never seeded". A deleted default is therefore restored on the next boot.
+   * This is intentional: defaults are treated as part of the installation, not as user data.
+   */
   private async seed(): Promise<void> {
     const summary: string[] = [];
+
+    // 0. Verify the unique indexes that carry correctness guarantees. Seeding below relies on them
+    // for idempotency, and a silently-failed index build would make that reliance false.
+    await this.indexGuard.verify();
 
     // 1. Bootstrap API key if none exist
     const hasKeys = await this.apiKeyService.hasAnyKeys();
@@ -50,6 +67,15 @@ export class BootstrapService implements OnApplicationBootstrap {
       this.logger.log('='.repeat(60));
       this.logger.log('');
       summary.push('1 API key');
+    }
+
+    // A workshop seat holds only its own starter kit, written by its seed script; the demo set
+    // would sit beside it and restore itself on every restart. The key and indexes above still run,
+    // because the seed script needs the first-boot key to reach the seat at all.
+    if (this.config.get<string>('CHANL_EVAL_SEED_DEFAULTS') === 'false') {
+      this.seeded = true;
+      this.logger.log(`Seeded: ${summary.join(', ') || 'nothing'} (default content off)`);
+      return;
     }
 
     // 2. Seed default personas
@@ -65,7 +91,13 @@ export class BootstrapService implements OnApplicationBootstrap {
       summary.push('1 scorecard');
     }
 
-    // 4. Seed default scenarios referencing personas + scorecard
+    // 4. Seed default prompts (the agents under test).
+    // Without at least one, nothing on this install can execute: /scenarios/:id/execute requires a
+    // promptId, so a fresh quickstart dead-ends at "promptId must be a string".
+    const prompts = await this.promptsService.createDefaultPromptsIfNeeded();
+    summary.push(`${prompts.length} prompts`);
+
+    // 5. Seed default scenarios referencing personas + scorecard
     const personaMap: Record<string, string> = {};
     for (const p of personas) {
       // Mongoose documents have .id (virtual) and ._id — Persona type omits them

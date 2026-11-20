@@ -1,0 +1,21 @@
+# MongoDB for the workshop room: one database per seat (seat-01..seat-40) plus `room`
+# (accounts and the seat directory). Private network only; no services are exposed.
+app = "chanl-eval-room-db"
+primary_region = "ewr"
+
+[build]
+  image = "mongo:7.0"
+
+[processes]
+  # --ipv6 is required: Fly's private network (.internal) is IPv6-only.
+  db = "mongod --bind_ip_all --ipv6"
+
+[mounts]
+  source = "room_mongo"
+  destination = "/data/db"
+  processes = ["db"]
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "4gb"
+  processes = ["db"]

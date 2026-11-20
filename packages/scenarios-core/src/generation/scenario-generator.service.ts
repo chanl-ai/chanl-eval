@@ -13,7 +13,7 @@ const VALID_COMMUNICATION = ['direct', 'indirect', 'verbose', 'concise', 'rambli
 const VALID_PERSONALITY = ['friendly', 'professional', 'assertive', 'passive', 'demanding'] as const;
 const VALID_SPEECH_STYLES = ['slow', 'fast', 'normal', 'moderate'] as const;
 const VALID_INTENT_CLARITY = ['very clear', 'slightly unclear', 'slurred', 'slightly slurred', 'mumbled', 'unclear'] as const;
-const VALID_CRITERIA_TYPES = ['prompt', 'keyword', 'response_time', 'tool_call', 'hallucination', 'knowledge_retention', 'conversation_completeness', 'role_adherence', 'rag_faithfulness'] as const;
+const VALID_CRITERIA_TYPES = ['prompt', 'keyword', 'pattern', 'response_time', 'tool_call', 'hallucination', 'knowledge_retention', 'conversation_completeness', 'role_adherence', 'rag_faithfulness'] as const;
 
 export interface GenerateRequest {
   systemPrompt: string;

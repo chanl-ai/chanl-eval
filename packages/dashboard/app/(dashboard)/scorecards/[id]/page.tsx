@@ -8,6 +8,7 @@ import {
   Edit,
   FolderOpen,
   Layers,
+  ListOrdered,
   Loader2,
   MessageSquareText,
   Plus,
@@ -20,6 +21,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { JudgeAgreementPanel } from '@/components/scorecard/judge-agreement-panel';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,6 +47,16 @@ import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  EMPTY_TOOL_CHECK,
+  ToolCallFields,
+  ToolOrderFields,
+  toolCallSettings,
+  toolCheckFromSettings,
+  toolOrderSettings,
+  type ToolCheckState,
+} from '@/components/scorecard/tool-check-fields';
+import { DuplicateScorecardButton } from '@/components/scorecard/duplicate-scorecard-button';
 import type { ScorecardCategory, ScorecardCriteria } from '@chanl/eval-sdk';
 
 // ---------------------------------------------------------------------------
@@ -52,10 +64,11 @@ import type { ScorecardCategory, ScorecardCriteria } from '@chanl/eval-sdk';
 // ---------------------------------------------------------------------------
 
 const CRITERIA_TYPE_MAP: Record<string, { label: string; icon: typeof Type; description: string }> = {
-  keyword:       { label: 'Keyword',       icon: Type,               description: 'Check for specific words or phrases' },
-  prompt:        { label: 'LLM Judge',     icon: MessageSquareText,  description: 'LLM evaluates against a rubric' },
-  response_time: { label: 'Response Time', icon: Timer,              description: 'Check agent responds within time limit' },
-  tool_call:     { label: 'Tool Call',     icon: Wrench,             description: 'Verify agent called a specific tool' },
+  keyword:       { label: 'Must say',       icon: Type,               description: 'Check for specific words or phrases' },
+  prompt:        { label: 'AI judge',     icon: MessageSquareText,  description: 'LLM evaluates against a rubric' },
+  response_time: { label: 'Response time', icon: Timer,              description: 'Check agent responds within time limit' },
+  tool_call:     { label: 'Tool called',     icon: Wrench,             description: 'Verify agent called (or never called) a tool' },
+  tool_order:    { label: 'Tool order',    icon: ListOrdered,        description: 'Verify one tool is called before another' },
 };
 
 const CRITERIA_TYPES = Object.entries(CRITERIA_TYPE_MAP).map(([value, meta]) => ({ value, ...meta }));
@@ -76,6 +89,9 @@ function CriterionDialog({
   editingCriterion?: ScorecardCriteria | null; onSaved: () => void;
 }) {
   const { client } = useEvalConfig();
+  // Tool names come from the seat's mock tools, so a typo cannot make a "never called" check pass forever.
+  const toolsQ = useQuery({ queryKey: ['tool-fixtures'], queryFn: () => client.toolFixtures.list({ limit: 100, isActive: true }), enabled: open });
+  const toolNames = [...new Set((toolsQ.data?.toolFixtures ?? []).map((t) => t.name))].sort();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -84,7 +100,7 @@ function CriterionDialog({
   const [matchType, setMatchType] = useState('any');
   const [rubric, setRubric] = useState('');
   const [maxMs, setMaxMs] = useState('5000');
-  const [toolName, setToolName] = useState('');
+  const [toolCheck, setToolCheck] = useState<ToolCheckState>(EMPTY_TOOL_CHECK);
 
   useEffect(() => {
     if (editingCriterion) {
@@ -92,14 +108,15 @@ function CriterionDialog({
       setDescription(editingCriterion.description ?? '');
       setType(editingCriterion.type ?? 'keyword');
       const s = (editingCriterion.settings ?? {}) as Record<string, unknown>;
-      setKeywords(((s.keywords as string[]) ?? []).join(', '));
+      // Seeded checks store the list under `keyword`; the handler reads either. Saved back as `keywords`.
+      setKeywords([((s.keywords ?? s.keyword) as string[] | string | undefined) ?? []].flat().join(', '));
       setMatchType((s.matchType as string) ?? 'any');
       setRubric((s.rubric as string) ?? '');
       setMaxMs(String((s.maxMs as number) ?? 5000));
-      setToolName((s.toolName as string) ?? '');
+      setToolCheck(toolCheckFromSettings(s));
     } else {
       setName(''); setDescription(''); setType('keyword');
-      setKeywords(''); setMatchType('any'); setRubric(''); setMaxMs('5000'); setToolName('');
+      setKeywords(''); setMatchType('any'); setRubric(''); setMaxMs('5000'); setToolCheck(EMPTY_TOOL_CHECK);
     }
   }, [editingCriterion, open]);
 
@@ -108,7 +125,8 @@ function CriterionDialog({
       case 'keyword': return { keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean), matchType };
       case 'prompt': return { rubric };
       case 'response_time': return { maxMs: parseInt(maxMs) || 5000 };
-      case 'tool_call': return { toolName };
+      case 'tool_call': return toolCallSettings(toolCheck);
+      case 'tool_order': return toolOrderSettings(toolCheck);
       default: return {};
     }
   }
@@ -204,12 +222,8 @@ function CriterionDialog({
               <Input type="number" value={maxMs} onChange={(e) => setMaxMs(e.target.value)} />
             </div>
           )}
-          {type === 'tool_call' && (
-            <div className="space-y-2">
-              <Label>Expected Tool Name</Label>
-              <Input value={toolName} onChange={(e) => setToolName(e.target.value)} placeholder="e.g. check_order_status" />
-            </div>
-          )}
+          {type === 'tool_call' && <ToolCallFields value={toolCheck} onChange={setToolCheck} toolNames={toolNames} />}
+          {type === 'tool_order' && <ToolOrderFields value={toolCheck} onChange={setToolCheck} toolNames={toolNames} />}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
@@ -330,14 +344,21 @@ function CriterionCard({ criterion, scorecardId, onEdit, onDeleted }: {
   let summary = '';
   switch (criterion.type) {
     case 'keyword': {
-      const kws = (settings.keywords as string[]) ?? [];
+      const kws = [((settings.keywords ?? settings.keyword) as string[] | string | undefined) ?? []].flat();
       const mt = (settings.matchType as string) ?? 'any';
       summary = `${mt === 'must_not_contain' ? 'Excludes' : mt === 'all' ? 'All of' : 'Any of'}: ${kws.join(', ')}`;
       break;
     }
     case 'prompt': summary = ((settings.rubric as string) ?? '').slice(0, 100) + ((settings.rubric as string)?.length > 100 ? '...' : ''); break;
     case 'response_time': summary = `Max ${settings.maxMs}ms`; break;
-    case 'tool_call': summary = `Tool: ${settings.toolName}`; break;
+    case 'tool_call': {
+      const tool = settings.expectedTool ?? settings.toolName;
+      summary = `${settings.mode === 'never_called' ? 'Never calls' : 'Calls'}: ${Array.isArray(tool) ? tool.join(', ') : tool}`;
+      const args = Object.keys((settings.expectedArgs as object) ?? {});
+      if (args.length) summary += ` (${args.join(', ')})`;
+      break;
+    }
+    case 'tool_order': summary = `${settings.first} → ${settings.then}`; break;
   }
 
   return (
@@ -379,7 +400,7 @@ export default function ScorecardDetailPage() {
   const id = typeof params.id === 'string' ? params.id : '';
   const router = useRouter();
   const qc = useQueryClient();
-  const { client } = useEvalConfig();
+  const { client, room } = useEvalConfig();
 
   const q = useQuery({ queryKey: ['scorecard', id], queryFn: () => client.scorecards.get(id), enabled: !!id });
   const categoriesQ = useQuery({ queryKey: ['scorecard-categories', id], queryFn: () => client.scorecards.listCategories(id), enabled: !!id });
@@ -456,6 +477,30 @@ export default function ScorecardDetailPage() {
     finally { setIsDeletingCategory(false); }
   }
 
+  // A criterion needs a category. A scorecard without one gets a default category on first add,
+  // so "Add criterion" never dead-ends.
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  async function openNewCriterion() {
+    let categoryId = selectedCategoryId ?? categoriesQ.data?.[0]?.id ?? '';
+    if (!categoryId) {
+      setCreatingCategory(true);
+      try {
+        const cat = await client.scorecards.createCategory(id, { name: 'General', weight: 100 });
+        categoryId = cat.id;
+        setSelectedCategoryId(cat.id);
+        refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not create a category');
+        return;
+      } finally {
+        setCreatingCategory(false);
+      }
+    }
+    setActiveCategoryId(categoryId);
+    setEditingCriterion(null);
+    setCriterionDialogOpen(true);
+  }
+
   const scorecard = q.data;
   const categories = categoriesQ.data ?? [];
   const criteria = criteriaQ.data ?? [];
@@ -468,8 +513,9 @@ export default function ScorecardDetailPage() {
       title={scorecard?.name ?? 'Scorecard'}
       description={scorecard?.description ?? 'Loading...'}
       actions={scorecard ? (
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => { setActiveCategoryId(selectedCategoryId ?? categories[0]?.id ?? ''); setEditingCriterion(null); setCriterionDialogOpen(true); }} disabled={categories.length === 0} data-testid="add-criterion-top">
+        <div className="flex flex-wrap items-center gap-2">
+          <DuplicateScorecardButton scorecard={scorecard} />
+          <Button size="sm" onClick={openNewCriterion} disabled={categoriesQ.isLoading || creatingCategory} data-testid="add-criterion-top">
             <Plus className="mr-2 h-3.5 w-3.5" />Add Criterion
           </Button>
           <Button size="sm" variant="outline" onClick={() => setDeleteOpen(true)} data-testid="delete-scorecard-button">
@@ -596,7 +642,9 @@ export default function ScorecardDetailPage() {
           </div>
 
           {/* Col 3: Settings sidebar */}
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto">
+            {!room.cloud && <JudgeAgreementPanel scorecardId={id} />}
+
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Settings</CardTitle>
@@ -630,7 +678,7 @@ export default function ScorecardDetailPage() {
                   <Select value={scoringAlgorithm} onValueChange={setScoringAlgorithm}>
                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="weighted_average">Weighted Avg</SelectItem>
+                      <SelectItem value="weighted_average">Average score (weighted)</SelectItem>
                       <SelectItem value="simple_average">Simple Avg</SelectItem>
                       <SelectItem value="minimum_all">Min All</SelectItem>
                       <SelectItem value="pass_fail">Pass/Fail</SelectItem>

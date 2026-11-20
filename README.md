@@ -57,6 +57,16 @@ docker compose up
 
 Open **[localhost:3010](http://localhost:3010)** — sample scenarios, personas, and scorecards are seeded automatically.
 
+**Add an LLM key before your first run.** chanl-eval drives real conversations, so it needs a key to
+reach a model. Either works:
+
+- **In the dashboard** — Settings → *LLM provider keys* → paste an OpenAI or Anthropic key → Save.
+  It is stored on the eval server, so every run picks it up. Nothing to restart.
+- **By environment** — `cp .env.example .env`, set `CHANL_OPENAI_API_KEY`, then `docker compose up`.
+  Better for CI and headless runs.
+
+Without one, runs fail with *no LLM key configured*.
+
 ### Option 2: CLI
 
 ```bash

@@ -15,9 +15,12 @@ import { ScorecardsModule } from './modules/scorecards';
 import { ExecutionsModule } from './modules/executions';
 import { ToolFixturesModule } from './modules/tool-fixtures';
 import { SettingsModule } from './modules/settings';
+import { LabelsModule } from './modules/labels';
 import { ChatModule } from './modules/chat';
 import { DatasetsModule } from './modules/datasets';
 import { GenerationModule } from './modules/generation';
+import { RunSetsModule } from './modules/run-sets';
+import { StatsModule } from './modules/stats';
 import type { EvalClientConfig } from './types';
 
 /**
@@ -76,9 +79,12 @@ export class EvalClient {
   readonly executions: ExecutionsModule;
   readonly toolFixtures: ToolFixturesModule;
   readonly settings: SettingsModule;
+  readonly labels: LabelsModule;
   readonly chat: ChatModule;
   readonly datasets: DatasetsModule;
   readonly generation: GenerationModule;
+  readonly runSets: RunSetsModule;
+  readonly stats: StatsModule;
 
   constructor(config: EvalClientConfig) {
     const headers: Record<string, string> = {
@@ -125,9 +131,12 @@ export class EvalClient {
     this.executions = new ExecutionsModule(this.http);
     this.toolFixtures = new ToolFixturesModule(this.http);
     this.settings = new SettingsModule(this.http);
+    this.labels = new LabelsModule(this.http);
     this.chat = new ChatModule(this.http);
     this.datasets = new DatasetsModule(this.http);
     this.generation = new GenerationModule(this.http);
+    this.runSets = new RunSetsModule(this.http);
+    this.stats = new StatsModule(this.http);
   }
 
   /**

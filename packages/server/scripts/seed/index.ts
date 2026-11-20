@@ -14,6 +14,8 @@ import { PERSONAS } from './personas';
 import { TOOL_FIXTURES } from './tool-fixtures';
 import { SCORECARDS } from './scorecards';
 import { SCENARIOS, SCENARIO_LINKS } from './scenarios';
+import { CreateScenarioDto } from '@chanl/scenarios-core';
+import { validateBatch, reportAndExitOnFailure } from './validate';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27217/chanl-eval';
 
@@ -25,6 +27,7 @@ async function seed() {
     const db = client.db();
 
     console.log(`\n🌱 Seeding chanl-eval → ${MONGODB_URI}\n`);
+
 
     // ── Prompts ──────────────────────────────────────────────────────────
     const promptsCol = db.collection('prompts');
@@ -118,7 +121,7 @@ async function seed() {
         ? (await scorecardsCol.findOne({ name: link.scorecardName }))?._id
         : undefined;
 
-      await scenariosCol.insertOne({
+      const doc = {
         ...scenario,
         personaIds: linkedPersonaIds,
         scorecardId: linkedScorecardId,
@@ -128,7 +131,22 @@ async function seed() {
         version: 1,
         createdAt: now,
         updatedAt: now,
-      });
+      };
+
+      // Validate what is actually written, projected as the API would see it. Persona and scorecard
+      // links are resolved above, and ids are ObjectIds at rest but strings over the wire, so
+      // neither the definition literal nor the raw document is the right thing to check.
+      reportAndExitOnFailure(
+        validateBatch('Scenario', CreateScenarioDto, [
+          {
+            ...doc,
+            personaIds: linkedPersonaIds.map((p) => p.toString()),
+            scorecardId: linkedScorecardId?.toString(),
+          },
+        ]),
+      );
+
+      await scenariosCol.insertOne(doc);
       console.log(`  ✓ Scenario "${scenario.name}" → ${linkedPersonaIds.length} personas, scorecard: ${linkedScorecardId ? 'yes' : 'none'}`);
       scenariosInserted++;
     }

@@ -19,3 +19,6 @@ jobs:
       - run: pnpm install
       - run: pnpm build
       - run: pnpm test
+      # Fails when files already over the line limit grow. Counting such files is blind to this:
+      # a file going from 799 to 865 lines does not change the count.
+      - run: pnpm check:size

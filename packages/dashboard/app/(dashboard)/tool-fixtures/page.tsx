@@ -39,12 +39,12 @@ export default function ToolFixturesListPage() {
   return (
     <PageLayout
       icon={Wrench}
-      title="Tool Fixtures"
+      title="Mock tools"
       description="Define tools with mock responses for deterministic agent testing"
       actions={
         <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="create-tool-fixture-button">
           <Plus className="mr-2 h-3.5 w-3.5" />
-          Create Tool Fixture
+          Create Mock Tool
         </Button>
       }
     >
@@ -65,9 +65,9 @@ export default function ToolFixturesListPage() {
           <CardContent className="p-0">
             <EmptyState
               icon={Wrench}
-              title="No tool fixtures yet"
-              description="Create your first tool fixture to start testing tool-calling behavior."
-              action={{ label: 'Create Tool Fixture', onClick: () => setCreateOpen(true) }}
+              title="No mock tools yet"
+              description="Create your first mock tool to start testing tool-calling behavior."
+              action={{ label: 'Create Mock Tool', onClick: () => setCreateOpen(true) }}
             />
           </CardContent>
         </Card>

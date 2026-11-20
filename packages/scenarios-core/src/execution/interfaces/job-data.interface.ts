@@ -9,6 +9,8 @@ export interface ScenarioExecutionJobData {
   maxTurns?: number;
   parameters?: Record<string, any>;
   toolFixtureIds?: string[];
+  /** Scorecard chosen for this run; overrides the scenario's own scorecard. */
+  scorecardId?: string;
 }
 
 /**

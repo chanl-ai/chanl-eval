@@ -14,13 +14,23 @@ export enum CriteriaType {
   CONVERSATION_COMPLETENESS = 'conversation_completeness',
   ROLE_ADHERENCE = 'role_adherence',
   RAG_FAITHFULNESS = 'rag_faithfulness',
+  PATTERN = 'pattern',
+  TOOL_ORDER = 'tool_order',
 }
 
 // ========== SETTINGS INTERFACES ==========
 
 export interface PromptCriteriaSettings {
+  /** The judge question as the dashboard saves it. `description` is the older name for it. */
+  rubric?: string;
   description: string;
   evaluationType: 'boolean' | 'score';
+  /**
+   * Draw k independent judge samples and vote instead of trusting one call (self-consistency).
+   * Reports inter-sample agreement as `confidence`. Default 1 (single call, no confidence signal).
+   * Costs k× — use it on the criteria whose verdicts you actually act on.
+   */
+  selfConsistency?: number;
 }
 
 export interface KeywordCriteriaSettings {
@@ -31,13 +41,51 @@ export interface KeywordCriteriaSettings {
   caseSensitive?: boolean;
 }
 
+export interface PatternCriteriaSettings {
+  /**
+   * Built-in pattern groups to enable: 'placeholder' | 'system_prompt_leak' | 'pii' | 'internal_ids'.
+   * Typed as string[] so an unknown preset degrades to a reported warning instead of a hard failure.
+   */
+  presets?: string | string[];
+  /** Additional custom regex sources, e.g. ['ACME-\\d{4}'] */
+  patterns?: string | string[];
+  /** Default 'must_not_match' — any match fails the criterion. */
+  matchType?: 'must_not_match' | 'must_match';
+  /** Whose turns to scan. Default 'agent' — the persona is allowed to say anything. */
+  speaker?: 'agent' | 'customer' | 'any';
+  caseSensitive?: boolean;
+  /** Max evidence snippets to return. Default 5. */
+  maxEvidence?: number;
+}
+
 export interface ResponseTimeCriteriaSettings {
   participant: 'agent' | 'customer' | 'both';
 }
 
+export interface ToolArgExpectation {
+  op: 'equals' | 'contains' | 'regex';
+  value: unknown;
+}
+
 export interface ToolCallCriteriaSettings {
   expectedTool: string | string[];
+  /** 'called' (default) passes when an expected tool was called; 'never_called' passes when none was. */
+  mode?: 'called' | 'never_called';
+  /** Per-argument expectations; a call only counts as a match when every listed argument matches. */
+  expectedArgs?: Record<string, ToolArgExpectation>;
+  /**
+   * Scope the check to runs where this tool was called with these arguments; other runs are N/A.
+   * Lets one scorecard say "flag_for_review called" for large invoices without failing small ones.
+   */
+  appliesWhen?: { tool: string; args?: Record<string, ToolArgExpectation> };
   executionCondition?: string;
+}
+
+export interface ToolOrderCriteriaSettings {
+  first: string;
+  then: string;
+  /** Also fail when the `first` call's result looks like an error, mismatch or not-found. Default true. */
+  requireFirstSuccess?: boolean;
 }
 
 export interface HallucinationCriteriaSettings {
@@ -69,8 +117,10 @@ export interface RagFaithfulnessCriteriaSettings {
 export type CriteriaSettings =
   | PromptCriteriaSettings
   | KeywordCriteriaSettings
+  | PatternCriteriaSettings
   | ResponseTimeCriteriaSettings
   | ToolCallCriteriaSettings
+  | ToolOrderCriteriaSettings
   | HallucinationCriteriaSettings
   | KnowledgeRetentionCriteriaSettings
   | ConversationCompletenessCriteriaSettings
@@ -142,7 +192,9 @@ export function getEvaluationType(
   }
   if (
     criteria.type === CriteriaType.KEYWORD ||
-    criteria.type === CriteriaType.TOOL_CALL
+    criteria.type === CriteriaType.TOOL_CALL ||
+    criteria.type === CriteriaType.TOOL_ORDER ||
+    criteria.type === CriteriaType.PATTERN
   ) {
     return 'boolean';
   }

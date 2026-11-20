@@ -30,14 +30,41 @@ export default function RunsListPage() {
     queryFn: () => client.executions.list({ limit: 100 }),
   });
 
+  // Resolve scenario names so the table shows "Auto Collision — File a Claim"
+  // instead of an opaque "Scenario a843cf".
+  const scenariosQ = useQuery({
+    queryKey: ['scenarios', 'names'],
+    queryFn: () => client.scenarios.list({ limit: 200 }),
+    staleTime: 60_000,
+  });
+
+  const scenarioNameById = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of scenariosQ.data?.scenarios ?? []) {
+      if (s.id && s.name) map.set(s.id, s.name);
+    }
+    return map;
+  }, [scenariosQ.data]);
+
+  const personasQ = useQuery({ queryKey: ['personas'], queryFn: () => client.personas.list({ limit: 100 }), staleTime: 60_000 });
+  const promptsQ = useQuery({ queryKey: ['prompts'], queryFn: () => client.prompts.list({ limit: 100 }), staleTime: 60_000 });
+  const nameOf = React.useCallback(
+    (list: Array<{ id: string; name: string }> | undefined, id: string | undefined) =>
+      (id && list?.find((x) => x.id === id)?.name) || '--',
+    [],
+  );
+
   const rows: ExecutionRow[] = React.useMemo(() => {
     const executions = q.data?.executions ?? [];
     const mapped = executions.map((e: Execution) => ({
       id: e.id,
       scenarioName: e.scenarioId
-        ? `Scenario ${e.scenarioId.slice(-6)}`
+        ? scenarioNameById.get(e.scenarioId) ?? `Scenario ${e.scenarioId.slice(-6)}`
         : 'Unnamed run',
-      score: e.overallScore,
+      personaName: nameOf(personasQ.data?.personas, e.personaId),
+      agentName: nameOf(promptsQ.data?.prompts, e.promptId),
+      passed: (e as Execution & { passed?: boolean | null }).passed ?? null,
+      score: (e as Execution & { scorePercent?: number | null }).scorePercent ?? null,
       status: e.status,
       duration: e.duration,
       createdAt: e.createdAt,
@@ -47,7 +74,7 @@ export default function RunsListPage() {
       return mapped.filter((r) => r.status === statusFilter);
     }
     return mapped;
-  }, [q.data, statusFilter]);
+  }, [q.data, scenarioNameById, statusFilter, personasQ.data, promptsQ.data, nameOf]);
 
   function handleRowClick(row: ExecutionRow) {
     router.push(`/executions/${encodeURIComponent(row.id)}`);

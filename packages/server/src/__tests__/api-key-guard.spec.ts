@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigModule } from '@nestjs/config';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ApiKeyGuard } from '../auth/api-key.guard';
@@ -32,6 +33,10 @@ describe('ApiKeyGuard', () => {
   beforeEach(async () => {
     process.env.CHANL_EVAL_REQUIRE_API_KEY = 'true';
     const module: TestingModule = await Test.createTestingModule({
+      imports: [
+        // Reads live process.env, which this suite mutates per test.
+        ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+      ],
       providers: [
         ApiKeyGuard,
         Reflector,

@@ -3,7 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Info, Play, Trash2 } from 'lucide-react';
+import { Info, Play, Repeat, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,9 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { DeleteDialog } from '@/components/shared/delete-dialog';
 import { PageLayout } from '@/components/shared/page-layout';
+import { RunSetDialog } from '@/components/run-sets/run-set-dialog';
 import { useEvalConfig } from '@/lib/eval-config';
+import { playgroundHref } from '@/lib/playground-link';
 import { toast } from 'sonner';
 import type { Persona, Scorecard } from '@chanl/eval-sdk';
 
@@ -28,7 +30,7 @@ export default function ScenarioDetailPage() {
   const id = typeof params.id === 'string' ? params.id : '';
   const router = useRouter();
   const qc = useQueryClient();
-  const { client } = useEvalConfig();
+  const { client, room } = useEvalConfig();
 
   const q = useQuery({
     queryKey: ['scenario', id],
@@ -89,6 +91,7 @@ export default function ScenarioDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const [runSetOpen, setRunSetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -123,9 +126,13 @@ export default function ScenarioDetailPage() {
             >
               {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => router.push(`/playground?scenario=${id}`)}>
+            <Button size="sm" variant="outline" onClick={() => router.push(playgroundHref({ scenarioId: id, personaId: personaId || undefined, scorecardId: scorecardId || undefined }))} data-testid="run-scenario">
               <Play className="mr-2 h-3.5 w-3.5" />
               Run
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setRunSetOpen(true)} data-testid="run-x5">
+              <Repeat className="mr-2 h-3.5 w-3.5" />
+              Run ×5
             </Button>
             <Button size="sm" variant="outline" onClick={() => setDeleteOpen(true)} data-testid="delete-scenario-button">
               <Trash2 className="mr-2 h-3.5 w-3.5" />
@@ -180,8 +187,8 @@ export default function ScenarioDetailPage() {
                   data-testid="scenario-prompt"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  The customer&apos;s situation — written in first person. This becomes the persona&apos;s motivation
-                  during the simulated conversation.
+                  The customer&apos;s situation — written in the third person (e.g. &quot;Customer was rear-ended and
+                  wants to file a claim&quot;). This becomes the persona&apos;s motivation during the simulated conversation.
                 </p>
               </div>
 
@@ -284,7 +291,7 @@ export default function ScenarioDetailPage() {
           </Card>
 
           {/* How Simulation Works */}
-          <Card>
+          {!room.cloud && <Card>
             <CardHeader>
               <CardTitle className="text-base font-medium flex items-center gap-2">
                 <Info className="h-4 w-4 text-muted-foreground" />
@@ -305,14 +312,23 @@ export default function ScenarioDetailPage() {
                 The generated prompt includes sections for negotiation style, patience reactions,
                 conversation pacing, and closing behavior — all derived from the persona&apos;s trait settings.
               </p>
-              <p className="text-xs border-t pt-3 mt-3">
+              {!room.cloud && <p className="text-xs border-t pt-3 mt-3">
                 <strong className="text-foreground">Customize the prompt generation:</strong>{' '}
                 <code className="bg-muted px-1 rounded text-[11px]">packages/scenarios-core/src/simulator/persona-simulator.service.ts</code>
-              </p>
+              </p>}
             </CardContent>
-          </Card>
+          </Card>}
         </div>
       ) : null}
+
+      <RunSetDialog
+        open={runSetOpen}
+        onOpenChange={setRunSetOpen}
+        kind="reliability"
+        scenarioId={id}
+        personaId={personaId || undefined}
+        scorecardId={scorecardId || undefined}
+      />
 
       <DeleteDialog
         open={deleteOpen}

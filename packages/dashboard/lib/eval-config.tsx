@@ -14,11 +14,13 @@ import { EvalClient } from '@chanl/eval-sdk';
 const STORAGE_BASE = 'chanl-eval-base-url';
 const STORAGE_KEY = 'chanl-eval-api-key';
 const STORAGE_ADAPTER = 'chanl-eval-adapter-type';
-const STORAGE_AGENT_KEY = 'chanl-eval-agent-api-key';
 const STORAGE_AGENT_MODEL = 'chanl-eval-agent-model';
 const STORAGE_AGENT_BASE_URL = 'chanl-eval-agent-base-url';
-const STORAGE_SIM_KEY = 'chanl-eval-sim-api-key';
 const STORAGE_SIM_MODEL = 'chanl-eval-sim-model';
+
+// Credentials are stored server-side. These browser keys are purged on load so no secret is left
+// behind by older builds.
+const LEGACY_SECRET_KEYS = ['chanl-eval-agent-api-key', 'chanl-eval-sim-api-key'];
 
 function envServer(): string {
   return process.env.NEXT_PUBLIC_CHANL_EVAL_SERVER || 'http://localhost:18005/api/v1';
@@ -28,11 +30,28 @@ function envApiKey(): string {
   return process.env.NEXT_PUBLIC_CHANL_EVAL_API_KEY || '';
 }
 
-function envAgentApiKey(): string {
-  return process.env.NEXT_PUBLIC_CHANL_EVAL_AGENT_API_KEY || '';
+export type AdapterType = 'openai' | 'anthropic' | 'http';
+
+/**
+ * Same-origin route that forwards to the attendee's seat server and adds its key server-side.
+ * Absolute, because axios joins a root-relative request path onto a relative base URL.
+ */
+function cloudBaseUrl(): string {
+  return typeof window === 'undefined' ? '/api/eval' : `${window.location.origin}/api/eval`;
 }
 
-export type AdapterType = 'openai' | 'anthropic' | 'http';
+export interface RoomUser {
+  name: string;
+  email: string;
+  seat: string;
+}
+
+export interface RoomInfo {
+  /** True when the dashboard runs as the shared workshop room (CHANL_EVAL_MODE=cloud). */
+  cloud: boolean;
+  user: RoomUser | null;
+  facilitator: boolean;
+}
 
 interface EvalConfigContextValue {
   // Server
@@ -40,23 +59,22 @@ interface EvalConfigContextValue {
   setBaseUrl: (v: string) => void;
   apiKey: string;
   setApiKey: (v: string) => void;
-  // Agent Under Test
+  // Agent Under Test.
+  // No API key here by design — provider credentials live on the server (PUT /settings) because the
+  // engine, not the browser, makes the LLM calls.
   adapterType: AdapterType;
   setAdapterType: (v: AdapterType) => void;
-  agentApiKey: string;
-  setAgentApiKey: (v: string) => void;
   agentModel: string;
   setAgentModel: (v: string) => void;
   agentBaseUrl: string;
   setAgentBaseUrl: (v: string) => void;
   // Simulation LLM (persona + judge)
-  simApiKey: string;
-  setSimApiKey: (v: string) => void;
   simModel: string;
   setSimModel: (v: string) => void;
   // SDK client
   client: EvalClient;
   hydrated: boolean;
+  room: RoomInfo;
 }
 
 const EvalConfigContext = createContext<EvalConfigContextValue | null>(null);
@@ -71,59 +89,66 @@ function makeSetter(
   };
 }
 
-export function EvalConfigProvider({ children }: { children: React.ReactNode }) {
-  // Server
-  const [baseUrl, setBaseUrlState] = useState(() => envServer());
-  const [apiKey, setApiKeyState] = useState(() => envApiKey());
+const LOCAL_ROOM: RoomInfo = { cloud: false, user: null, facilitator: false };
+
+export function EvalConfigProvider({
+  children,
+  room = LOCAL_ROOM,
+}: {
+  children: React.ReactNode;
+  room?: RoomInfo;
+}) {
+  const cloud = room.cloud;
+  // Server. In cloud mode the browser only ever talks to the same-origin proxy and holds no key.
+  const [baseUrl, setBaseUrlState] = useState(() => (cloud ? cloudBaseUrl() : envServer()));
+  const [apiKey, setApiKeyState] = useState(() => (cloud ? '' : envApiKey()));
   // Agent Under Test
   const [adapterType, setAdapterTypeState] = useState<AdapterType>('openai');
-  const [agentApiKey, setAgentApiKeyState] = useState(() => envAgentApiKey());
   const [agentModel, setAgentModelState] = useState('gpt-4o-mini');
   const [agentBaseUrl, setAgentBaseUrlState] = useState('');
   // Simulation LLM
-  const [simApiKey, setSimApiKeyState] = useState('');
   const [simModel, setSimModelState] = useState('gpt-4o-mini');
   const [hydrated, setHydrated] = useState(false);
 
   // Hydrate from localStorage
   useEffect(() => {
     try {
-      const b = localStorage.getItem(STORAGE_BASE);
-      const k = localStorage.getItem(STORAGE_KEY);
       const a = localStorage.getItem(STORAGE_ADAPTER) as AdapterType | null;
-      const ak = localStorage.getItem(STORAGE_AGENT_KEY);
-      if (b !== null && b !== '') setBaseUrlState(b);
-      if (k !== null && k !== '') setApiKeyState(k);
-      else if (k === '' && envApiKey()) setApiKeyState(envApiKey());
+      if (!cloud) {
+        const b = localStorage.getItem(STORAGE_BASE);
+        const k = localStorage.getItem(STORAGE_KEY);
+        if (b !== null && b !== '') setBaseUrlState(b);
+        if (k !== null && k !== '') setApiKeyState(k);
+        else if (k === '' && envApiKey()) setApiKeyState(envApiKey());
+      }
       if (a === 'openai' || a === 'anthropic' || a === 'http') setAdapterTypeState(a);
-      if (ak !== null && ak !== '') setAgentApiKeyState(ak);
-      else if (ak === '' && envAgentApiKey()) setAgentApiKeyState(envAgentApiKey());
       const am = localStorage.getItem(STORAGE_AGENT_MODEL);
       if (am !== null && am !== '') setAgentModelState(am);
       const abu = localStorage.getItem(STORAGE_AGENT_BASE_URL);
       if (abu !== null) setAgentBaseUrlState(abu);
       // Simulation
-      const sk = localStorage.getItem(STORAGE_SIM_KEY);
-      if (sk !== null && sk !== '') setSimApiKeyState(sk);
       const sm = localStorage.getItem(STORAGE_SIM_MODEL);
       if (sm !== null && sm !== '') setSimModelState(sm);
+      // Drop credentials left behind by older builds.
+      for (const legacy of LEGACY_SECRET_KEYS) localStorage.removeItem(legacy);
     } catch {
       /* ignore */
     }
     setHydrated(true);
-  }, []);
+  }, [cloud]);
 
   // Stable setters
-  const setBaseUrl = useCallback(makeSetter(setBaseUrlState, STORAGE_BASE), []);
-  const setApiKey = useCallback(makeSetter(setApiKeyState, STORAGE_KEY), []);
+  const noop = useCallback(() => {}, []);
+  const setBaseUrlLocal = useCallback(makeSetter(setBaseUrlState, STORAGE_BASE), []);
+  const setApiKeyLocal = useCallback(makeSetter(setApiKeyState, STORAGE_KEY), []);
+  const setBaseUrl = cloud ? noop : setBaseUrlLocal;
+  const setApiKey = cloud ? noop : setApiKeyLocal;
   const setAdapterType = useCallback((v: AdapterType) => {
     setAdapterTypeState(v);
     try { localStorage.setItem(STORAGE_ADAPTER, v); } catch { /* ignore */ }
   }, []);
-  const setAgentApiKey = useCallback(makeSetter(setAgentApiKeyState, STORAGE_AGENT_KEY), []);
   const setAgentModel = useCallback(makeSetter(setAgentModelState, STORAGE_AGENT_MODEL), []);
   const setAgentBaseUrl = useCallback(makeSetter(setAgentBaseUrlState, STORAGE_AGENT_BASE_URL), []);
-  const setSimApiKey = useCallback(makeSetter(setSimApiKeyState, STORAGE_SIM_KEY), []);
   const setSimModel = useCallback(makeSetter(setSimModelState, STORAGE_SIM_MODEL), []);
 
   const client = useMemo(
@@ -136,20 +161,18 @@ export function EvalConfigProvider({ children }: { children: React.ReactNode }) 
       baseUrl, setBaseUrl,
       apiKey, setApiKey,
       adapterType, setAdapterType,
-      agentApiKey, setAgentApiKey,
       agentModel, setAgentModel,
       agentBaseUrl, setAgentBaseUrl,
-      simApiKey, setSimApiKey,
       simModel, setSimModel,
-      client, hydrated,
+      client, hydrated, room,
     }),
     [
       baseUrl, setBaseUrl, apiKey, setApiKey,
       adapterType, setAdapterType,
-      agentApiKey, setAgentApiKey, agentModel, setAgentModel,
+      agentModel, setAgentModel,
       agentBaseUrl, setAgentBaseUrl,
-      simApiKey, setSimApiKey, simModel, setSimModel,
-      client, hydrated,
+      simModel, setSimModel,
+      client, hydrated, room,
     ],
   );
 

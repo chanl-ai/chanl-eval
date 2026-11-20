@@ -15,14 +15,19 @@ import {
   ScorecardResult,
   ScorecardResultSchema,
 } from './schemas/scorecard-result.schema';
+import { HumanLabel, HumanLabelSchema } from './schemas/human-label.schema';
+import { LabelsService } from './labels/labels.service';
+import { LabelsController } from './labels/labels.controller';
 import { CriteriaHandlerRegistry } from './handlers/criteria-handler-registry';
 import {
   HallucinationHandler,
   KeywordHandler,
+  PatternHandler,
   PromptHandler,
   RagFaithfulnessHandler,
   ResponseTimeHandler,
   ToolCallHandler,
+  ToolOrderHandler,
   KnowledgeRetentionHandler,
   ConversationCompletenessHandler,
   RoleAdherenceHandler,
@@ -33,10 +38,12 @@ function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
   const registry = new CriteriaHandlerRegistry();
   registry.register(new HallucinationHandler());
   registry.register(new KeywordHandler());
+  registry.register(new PatternHandler());
   registry.register(new PromptHandler());
   registry.register(new ResponseTimeHandler());
   registry.register(new RagFaithfulnessHandler());
   registry.register(new ToolCallHandler());
+  registry.register(new ToolOrderHandler());
   registry.register(new KnowledgeRetentionHandler());
   registry.register(new ConversationCompletenessHandler());
   registry.register(new RoleAdherenceHandler());
@@ -50,9 +57,10 @@ function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
       { name: ScorecardCategory.name, schema: ScorecardCategorySchema },
       { name: ScorecardCriteria.name, schema: ScorecardCriteriaSchema },
       { name: ScorecardResult.name, schema: ScorecardResultSchema },
+      { name: HumanLabel.name, schema: HumanLabelSchema },
     ]),
   ],
-  controllers: [ScorecardsController],
+  controllers: [ScorecardsController, LabelsController],
   providers: [
     ScorecardsService,
     {
@@ -60,7 +68,13 @@ function createCriteriaHandlerRegistry(): CriteriaHandlerRegistry {
       useFactory: createCriteriaHandlerRegistry,
     },
     EvaluationService,
+    LabelsService,
   ],
-  exports: [ScorecardsService, EvaluationService, CriteriaHandlerRegistry],
+  exports: [
+    ScorecardsService,
+    EvaluationService,
+    CriteriaHandlerRegistry,
+    LabelsService,
+  ],
 })
 export class ScorecardsModule {}

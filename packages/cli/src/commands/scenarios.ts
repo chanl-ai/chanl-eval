@@ -10,6 +10,20 @@ import { printOutput, printSuccess, printError, truncate } from '../output';
 /**
  * Shared run action — used by both `chanl scenarios run` and `chanl run`.
  */
+/**
+ * Score for display. `result` may be a number, a boolean, or the strings "pass"/"fail"; only a
+ * numeric verdict is a score. Reading it with a bare typeof check dropped the score on every row
+ * written as a string.
+ */
+function numericScore(result: unknown): number | undefined {
+  if (typeof result === 'number' && Number.isFinite(result)) return result;
+  if (typeof result === 'string') {
+    const n = Number(result.trim());
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
 export async function runScenarioAction(
   idOrNameOrFile: string | undefined,
   options: {
@@ -794,7 +808,7 @@ function extractCriteriaResults(
       name: cr.criteriaName || cr.criteriaKey || '',
       key: cr.criteriaKey || '',
       type: cr.type,
-      score: typeof cr.result === 'number' ? cr.result : undefined,
+      score: numericScore(cr.result),
       passed: !!cr.passed,
       reasoning: cr.reasoning,
     }));
@@ -807,7 +821,7 @@ function extractCriteriaResults(
         name: cr.criteriaName || cr.criteriaKey || '',
         key: cr.criteriaKey || '',
         type: cr.type,
-        score: typeof cr.result === 'number' ? cr.result : undefined,
+        score: numericScore(cr.result),
         passed: !!cr.passed,
         reasoning: cr.reasoning,
       }),

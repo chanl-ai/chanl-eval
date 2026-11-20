@@ -36,6 +36,43 @@ interface ScenarioJSON extends Omit<Scenario, 'personaIds' | 'scorecardId' | 'pa
   parentScenarioId?: Types.ObjectId | string;
 }
 
+/** The starter scenarios every install begins with. Keyed by `name` when seeded. */
+const DEFAULT_SCENARIOS = [
+  {
+    name: 'Angry Customer Refund',
+    description:
+      'A frustrated customer demands a full refund for a broken laptop purchased 2 weeks ago. Tests empathy, de-escalation, and resolution skills.',
+    prompt:
+      "I bought a laptop 2 weeks ago and it's already broken. I want a full refund NOW.",
+    category: 'support',
+    difficulty: 'medium' as DifficultyLevel,
+    personaKey: 'Angry - Karen',
+    tags: ['_default', 'refund', 'complaint', 'empathy'],
+  },
+  {
+    name: 'Confused Billing Inquiry',
+    description:
+      'A worried customer calls about unfamiliar charges on their bill. Tests clarity, patience, and ability to explain complex information.',
+    prompt:
+      "I don't understand my bill. There are charges I've never seen before and I'm worried.",
+    category: 'support',
+    difficulty: 'easy' as DifficultyLevel,
+    personaKey: 'Stressed - Mei',
+    tags: ['_default', 'billing', 'clarity', 'patience'],
+  },
+  {
+    name: 'Product Interest Call',
+    description:
+      'A curious prospect asks about the premium plan. Tests discovery, engagement, and sales skills.',
+    prompt:
+      "Hi, I've been looking at your premium plan. Can you tell me more about it?",
+    category: 'sales',
+    difficulty: 'easy' as DifficultyLevel,
+    personaKey: 'Curious - Maria',
+    tags: ['_default', 'sales', 'discovery', 'engagement'],
+  },
+];
+
 @Injectable()
 export class ScenarioService {
   private readonly logger = new Logger(ScenarioService.name);
@@ -626,72 +663,26 @@ export class ScenarioService {
   }
 
   /**
-   * Create default starter scenarios. Idempotent — skips if defaults already exist.
-   * Creates scenarios as drafts (no agents configured yet).
+   * Seed the default starter scenarios.
+   *
+   * Idempotent by upsert on `name` rather than an existence check, so replicas booting
+   * concurrently converge instead of each inserting a full set (the unique index on `name` is
+   * what actually enforces that).
    */
   async createDefaultScenarios(
     personaMap: Record<string, string>,
     scorecardId?: string,
   ): Promise<Scenario[]> {
     try {
-      // Check if defaults already exist
-      const existing = await this.scenarioModel
-        .find({ tags: '_default' })
-        .exec();
-      if (existing.length > 0) {
-        // Ensure defaults are active (fix for early versions that created them as draft)
-        await this.scenarioModel.updateMany(
-          { tags: '_default', status: 'draft' },
-          { $set: { status: 'active' } },
-        );
-        const updated = await this.scenarioModel
-          .find({ tags: '_default' })
-          .exec();
-        this.logger.log(
-          `Default scenarios already exist (${updated.length} found)`,
-        );
-        return updated.map((doc) => toScenario(doc));
-      }
-
-      const defaults = [
-        {
-          name: 'Angry Customer Refund',
-          description:
-            'A frustrated customer demands a full refund for a broken laptop purchased 2 weeks ago. Tests empathy, de-escalation, and resolution skills.',
-          prompt:
-            "I bought a laptop 2 weeks ago and it's already broken. I want a full refund NOW.",
-          category: 'support',
-          difficulty: 'medium' as DifficultyLevel,
-          personaKey: 'Angry - Karen',
-          tags: ['_default', 'refund', 'complaint', 'empathy'],
-        },
-        {
-          name: 'Confused Billing Inquiry',
-          description:
-            'A worried customer calls about unfamiliar charges on their bill. Tests clarity, patience, and ability to explain complex information.',
-          prompt:
-            "I don't understand my bill. There are charges I've never seen before and I'm worried.",
-          category: 'support',
-          difficulty: 'easy' as DifficultyLevel,
-          personaKey: 'Stressed - Mei',
-          tags: ['_default', 'billing', 'clarity', 'patience'],
-        },
-        {
-          name: 'Product Interest Call',
-          description:
-            'A curious prospect asks about the premium plan. Tests discovery, engagement, and sales skills.',
-          prompt:
-            "Hi, I've been looking at your premium plan. Can you tell me more about it?",
-          category: 'sales',
-          difficulty: 'easy' as DifficultyLevel,
-          personaKey: 'Curious - Maria',
-          tags: ['_default', 'sales', 'discovery', 'engagement'],
-        },
-      ];
+      // A default left in `draft` is not executable; some installs carry them that way.
+      await this.scenarioModel.updateMany(
+        { tags: '_default', status: 'draft' },
+        { $set: { status: 'active' } },
+      );
 
       const scenarios: Scenario[] = [];
 
-      for (const def of defaults) {
+      for (const def of DEFAULT_SCENARIOS) {
         const personaId = personaMap[def.personaKey];
         const personaIds = personaId
           ? [new Types.ObjectId(personaId)]
@@ -707,20 +698,17 @@ export class ScenarioService {
           status: 'active',
           personaIds,
           createdBy: 'system',
-          createdAt: new Date(),
-          updatedAt: new Date(),
         };
 
         if (scorecardId) {
           scenarioData.scorecardId = new Types.ObjectId(scorecardId);
         }
 
-        const scenario = new this.scenarioModel(scenarioData);
-        const saved = await scenario.save();
-        scenarios.push(toScenario(saved));
+        const saved = await this.upsertDefaultScenario(scenarioData);
+        if (saved) scenarios.push(toScenario(saved));
       }
 
-      this.logger.log(`Created ${scenarios.length} default scenarios`);
+      this.logger.log(`Default scenarios ensured: ${scenarios.length}`);
       return scenarios;
     } catch (error: unknown) {
       const err = error as Error;
@@ -729,6 +717,41 @@ export class ScenarioService {
         err.stack,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Upsert one default scenario by name.
+   *
+   * A concurrent seeder can win the insert between this call's read and write, which the unique
+   * index turns into a duplicate-key error. The document exists either way, so read it back.
+   */
+  private async upsertDefaultScenario(
+    scenarioData: Record<string, unknown>,
+  ): Promise<ScenarioDocument | null> {
+    // createdBy matches the scope of the unique index, so the index covers this upsert.
+    const filter = { name: scenarioData.name as string, createdBy: 'system' };
+    const now = new Date();
+
+    try {
+      return await this.scenarioModel.findOneAndUpdate(
+        filter,
+        // $setOnInsert only: re-seeding must not clobber a scenario the user has since edited.
+        { $setOnInsert: { ...scenarioData, createdAt: now, updatedAt: now } },
+        {
+          new: true,
+          upsert: true,
+          setDefaultsOnInsert: true,
+          // Timestamps are set explicitly above so re-seeding does not bump updatedAt on a
+          // document it did not change.
+          timestamps: false,
+        },
+      );
+    } catch (error: unknown) {
+      if ((error as { code?: number })?.code !== 11000) throw error;
+      const winner = await this.scenarioModel.findOne(filter);
+      if (!winner) throw error;
+      return winner;
     }
   }
 

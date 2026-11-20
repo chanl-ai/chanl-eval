@@ -27,6 +27,7 @@ export class PromptsController {
       content: string;
       status?: string;
       tags?: string[];
+      toolFixtureIds?: string[];
       adapterConfig?: {
         adapterType?: string;
         model?: string;
@@ -69,6 +70,7 @@ export class PromptsController {
       content?: string;
       status?: string;
       tags?: string[];
+      toolFixtureIds?: string[];
       adapterConfig?: {
         adapterType?: string;
         model?: string;

@@ -178,3 +178,47 @@ db-shell: ## Open MongoDB shell
 db-reset: ## Drop database and re-seed
 	mongosh mongodb://localhost:27217/chanl-eval --eval "db.dropDatabase()" && \
 	$(MAKE) seed
+
+# ─── Workshop room (Fly org chanl-dev) ───────────────────────────────────────
+# Credentials: ~/.chanl-eval-room.env (outside the repo). Seats are private; these targets reach
+# them through `fly proxy`. Spec: one seat machine per attendee, each with its own Mongo db.
+
+.PHONY: room-up room-seed room-status room-reset-seat room-reset-all room-reset-password room-deploy-dashboard room-loadtest room-clear-runs
+
+ROOM_SEATS ?= 40
+
+room-up: ## Build the seat image from HEAD and create/update seat-01..seat-$(ROOM_SEATS)
+	cd $(CURDIR)/deploy/room && ./room.sh secrets && ./room.sh build && ./room.sh up $(ROOM_SEATS)
+
+room-seed: ## Seed every seat with the starter kit and write the seat directory (db room)
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts seed --seats 1-$(ROOM_SEATS)
+
+room-status: ## Health of every seat
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts status --seats 1-$(ROOM_SEATS)
+
+room-reset-seat: ## Wipe and reseed one seat, delete its account and free it: make room-reset-seat SEAT=07
+ifndef SEAT
+	$(error SEAT is required, e.g. SEAT=07)
+endif
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts reset $(SEAT)
+
+room-reset-all: ## Before the workshop: wipe and reseed every seat, delete every account, free every seat
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts reset-all --seats 1-$(ROOM_SEATS)
+
+room-reset-password: ## Set an attendee's password: make room-reset-password EMAIL=a@b.co PASSWORD=newpass123
+ifndef EMAIL
+	$(error EMAIL is required)
+endif
+ifndef PASSWORD
+	$(error PASSWORD is required)
+endif
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts reset-password '$(EMAIL)' '$(PASSWORD)'
+
+room-deploy-dashboard: ## Deploy packages/dashboard as chanl-eval-lab (cloud mode)
+	cd $(CURDIR)/deploy/room && ./room.sh deploy-dashboard
+
+room-loadtest: ## Queue K runs of the Acme scenario on every seat at once: make room-loadtest K=5
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts loadtest --seats 1-$(ROOM_SEATS) --k $(or $(K),5)
+
+room-clear-runs: ## Delete rehearsal runs on every seat; RELEASE=1 also deletes accounts and frees seats
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts clear-runs --seats 1-$(ROOM_SEATS) $(if $(RELEASE),--release)
