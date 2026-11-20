@@ -152,7 +152,7 @@ function StatCards({ execution, personaName, agentName, passed, checksPassed, ch
           : <CheckCircle className={`h-4 w-4 shrink-0 ${passed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />}
         label="Scorecard"
         testId="run-verdict"
-        value={passed === undefined ? 'Not scored' : `${passed ? 'Passed' : 'Failed'} · ${checksPassed} of ${checksTotal} checks`}
+        value={passed === undefined ? 'Not scored' : `${passed ? 'Passed' : 'Failed'} · ${checksPassed} of ${checksTotal} checks passed`}
       />
       <Stat icon={<User className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Persona" value={personaName ?? '--'} testId="run-persona" />
       <Stat icon={<Bot className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Agent" value={agentName ?? '--'} testId="run-agent" />
@@ -321,6 +321,9 @@ export default function RunDetailPage() {
     .flatMap((m) => m.criteria ?? [])
     .filter((c) => !c.passed && !c.notApplicable)
     .map((c) => ({ name: c.name, criteriaId: c.criteriaId, reason: c.explanation, evidence: c.evidence, needsReview: c.needsReview }));
+  // One verdict for the header and the scorecard widget: the stored result's own `passed`.
+  const verdictPassed: boolean | undefined = hasEvaluation ? (scorePassed ?? failedChecks.length === 0) : undefined;
+
   const failedEvidence = failedChecks.flatMap((c) => c.evidence ?? []);
   const isFailedRun = !isActive && (execution?.status === 'failed' || failedChecks.length > 0);
 
@@ -356,8 +359,8 @@ export default function RunDetailPage() {
   return (
     <PageLayout
       backHref="/executions"
-      title={scenarioName ?? (execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail')}
-      description={execution ? `Run ${execution.id.slice(-8)} · ${formatDate(execution.createdAt)}` : 'Loading...'}
+      title={scenarioName ?? (execution ? `Run ${id.slice(-8)}` : 'Run Detail')}
+      description={execution ? `Run ${id.slice(-8)} · ${formatDate(execution.createdAt)}` : 'Loading...'}
       titleExtra={
         execution && !room.cloud ? (
           <div className="flex items-center gap-2">
@@ -375,7 +378,7 @@ export default function RunDetailPage() {
       }
       actions={
         execution ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {!room.cloud && <ShareResults
               metrics={metrics}
               overallScore={displayScore}
@@ -418,7 +421,7 @@ export default function RunDetailPage() {
             execution={execution}
             personaName={personaQ.data?.name}
             agentName={agentQ.data?.name}
-            passed={hasEvaluation ? (scorePassed ?? failedChecks.length === 0) : undefined}
+            passed={verdictPassed}
             checksPassed={applicableChecks.filter((c) => c.passed).length}
             checksTotal={applicableChecks.length}
           />
@@ -485,7 +488,8 @@ export default function RunDetailPage() {
                   <ScorecardWidget
                     metrics={metrics}
                     overallScorePercentage={displayScore}
-                    summary={scorecardSummary}
+                    overallStatus={verdictPassed === undefined ? undefined : verdictPassed ? 'pass' : 'fail'}
+                    summary={room.cloud ? undefined : scorecardSummary}
                     review={
                       scorecardResult?.id
                         ? {

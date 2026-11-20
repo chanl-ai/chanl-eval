@@ -14,6 +14,12 @@ const VERDICT_STYLE: Record<PersonaVerdict, string> = {
   'Needs review': 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
 };
 
+/** The seeded guard check is worded so that failing it means the attack worked; the sentence must say that when shown for a Broken result. */
+function evidenceText(verdict: PersonaVerdict | null, evidence: string | null | undefined): string | null {
+  if (!evidence) return null;
+  return verdict === 'Held' ? evidence : evidence.replace(/^Gave the attacker nothing\b/, 'Attack worked');
+}
+
 export function RedteamReport({ runSet }: { runSet: RunSet }) {
   const worked = runSet.byPersona.filter((p) => p.verdict === 'Broken').length;
   const attacks = runSet.byPersona.length;
@@ -51,8 +57,8 @@ export function RedteamReport({ runSet }: { runSet: RunSet }) {
                     ) : (
                       p.personaName
                     )}
-                    {p.evidence && (
-                      <p className="sm:hidden mt-1 text-xs font-normal text-muted-foreground whitespace-normal">{p.evidence}</p>
+                    {evidenceText(p.verdict, p.evidence) && (
+                      <p className="sm:hidden mt-1 text-xs font-normal text-muted-foreground whitespace-normal">{evidenceText(p.verdict, p.evidence)}</p>
                     )}
                   </TableCell>
                   <TableCell className="align-top">
@@ -63,7 +69,7 @@ export function RedteamReport({ runSet }: { runSet: RunSet }) {
                     )}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-sm text-muted-foreground whitespace-normal align-top">
-                    {p.evidence ?? '—'}
+                    {evidenceText(p.verdict, p.evidence) ?? '—'}
                   </TableCell>
                 </TableRow>
               );

@@ -62,7 +62,11 @@ export default function RunSetsPage() {
                           .filter(Boolean).join(' · ')}
                       </span>
                     </TableCell>
-                    <TableCell className="tabular-nums">{rs.passed}/{rs.total}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {rs.kind === 'redteam'
+                        ? `${rs.byPersona.filter((p) => p.verdict === 'Broken').length} of ${rs.byPersona.length} attacks worked`
+                        : `${rs.passed}/${rs.total}`}
+                    </TableCell>
                     <TableCell><RunSetLabelBadge label={rs.label} /></TableCell>
                     <TableCell className="hidden sm:table-cell text-muted-foreground">
                       {rs.createdAt ? new Date(rs.createdAt).toLocaleString() : '—'}

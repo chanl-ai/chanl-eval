@@ -412,7 +412,11 @@ function Playground() {
     if (initialized || !dataReady) return;
     setInitialized(true);
     const linkedAgent = savedPrompts.find((p) => p.id === linked.agent);
-    const scenarioId = linked.scenario || scenarioForAgent(linkedAgent, scenarios);
+    // Opened with no link (sidebar): start on the workshop's first exercise, not whichever record sorts first.
+    const bare = !linked.scenario && !linked.agent;
+    const defaultAgent = bare ? savedPrompts.find((p) => p.name === 'Acme Refund Agent') : undefined;
+    const defaultScenario = bare ? scenarios.find((s: Scenario) => s.name === 'Late Refund Request') : undefined;
+    const scenarioId = linked.scenario || defaultScenario?.id || scenarioForAgent(linkedAgent, scenarios);
     const scenario = scenarios.find((s: Scenario) => s.id === scenarioId) ?? scenarios[0];
     if (scenario) setSelectedScenarioId(scenario.id);
     const personaId = linked.persona || scenario?.personaIds?.[0] || personas[0]?.id;
@@ -421,6 +425,7 @@ function Playground() {
     const last = readLastAgent();
     const has = (id: string | null | undefined) => !!id && savedPrompts.some((p) => p.id === id);
     const agentId = has(linked.agent) ? linked.agent
+      : defaultAgent ? defaultAgent.id
       : linked.scenario ? agentForScenario(scenario, savedPrompts, last) ?? savedPrompts[0]?.id
       : has(restoredPromptId) ? restoredPromptId!
       : has(last) ? last! : savedPrompts[0]?.id;
@@ -429,13 +434,16 @@ function Playground() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialized, dataReady]);
 
-  // Every mock tool starts ticked; the lesson is watching which ones the agent chooses to call.
+  // The agent's own tools start ticked (every mock tool when it names none); the lesson is watching
+  // which ones the agent chooses to call.
   const [toolsInitialized, setToolsInitialized] = useState(false);
   useEffect(() => {
-    if (toolsInitialized || !toolFixturesQuery.isSuccess) return;
+    if (toolsInitialized || !toolFixturesQuery.isSuccess || !initialized) return;
     setToolsInitialized(true);
-    setSelectedToolIds(toolFixtures.map((t: ToolFixture) => t.id));
-  }, [toolsInitialized, toolFixturesQuery.isSuccess, toolFixtures]);
+    const own = savedPrompts.find((p) => p.id === savedPromptId)?.toolFixtureIds ?? [];
+    const known = own.filter((id) => toolFixtures.some((t: ToolFixture) => t.id === id));
+    setSelectedToolIds(known.length > 0 ? known : toolFixtures.map((t: ToolFixture) => t.id));
+  }, [toolsInitialized, toolFixturesQuery.isSuccess, toolFixtures, initialized, savedPrompts, savedPromptId]);
 
   function handleSelectScenario(id: string) {
     setSelectedScenarioId(id);
