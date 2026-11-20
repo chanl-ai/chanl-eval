@@ -13,8 +13,8 @@ type Mode = 'signup' | 'login';
 
 const FIELDS: Record<Mode, Array<{ id: string; label: string; type: string; autoComplete: string }>> = {
   signup: [
-    { id: 'name', label: 'Name', type: 'text', autoComplete: 'name' },
-    { id: 'email', label: 'Email', type: 'email', autoComplete: 'email' },
+    { id: 'name', label: 'Full name', type: 'text', autoComplete: 'name' },
+    { id: 'email', label: 'Work email', type: 'email', autoComplete: 'email' },
     { id: 'password', label: 'Password (at least 8 characters)', type: 'password', autoComplete: 'new-password' },
     { id: 'roomCode', label: 'Room code', type: 'text', autoComplete: 'off' },
   ],
@@ -92,7 +92,7 @@ export function RoomAuthForm({ mode }: { mode: Mode }) {
           <CardFooter className="flex flex-col gap-3 pt-2">
             <Button type="submit" className="w-full" disabled={pending} data-testid="auth-submit">
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isSignup ? 'Create account' : 'Log in'}
+              {isSignup ? 'Create my workspace' : 'Log in'}
             </Button>
             <p className="text-sm text-muted-foreground">
               {isSignup ? 'Already joined? ' : 'New here? '}

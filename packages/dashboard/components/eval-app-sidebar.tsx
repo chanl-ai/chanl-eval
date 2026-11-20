@@ -49,7 +49,7 @@ const dataNav = [
   { title: 'Run sets', href: '/run-sets', icon: Repeat },
   { title: 'Scenarios', href: '/scenarios', icon: FileText },
   { title: 'Personas', href: '/personas', icon: UserCircle },
-  { title: 'Tool Fixtures', href: '/tool-fixtures', icon: Wrench },
+  { title: 'Mock tools', href: '/tool-fixtures', icon: Wrench },
   { title: 'Scorecards', href: '/scorecards', icon: ClipboardList },
   { title: 'Datasets', href: '/datasets', icon: Database },
 ];

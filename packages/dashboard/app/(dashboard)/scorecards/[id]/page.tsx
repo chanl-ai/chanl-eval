@@ -64,11 +64,11 @@ import type { ScorecardCategory, ScorecardCriteria } from '@chanl/eval-sdk';
 // ---------------------------------------------------------------------------
 
 const CRITERIA_TYPE_MAP: Record<string, { label: string; icon: typeof Type; description: string }> = {
-  keyword:       { label: 'Keyword',       icon: Type,               description: 'Check for specific words or phrases' },
-  prompt:        { label: 'LLM Judge',     icon: MessageSquareText,  description: 'LLM evaluates against a rubric' },
-  response_time: { label: 'Response Time', icon: Timer,              description: 'Check agent responds within time limit' },
-  tool_call:     { label: 'Tool Call',     icon: Wrench,             description: 'Verify agent called (or never called) a tool' },
-  tool_order:    { label: 'Tool Order',    icon: ListOrdered,        description: 'Verify one tool is called before another' },
+  keyword:       { label: 'Must say',       icon: Type,               description: 'Check for specific words or phrases' },
+  prompt:        { label: 'AI judge',     icon: MessageSquareText,  description: 'LLM evaluates against a rubric' },
+  response_time: { label: 'Response time', icon: Timer,              description: 'Check agent responds within time limit' },
+  tool_call:     { label: 'Tool called',     icon: Wrench,             description: 'Verify agent called (or never called) a tool' },
+  tool_order:    { label: 'Tool order',    icon: ListOrdered,        description: 'Verify one tool is called before another' },
 };
 
 const CRITERIA_TYPES = Object.entries(CRITERIA_TYPE_MAP).map(([value, meta]) => ({ value, ...meta }));
@@ -473,6 +473,30 @@ export default function ScorecardDetailPage() {
     finally { setIsDeletingCategory(false); }
   }
 
+  // A criterion needs a category. A scorecard without one gets a default category on first add,
+  // so "Add criterion" never dead-ends.
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  async function openNewCriterion() {
+    let categoryId = selectedCategoryId ?? categoriesQ.data?.[0]?.id ?? '';
+    if (!categoryId) {
+      setCreatingCategory(true);
+      try {
+        const cat = await client.scorecards.createCategory(id, { name: 'General', weight: 100 });
+        categoryId = cat.id;
+        setSelectedCategoryId(cat.id);
+        refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not create a category');
+        return;
+      } finally {
+        setCreatingCategory(false);
+      }
+    }
+    setActiveCategoryId(categoryId);
+    setEditingCriterion(null);
+    setCriterionDialogOpen(true);
+  }
+
   const scorecard = q.data;
   const categories = categoriesQ.data ?? [];
   const criteria = criteriaQ.data ?? [];
@@ -487,7 +511,7 @@ export default function ScorecardDetailPage() {
       actions={scorecard ? (
         <div className="flex flex-wrap items-center gap-2">
           <DuplicateScorecardButton scorecard={scorecard} />
-          <Button size="sm" onClick={() => { setActiveCategoryId(selectedCategoryId ?? categories[0]?.id ?? ''); setEditingCriterion(null); setCriterionDialogOpen(true); }} disabled={categories.length === 0} data-testid="add-criterion-top">
+          <Button size="sm" onClick={openNewCriterion} disabled={categoriesQ.isLoading || creatingCategory} data-testid="add-criterion-top">
             <Plus className="mr-2 h-3.5 w-3.5" />Add Criterion
           </Button>
           <Button size="sm" variant="outline" onClick={() => setDeleteOpen(true)} data-testid="delete-scorecard-button">
@@ -650,7 +674,7 @@ export default function ScorecardDetailPage() {
                   <Select value={scoringAlgorithm} onValueChange={setScoringAlgorithm}>
                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="weighted_average">Weighted Avg</SelectItem>
+                      <SelectItem value="weighted_average">Average score (weighted)</SelectItem>
                       <SelectItem value="simple_average">Simple Avg</SelectItem>
                       <SelectItem value="minimum_all">Min All</SelectItem>
                       <SelectItem value="pass_fail">Pass/Fail</SelectItem>

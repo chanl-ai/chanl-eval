@@ -81,6 +81,25 @@ export function RoomWall() {
               </CardContent>
             </Card>
           </div>
+          <Card>
+            <CardHeader><CardTitle className="text-2xl">Run ×5 results by team</CardTitle></CardHeader>
+            <CardContent>
+              {d.teams.length === 0 ? (
+                <p className="text-xl text-muted-foreground">No one has run ×5 yet.</p>
+              ) : (
+                <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-3" data-testid="wall-teams">
+                  {d.teams.map((t) => (
+                    <li key={t.name} className="flex items-baseline justify-between gap-4 text-2xl">
+                      <span className="min-w-0 break-words">{t.name}</span>
+                      <span className="tabular-nums font-semibold shrink-0">
+                        {t.passed}<span className="text-muted-foreground text-lg">/{t.total}{t.running ? ' …' : ''}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </main>

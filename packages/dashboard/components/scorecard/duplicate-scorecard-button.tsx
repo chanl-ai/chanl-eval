@@ -21,6 +21,8 @@ export async function duplicateScorecard(client: EvalClient, source: Scorecard):
   const copy = await client.scorecards.create({
     name: `${source.name} (copy)`,
     description: source.description,
+    // A copy is made to be used straight away; as a draft it is missing from the scenario picker.
+    status: 'active',
     passingThreshold: source.passingThreshold,
     scoringAlgorithm: source.scoringAlgorithm as never,
     tags: source.tags,

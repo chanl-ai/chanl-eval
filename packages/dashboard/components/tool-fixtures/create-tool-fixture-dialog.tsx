@@ -58,13 +58,13 @@ export function CreateToolFixtureDialog({ open, onOpenChange }: CreateToolFixtur
         name: values.name,
         description: values.description,
       });
-      toast.success(`Tool fixture "${values.name}" created`);
+      toast.success(`Mock tool "${values.name}" created`);
       void queryClient.invalidateQueries({ queryKey: ['tool-fixtures'] });
       form.reset();
       onOpenChange(false);
       router.push(`/tool-fixtures/${created.id}`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to create tool fixture';
+      const msg = err instanceof Error ? err.message : 'Failed to create mock tool';
       setSubmitError(msg);
       toast.error(msg);
     } finally {
@@ -76,7 +76,7 @@ export function CreateToolFixtureDialog({ open, onOpenChange }: CreateToolFixtur
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]" data-testid="create-tool-fixture-dialog">
         <DialogHeader>
-          <DialogTitle>Create Tool Fixture</DialogTitle>
+          <DialogTitle>Create Mock Tool</DialogTitle>
           <DialogDescription>
             Define a mock tool for testing. Add parameters and mock responses on the detail page after creation.
           </DialogDescription>
@@ -126,7 +126,7 @@ export function CreateToolFixtureDialog({ open, onOpenChange }: CreateToolFixtur
               {isSubmitting ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating...</>
               ) : (
-                <><Plus className="mr-2 h-4 w-4" />Create Tool Fixture</>
+                <><Plus className="mr-2 h-4 w-4" />Create Mock Tool</>
               )}
             </Button>
           </DialogFooter>

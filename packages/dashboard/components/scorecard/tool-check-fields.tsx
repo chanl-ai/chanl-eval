@@ -19,7 +19,7 @@ export interface ToolCheckState {
 }
 
 export const EMPTY_TOOL_CHECK: ToolCheckState = {
-  tool: '', mode: 'called', args: [], first: '', then: '', requireFirstSuccess: false,
+  tool: '', mode: 'called', args: [], first: '', then: '', requireFirstSuccess: true,
 };
 
 /** Reads saved settings. Older criteria stored the tool under `toolName`; the handler reads `expectedTool`. */

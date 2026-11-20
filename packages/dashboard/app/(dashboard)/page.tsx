@@ -295,7 +295,7 @@ export default function HomePage() {
         <FeatureSection
           title="Getting Started"
           description="Connect your API key and start testing agent performance"
-          items={GETTING_STARTED}
+          items={room.cloud ? GETTING_STARTED.filter((i) => i.href !== '/settings') : GETTING_STARTED}
         />
 
         <FeatureSection
