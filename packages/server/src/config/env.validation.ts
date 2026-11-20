@@ -35,6 +35,11 @@ export class EnvironmentVariables {
   })
   CHANL_EVAL_REQUIRE_API_KEY?: string;
 
+  /** "false" skips the demo personas, scorecard, prompts and scenarios seeded on boot (default true). */
+  @IsOptional()
+  @IsBooleanString({ message: 'CHANL_EVAL_SEED_DEFAULTS must be "true" or "false"' })
+  CHANL_EVAL_SEED_DEFAULTS?: string;
+
   @IsOptional()
   @IsString()
   CHANL_OPENAI_API_KEY?: string;

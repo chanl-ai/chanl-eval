@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getConnectionToken } from '@nestjs/mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Connection, Types } from 'mongoose';
+import { ConfigService } from '@nestjs/config';
 import { BootstrapService } from '../bootstrap/bootstrap.service';
 import { BootstrapModule } from '../bootstrap/bootstrap.module';
 import { PersonaService } from '@chanl/scenarios-core';
@@ -153,6 +154,7 @@ describe('BootstrapService', () => {
         { provide: ApiKeyService, useValue: mockApiKeyService },
         { provide: PromptsService, useValue: mockPromptsService },
         { provide: IndexGuardService, useValue: mockIndexGuard },
+        { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();
 

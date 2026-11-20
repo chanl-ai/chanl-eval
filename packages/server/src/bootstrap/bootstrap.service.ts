@@ -3,6 +3,7 @@ import {
   Logger,
   OnApplicationBootstrap,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PersonaService, Persona } from '@chanl/scenarios-core';
 import { ScenarioService } from '@chanl/scenarios-core';
 import { ScorecardsService } from '@chanl/scorecards-core';
@@ -22,6 +23,7 @@ export class BootstrapService implements OnApplicationBootstrap {
     private readonly apiKeyService: ApiKeyService,
     private readonly promptsService: PromptsService,
     private readonly indexGuard: IndexGuardService,
+    private readonly config: ConfigService,
   ) {}
 
   get isSeeded(): boolean {
@@ -65,6 +67,15 @@ export class BootstrapService implements OnApplicationBootstrap {
       this.logger.log('='.repeat(60));
       this.logger.log('');
       summary.push('1 API key');
+    }
+
+    // A workshop seat holds only its own starter kit, written by its seed script; the demo set
+    // would sit beside it and restore itself on every restart. The key and indexes above still run,
+    // because the seed script needs the first-boot key to reach the seat at all.
+    if (this.config.get<string>('CHANL_EVAL_SEED_DEFAULTS') === 'false') {
+      this.seeded = true;
+      this.logger.log(`Seeded: ${summary.join(', ') || 'nothing'} (default content off)`);
+      return;
     }
 
     // 2. Seed default personas

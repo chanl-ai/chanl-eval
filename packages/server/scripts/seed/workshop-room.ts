@@ -6,12 +6,14 @@
  * Usage (from packages/server; credentials come from ~/.chanl-eval-room.env):
  *   npx tsx scripts/seed/workshop-room.ts seed [--seats 1-40]
  *   npx tsx scripts/seed/workshop-room.ts status
- *   npx tsx scripts/seed/workshop-room.ts reset 07
+ *   npx tsx scripts/seed/workshop-room.ts reset 07              wipe, reseed and free the seat
+ *   npx tsx scripts/seed/workshop-room.ts reset-password <email> <password>
  *   npx tsx scripts/seed/workshop-room.ts loadtest [--seats 1-40] [--k 5]
  *   npx tsx scripts/seed/workshop-room.ts clear-runs [--seats 1-40] [--release]
  */
 
 import { spawn, execFileSync, ChildProcess } from 'child_process';
+import { randomBytes, scryptSync } from 'crypto';
 import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -173,6 +175,11 @@ async function cmdReset(argv: string[]) {
   const secrets = loadSecrets();
   const mongo = await openMongo(secrets);
   try {
+    // A reset seat goes back to the pool, so its attendee's account goes too; they sign up again.
+    const room = mongo.client.db('room');
+    const gone = await room.collection('accounts').deleteMany({ seat });
+    await room.collection('seats').updateOne({ seat }, { $set: { assignedTo: null } });
+    console.log(`${seat}: ${gone.deletedCount} account(s) deleted, seat free`);
     await mongo.client.db(seat).dropDatabase();
     console.log(`${seat}: database dropped, restarting ${m.id}`);
     // A restart rebuilds indexes and the first-boot key; the machine id, and so the seat URL, stay.
@@ -261,6 +268,25 @@ async function cmdClearRuns(argv: string[]) {
   }
 }
 
+/** Same scheme the dashboard's sign-in checks: scrypt$<salt b64>$<64-byte key b64>. */
+async function cmdResetPassword(argv: string[]) {
+  const [emailRaw, password] = argv;
+  const email = (emailRaw ?? '').trim().toLowerCase();
+  if (!email || !password || password.length < 8) {
+    throw new Error('usage: reset-password <email> <password of 8+ characters>');
+  }
+  const salt = randomBytes(16);
+  const hash = ['scrypt', salt.toString('base64'), scryptSync(password, salt, 64).toString('base64')].join('$');
+  const mongo = await openMongo(loadSecrets());
+  try {
+    const res = await mongo.client.db('room').collection('accounts').updateOne({ email }, { $set: { passwordHash: hash } });
+    if (res.matchedCount === 0) throw new Error(`no account for ${email}`);
+    console.log(`${email}: password reset`);
+  } finally {
+    await mongo.close();
+  }
+}
+
 function report(results: Record<string, unknown>) {
   const names = Object.keys(results).sort();
   let bad = 0;
@@ -275,7 +301,7 @@ function report(results: Record<string, unknown>) {
 
 const [cmd, ...rest] = process.argv.slice(2);
 const commands: Record<string, (a: string[]) => Promise<void>> = {
-  seed: cmdSeed, status: cmdStatus, reset: cmdReset, loadtest: cmdLoadtest, 'clear-runs': cmdClearRuns,
+  seed: cmdSeed, status: cmdStatus, reset: cmdReset, 'reset-password': cmdResetPassword, loadtest: cmdLoadtest, 'clear-runs': cmdClearRuns,
 };
 if (!commands[cmd]) {
   console.error('usage: workshop-room.ts seed|status|reset <n>|loadtest [--seats a-b] [--k 5]');

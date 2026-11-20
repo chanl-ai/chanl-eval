@@ -183,7 +183,7 @@ db-reset: ## Drop database and re-seed
 # Credentials: ~/.chanl-eval-room.env (outside the repo). Seats are private; these targets reach
 # them through `fly proxy`. Spec: one seat machine per attendee, each with its own Mongo db.
 
-.PHONY: room-up room-seed room-status room-reset-seat room-deploy-dashboard room-loadtest room-clear-runs
+.PHONY: room-up room-seed room-status room-reset-seat room-reset-password room-deploy-dashboard room-loadtest room-clear-runs
 
 ROOM_SEATS ?= 40
 
@@ -196,11 +196,20 @@ room-seed: ## Seed every seat with the starter kit and write the seat directory 
 room-status: ## Health of every seat
 	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts status --seats 1-$(ROOM_SEATS)
 
-room-reset-seat: ## Wipe and reseed one seat, keeping its attendee: make room-reset-seat SEAT=07
+room-reset-seat: ## Wipe and reseed one seat, delete its account and free it: make room-reset-seat SEAT=07
 ifndef SEAT
 	$(error SEAT is required, e.g. SEAT=07)
 endif
 	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts reset $(SEAT)
+
+room-reset-password: ## Set an attendee's password: make room-reset-password EMAIL=a@b.co PASSWORD=newpass123
+ifndef EMAIL
+	$(error EMAIL is required)
+endif
+ifndef PASSWORD
+	$(error PASSWORD is required)
+endif
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts reset-password '$(EMAIL)' '$(PASSWORD)'
 
 room-deploy-dashboard: ## Deploy packages/dashboard as chanl-eval-lab (cloud mode)
 	cd $(CURDIR)/deploy/room && ./room.sh deploy-dashboard
