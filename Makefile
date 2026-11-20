@@ -183,7 +183,7 @@ db-reset: ## Drop database and re-seed
 # Credentials: ~/.chanl-eval-room.env (outside the repo). Seats are private; these targets reach
 # them through `fly proxy`. Spec: one seat machine per attendee, each with its own Mongo db.
 
-.PHONY: room-up room-seed room-status room-reset-seat room-deploy-dashboard room-loadtest
+.PHONY: room-up room-seed room-status room-reset-seat room-deploy-dashboard room-loadtest room-clear-runs
 
 ROOM_SEATS ?= 40
 
@@ -207,3 +207,6 @@ room-deploy-dashboard: ## Deploy packages/dashboard as chanl-eval-lab (cloud mod
 
 room-loadtest: ## Queue K runs of the Acme scenario on every seat at once: make room-loadtest K=5
 	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts loadtest --seats 1-$(ROOM_SEATS) --k $(or $(K),5)
+
+room-clear-runs: ## Delete rehearsal runs on every seat; RELEASE=1 also deletes accounts and frees seats
+	cd $(CURDIR)/packages/server && npx tsx scripts/seed/workshop-room.ts clear-runs --seats 1-$(ROOM_SEATS) $(if $(RELEASE),--release)

@@ -8,6 +8,7 @@
  *   npx tsx scripts/seed/workshop-room.ts status
  *   npx tsx scripts/seed/workshop-room.ts reset 07
  *   npx tsx scripts/seed/workshop-room.ts loadtest [--seats 1-40] [--k 5]
+ *   npx tsx scripts/seed/workshop-room.ts clear-runs [--seats 1-40] [--release]
  */
 
 import { spawn, execFileSync, ChildProcess } from 'child_process';
@@ -236,6 +237,30 @@ async function forEachSeatAllAtOnce<T>(seats: number[], fn: (n: number, base: st
   return results;
 }
 
+/**
+ * Removes runs left by rehearsals and load tests so attendees start from an empty run history.
+ * --release also deletes accounts and frees every seat; never run it once attendees have joined.
+ */
+async function cmdClearRuns(argv: string[]) {
+  const mongo = await openMongo(loadSecrets());
+  try {
+    for (const n of parseSeats(argv)) {
+      const db = mongo.client.db(seatName(n));
+      const counts = await Promise.all(['scenarioExecutions', 'run_sets', 'scorecard_results']
+        .map(async (col) => (await db.collection(col).deleteMany({})).deletedCount));
+      console.log(`${seatName(n)}  removed ${counts.join('/')} runs/run sets/results`);
+    }
+    if (argv.includes('--release')) {
+      const room = mongo.client.db('room');
+      await room.collection('accounts').deleteMany({});
+      await room.collection('seats').updateMany({}, { $set: { assignedTo: null } });
+      console.log('accounts deleted, all seats free');
+    }
+  } finally {
+    await mongo.close();
+  }
+}
+
 function report(results: Record<string, unknown>) {
   const names = Object.keys(results).sort();
   let bad = 0;
@@ -250,7 +275,7 @@ function report(results: Record<string, unknown>) {
 
 const [cmd, ...rest] = process.argv.slice(2);
 const commands: Record<string, (a: string[]) => Promise<void>> = {
-  seed: cmdSeed, status: cmdStatus, reset: cmdReset, loadtest: cmdLoadtest,
+  seed: cmdSeed, status: cmdStatus, reset: cmdReset, loadtest: cmdLoadtest, 'clear-runs': cmdClearRuns,
 };
 if (!commands[cmd]) {
   console.error('usage: workshop-room.ts seed|status|reset <n>|loadtest [--seats a-b] [--k 5]');

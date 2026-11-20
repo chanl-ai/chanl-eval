@@ -21,7 +21,8 @@ primary_region = "ewr"
     grace_period = "20s"
     interval = "30s"
     method = "GET"
-    path = "/"
+    # "/" redirects signed-out visitors to /login, and checks do not follow redirects.
+    path = "/login"
     timeout = "5s"
 
 [[vm]]
