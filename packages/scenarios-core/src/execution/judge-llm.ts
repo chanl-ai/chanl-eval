@@ -62,7 +62,9 @@ export const SYSTEM_PROMPT = `You check one conversation between a customer and 
 Rules:
 - Answer ONLY the question asked. Ignore tone, politeness, helpfulness, empathy, completeness and
   whether the customer's problem was solved, unless the question itself asks about them.
-- Judge what the agent actually said and did in the transcript. Do not guess at intent.
+- Judge what the agent actually said and did in the whole transcript. Do not guess at intent.
+- If the agent did or promised the thing the question is about at any point, that settles it:
+  a later refusal, apology or policy reminder does not undo an earlier action or promise.
 - Lines starting "[Tool call]" are actions the agent took and the data the system returned to it.
   Count the actions as things the agent did, and use the data as the facts of the case.
 - For a yes/no question, "result" is the answer to the question exactly as worded: true means yes,
