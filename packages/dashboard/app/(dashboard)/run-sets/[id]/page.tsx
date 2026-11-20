@@ -16,7 +16,7 @@ import { RedteamReport } from '@/components/run-sets/redteam-report';
 import { ReliabilityCard } from '@/components/run-sets/reliability-card';
 import { useEvalConfig } from '@/lib/eval-config';
 
-const KIND_TITLE = { reliability: 'Run ×k', redteam: 'Red-team scan', compare: 'Comparison' } as const;
+const KIND_TITLE = { reliability: 'Run ×5', redteam: 'Red-team scan', compare: 'Comparison' } as const;
 
 export default function RunSetPage() {
   const params = useParams();
@@ -55,9 +55,13 @@ export default function RunSetPage() {
   });
 
   const running = rs?.status !== 'completed';
-  const title = rs ? `${KIND_TITLE[rs.kind]}${scenario.data ? ` · ${scenario.data.name}` : ''}` : 'Run set';
+  const title = rs ? `${rs.kind === 'reliability' ? `Run ×${rs.k}` : KIND_TITLE[rs.kind]}${scenario.data ? ` · ${scenario.data.name}` : ''}` : 'Run set';
   const description = rs
-    ? `Agent: ${prompt.data?.name ?? '…'} · ${rs.personaIds.length} persona${rs.personaIds.length === 1 ? '' : 's'} × ${rs.k}`
+    ? `Agent: ${prompt.data?.name ?? '…'} · ${
+        rs.byPersona.length > 0 && rs.byPersona.length <= 2
+          ? `Persona: ${rs.byPersona.map((p) => p.personaName).join(', ')}`
+          : `${rs.personaIds.length} persona${rs.personaIds.length === 1 ? '' : 's'}`
+      } × ${rs.k}`
     : 'Loading...';
 
   return (
@@ -97,7 +101,7 @@ export default function RunSetPage() {
         <div className="space-y-6 max-w-4xl">
           {rs.kind === 'redteam' ? <RedteamReport runSet={rs} /> : <ReliabilityCard runSet={rs} />}
           {rs.baselineRunSetId && (
-            <CompareCard runSetId={rs.id} baselineId={rs.baselineRunSetId} running={running} />
+            <CompareCard runSet={rs} baselineId={rs.baselineRunSetId} />
           )}
           <CompareDialog open={compareOpen} onOpenChange={setCompareOpen} baseline={rs} />
         </div>

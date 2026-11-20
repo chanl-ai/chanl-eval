@@ -21,6 +21,7 @@ import { DeleteDialog } from '@/components/shared/delete-dialog';
 import { PageLayout } from '@/components/shared/page-layout';
 import { RunSetDialog } from '@/components/run-sets/run-set-dialog';
 import { useEvalConfig } from '@/lib/eval-config';
+import { playgroundHref } from '@/lib/playground-link';
 import { toast } from 'sonner';
 import type { Persona, Scorecard } from '@chanl/eval-sdk';
 
@@ -29,7 +30,7 @@ export default function ScenarioDetailPage() {
   const id = typeof params.id === 'string' ? params.id : '';
   const router = useRouter();
   const qc = useQueryClient();
-  const { client } = useEvalConfig();
+  const { client, room } = useEvalConfig();
 
   const q = useQuery({
     queryKey: ['scenario', id],
@@ -125,7 +126,7 @@ export default function ScenarioDetailPage() {
             >
               {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => router.push(`/playground?scenario=${id}`)}>
+            <Button size="sm" variant="outline" onClick={() => router.push(playgroundHref({ scenarioId: id, personaId: q.data?.personaIds?.[0], scorecardId: q.data?.scorecardId }))} data-testid="run-scenario">
               <Play className="mr-2 h-3.5 w-3.5" />
               Run
             </Button>
@@ -311,10 +312,10 @@ export default function ScenarioDetailPage() {
                 The generated prompt includes sections for negotiation style, patience reactions,
                 conversation pacing, and closing behavior — all derived from the persona&apos;s trait settings.
               </p>
-              <p className="text-xs border-t pt-3 mt-3">
+              {!room.cloud && <p className="text-xs border-t pt-3 mt-3">
                 <strong className="text-foreground">Customize the prompt generation:</strong>{' '}
                 <code className="bg-muted px-1 rounded text-[11px]">packages/scenarios-core/src/simulator/persona-simulator.service.ts</code>
-              </p>
+              </p>}
             </CardContent>
           </Card>
         </div>

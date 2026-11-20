@@ -45,10 +45,13 @@ export function CompareDialog({ open, onOpenChange, baseline }: {
     if (open) { setPromptId(''); setK(String(baseline.k)); }
   }, [open, baseline.k]);
 
-  // The run set does not record its scorecard, so default to the scenario's and let the user change it.
+  // Judge "after" with the scorecard that judged "before", or the comparison is meaningless.
+  const baselineScorecard = (baseline as RunSet & { scorecardId?: string }).scorecardId;
   useEffect(() => {
-    if (open && !scorecardId && scenario.data?.scorecardId) setScorecardId(scenario.data.scorecardId);
-  }, [open, scorecardId, scenario.data?.scorecardId]);
+    if (!open || scorecardId) return;
+    const sc = baselineScorecard || scenario.data?.scorecardId;
+    if (sc) setScorecardId(sc);
+  }, [open, scorecardId, baselineScorecard, scenario.data?.scorecardId]);
 
   async function submit() {
     setPending(true);
@@ -107,7 +110,7 @@ export function CompareDialog({ open, onOpenChange, baseline }: {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="compare-k">Runs per persona (k)</Label>
+            <Label htmlFor="compare-k">Number of runs</Label>
             <Input id="compare-k" type="number" min={1} max={10} value={k} onChange={(e) => setK(e.target.value)} className="w-24" />
           </div>
         </div>

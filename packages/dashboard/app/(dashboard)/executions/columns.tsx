@@ -9,6 +9,10 @@ import { DataTableColumnHeader } from '@/components/shared/data-table-column-hea
 export interface ExecutionRow {
   id: string;
   scenarioName: string;
+  personaName: string;
+  agentName: string;
+  /** Scorecard verdict; undefined when no scorecard judged the run. */
+  passed: boolean | undefined;
   score: number | undefined;
   status: string;
   duration: number | undefined;
@@ -122,19 +126,30 @@ export const columns: ColumnDef<ExecutionRow>[] = [
     ),
   },
 
-  // Score (color-coded)
+  {
+    accessorKey: 'personaName',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Persona" />,
+    cell: ({ row }) => <span className="text-sm truncate max-w-[160px] block">{row.original.personaName}</span>,
+  },
+  {
+    accessorKey: 'agentName',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Agent" />,
+    cell: ({ row }) => <span className="text-sm truncate max-w-[180px] block">{row.original.agentName}</span>,
+  },
+
+  // Scorecard result: one verdict per run, with the score beside it.
   {
     accessorKey: 'score',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Score" />
+      <DataTableColumnHeader column={column} title="Scorecard" />
     ),
     cell: ({ row }) => {
-      const score = row.getValue('score') as number | undefined;
+      const { passed, score } = row.original;
+      if (passed === undefined) return <span className="text-xs text-muted-foreground">Not scored</span>;
       return (
-        <span
-          className={`text-sm font-semibold tabular-nums ${getScoreColor(score)}`}
-        >
-          {score != null ? `${score}%` : '--'}
+        <span className={`text-sm font-semibold tabular-nums whitespace-nowrap ${getScoreColor(passed ? 100 : 0)}`} data-testid="run-result">
+          {passed ? 'Passed' : 'Failed'}
+          {score != null && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{score}%</span>}
         </span>
       );
     },

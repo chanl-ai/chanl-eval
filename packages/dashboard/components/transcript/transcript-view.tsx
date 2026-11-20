@@ -9,12 +9,12 @@
  */
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Bot, ChevronRight, ChevronDown, Search, ChevronUp, Wrench } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Bot, ChevronDown, Search, ChevronUp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BeautifulAvatar } from '@/components/shared/beautiful-avatar';
+import { ToolCallList } from '@/components/shared/tool-call-list';
 import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -182,56 +182,10 @@ function MessageBubble({
 // ---------------------------------------------------------------------------
 
 function ToolCallBubble({ message }: { message: TranscriptMessage }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const call = message.toolCalls?.[0];
-  if (!call) return null;
-
+  if (!message.toolCalls?.length) return null;
   return (
     <div data-message-id={message.id}>
-      <Card className="overflow-hidden border-primary/20">
-        <CardHeader
-          className="cursor-pointer select-none bg-primary/5 py-2.5 px-3"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {isExpanded ? (
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-              )}
-              <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
-              <CardTitle className="text-sm font-medium font-mono">{call.name}</CardTitle>
-            </div>
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-primary">
-              completed
-            </Badge>
-          </div>
-          {!isExpanded && call.arguments && (
-            <p className="mt-1 text-xs text-muted-foreground truncate pl-8">
-              {JSON.stringify(call.arguments)}
-            </p>
-          )}
-        </CardHeader>
-        {isExpanded && (
-          <CardContent className="pt-3 pb-3 space-y-3">
-            {call.arguments && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Arguments</p>
-                <pre className="text-xs font-mono bg-muted p-2 rounded-md overflow-x-auto whitespace-pre-wrap">
-                  {JSON.stringify(call.arguments, null, 2)}
-                </pre>
-              </div>
-            )}
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Result</p>
-              <pre className="text-xs font-mono bg-muted p-2 rounded-md overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">
-                {typeof call.result === 'string' ? call.result : JSON.stringify(call.result, null, 2)}
-              </pre>
-            </div>
-          </CardContent>
-        )}
-      </Card>
+      <ToolCallList calls={message.toolCalls} />
     </div>
   );
 }

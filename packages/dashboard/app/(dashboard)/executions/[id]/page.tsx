@@ -21,7 +21,7 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Hash,
+  User,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -47,6 +47,8 @@ import { ShareResults } from '@/components/share-results';
 import { useFirstRunPrompt } from '@/components/first-run-prompt';
 import { useEvalConfig } from '@/lib/eval-config';
 import { embeddedResultsToMetrics, scorecardResultToMetrics } from '@/lib/scorecard-metrics';
+import { stepsToLines } from '@/lib/workshop';
+import { playgroundHref } from '@/lib/playground-link';
 import type { Execution, Scorecard } from '@chanl/eval-sdk';
 
 // ---------------------------------------------------------------------------
@@ -105,116 +107,56 @@ function getStatusIcon(status: string) {
 // ---------------------------------------------------------------------------
 
 function executionToMessages(execution: Execution): TranscriptMessage[] {
-  if (!execution.stepResults || execution.stepResults.length === 0) return [];
-
-  return execution.stepResults
-    .filter((step) => step.actualResponse || (step as Record<string, unknown>).role === 'tool')
-    .map((step, i) => {
-      const stepAny = step as Record<string, unknown>;
-      const role = stepAny.role as string | undefined;
-
-      // Tool call step — use structured toolCalls data
-      if (role === 'tool') {
-        const toolCalls = stepAny.toolCalls as Array<{ name: string; arguments: Record<string, unknown>; result: unknown }> | undefined;
-        if (toolCalls?.length) {
-          return {
-            id: `${step.stepId}-${i}`,
-            role: 'tool' as const,
-            content: '',
-            toolCalls: toolCalls.map((tc) => ({ name: tc.name, arguments: tc.arguments, result: tc.result })),
-          };
-        }
-        // Fallback: parse JSON from actualResponse
-        try {
-          const parsed = JSON.parse(step.actualResponse || '{}');
-          return {
-            id: `${step.stepId}-${i}`,
-            role: 'tool' as const,
-            content: '',
-            toolCalls: [{ name: parsed.name, arguments: parsed.arguments, result: parsed.result }],
-          };
-        } catch {
-          // Can't parse — show as raw text
-        }
-      }
-
-      // Persona or agent step
-      const isPersona = role === 'persona' || (step.stepId?.includes('persona') ?? false);
-      return {
-        id: `${step.stepId}-${i}`,
-        role: (isPersona ? 'persona' : 'agent') as 'agent' | 'persona',
-        content: step.actualResponse!,
-        duration: step.duration,
-        score: step.score,
-        status: step.status,
-      };
-    });
+  return stepsToLines((execution.stepResults ?? []) as Array<Record<string, unknown>>).map((line, i) => ({
+    id: `${line.role}-${i}`,
+    role: line.role,
+    content: line.content,
+    duration: line.latencyMs,
+    toolCalls: line.toolCalls,
+  }));
 }
 
 // ---------------------------------------------------------------------------
 // Stat Cards
 // ---------------------------------------------------------------------------
 
-function StatCards({ execution }: { execution: Execution }) {
-  const steps = execution.stepResults || [];
-  const passedSteps = steps.filter(
-    (s) => s.status === 'completed' || (s.score != null && s.score > 0),
-  ).length;
-  const failedSteps = steps.filter(
-    (s) => s.status === 'failed' || s.status === 'timeout' || s.status === 'skipped',
-  ).length;
+function Stat({ icon, label, value, testId }: { icon: React.ReactNode; label: string; value: React.ReactNode; testId?: string }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 min-w-0">
+          {icon}
+          <div className="min-w-0">
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div className="text-lg font-semibold truncate" data-testid={testId}>{value}</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
+/**
+ * One result per run: the scorecard's pass or fail. Step counts are left out because every
+ * finished step reads as "passed", which contradicted a failing scorecard.
+ */
+function StatCards({ execution, personaName, agentName, passed, failedCount }: {
+  execution: Execution; personaName?: string; agentName?: string;
+  passed: boolean | undefined; failedCount: number;
+}) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <Hash className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <div className="text-xs text-muted-foreground">Steps</div>
-              <div className="text-lg font-semibold tabular-nums">{steps.length}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <div>
-              <div className="text-xs text-muted-foreground">Passed</div>
-              <div className="text-lg font-semibold tabular-nums">{passedSteps}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-            <div>
-              <div className="text-xs text-muted-foreground">Failed</div>
-              <div className="text-lg font-semibold tabular-nums">{failedSteps}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <div className="text-xs text-muted-foreground">Duration</div>
-              <div className="text-lg font-semibold tabular-nums">
-                {formatDuration(execution.duration)}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Stat
+        icon={passed === false
+          ? <XCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+          : <CheckCircle className={`h-4 w-4 shrink-0 ${passed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />}
+        label="Scorecard"
+        testId="run-verdict"
+        value={passed === undefined ? 'Not scored' : passed ? 'Passed' : `Failed ${failedCount} check${failedCount === 1 ? '' : 's'}`}
+      />
+      <Stat icon={<User className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Persona" value={personaName ?? '--'} testId="run-persona" />
+      <Stat icon={<Bot className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Agent" value={agentName ?? '--'} testId="run-agent" />
+      <Stat icon={<Clock className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Duration" value={formatDuration(execution.duration)} />
     </div>
   );
 }
@@ -247,7 +189,7 @@ export default function RunDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = typeof params.id === 'string' ? params.id : '';
-  const { client } = useEvalConfig();
+  const { client, room } = useEvalConfig();
   const qc = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -273,9 +215,20 @@ export default function RunDetailPage() {
     enabled: !!execution?.scenarioId,
   });
   const scenarioName = scenarioQ.data?.name;
+  const personaQ = useQuery({
+    queryKey: ['persona', execution?.personaId],
+    queryFn: () => client.personas.get(execution!.personaId!),
+    enabled: !!execution?.personaId,
+  });
+  const agentQ = useQuery({
+    queryKey: ['prompt', execution?.promptId],
+    queryFn: () => client.prompts.get(execution!.promptId!),
+    enabled: !!execution?.promptId,
+  });
 
   // First-run star/follow prompt
-  useFirstRunPrompt(execution?.status === 'completed');
+  // The star prompt is for open-source users; workshop attendees get their own seat, not a repo.
+  useFirstRunPrompt(!room.cloud && execution?.status === 'completed');
 
   // Scorecard evaluation state
   const [selectedScorecardId, setSelectedScorecardId] = useState<string>('');
@@ -357,7 +310,8 @@ export default function RunDetailPage() {
     ? Math.round(embeddedResults.overallScore * 10)
     : scorecardResult?.overallScore != null
       ? Math.round(scorecardResult.overallScore * 10)
-      : execution?.overallScore ?? undefined;
+      : undefined;
+  const scorePassed: boolean | undefined = embeddedResults?.passed ?? (scorecardResult as { passed?: boolean } | null)?.passed;
 
   const scorecardSummary = (execution as any)?.scorecardSummary as string | undefined;
 
@@ -365,7 +319,7 @@ export default function RunDetailPage() {
   const failedChecks = metrics
     .flatMap((m) => m.criteria ?? [])
     .filter((c) => !c.passed && !c.notApplicable)
-    .map((c) => ({ name: c.name, reason: c.explanation, evidence: c.evidence, needsReview: c.needsReview }));
+    .map((c) => ({ name: c.name, criteriaId: c.criteriaId, reason: c.explanation, evidence: c.evidence, needsReview: c.needsReview }));
   const failedEvidence = failedChecks.flatMap((c) => c.evidence ?? []);
   const isFailedRun = !isActive && (execution?.status === 'failed' || failedChecks.length > 0);
 
@@ -432,7 +386,7 @@ export default function RunDetailPage() {
             {isFailedRun && (
               <BugReportButton execution={execution} scenarioName={scenarioName} failedChecks={failedChecks} messages={messages} />
             )}
-            <Button variant="outline" size="sm" onClick={() => router.push('/playground')} disabled={isActive}>
+            <Button variant="outline" size="sm" onClick={() => router.push(playgroundHref({ scenarioId: execution.scenarioId, agentId: execution.promptId, personaId: execution.personaId }))} disabled={isActive}>
               <RotateCcw className="mr-2 h-3.5 w-3.5" />
               Run Again
             </Button>
@@ -459,7 +413,13 @@ export default function RunDetailPage() {
       ) : execution ? (
         <div className="space-y-6">
           {/* Stat cards */}
-          <StatCards execution={execution} />
+          <StatCards
+            execution={execution}
+            personaName={personaQ.data?.name}
+            agentName={agentQ.data?.name}
+            passed={hasEvaluation ? (scorePassed ?? failedChecks.length === 0) : undefined}
+            failedCount={failedChecks.length}
+          />
 
           {/* Main content: Transcript + Scorecard */}
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
@@ -472,7 +432,7 @@ export default function RunDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <TranscriptView messages={messages} evidence={failedEvidence} />
+                <TranscriptView messages={messages} evidence={failedEvidence} personaName={personaQ.data?.name} />
               </CardContent>
             </Card>
 

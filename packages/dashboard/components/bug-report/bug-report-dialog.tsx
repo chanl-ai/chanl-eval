@@ -23,6 +23,9 @@ import type { RunSet } from '@chanl/eval-sdk';
 
 export interface FailedCheckInfo {
   name: string;
+  criteriaId?: string;
+  /** Criterion type (keyword, prompt, tool_call, tool_order, response_time). */
+  type?: string;
   reason?: string;
   evidence?: string[];
   needsReview?: boolean;
@@ -35,6 +38,15 @@ const CAUSES = [
   { value: 'model', label: 'Model (capability or randomness)' },
   { value: 'test', label: 'Test (the check or scenario is wrong)' },
 ] as const;
+
+/** Who decided the check failed, by criterion type: only an AI-judged check has a "judge". */
+const REASON_LABEL: Record<string, string> = {
+  prompt: 'AI judge',
+  keyword: 'Must say',
+  tool_call: 'Tool check',
+  tool_order: 'Tool order',
+  response_time: 'Response time',
+};
 
 const SEVERITIES = ['Critical', 'High', 'Medium', 'Low'] as const;
 
@@ -74,7 +86,7 @@ export function buildBugReport(r: ReportInput): string {
   if (r.failedChecks.length === 0) lines.push('_No scorecard check failed; the run itself failed._', '');
   for (const c of r.failedChecks) {
     lines.push(`### ${c.name}${c.needsReview ? ' (needs review)' : ''}`, '');
-    if (c.reason) lines.push(`Judge: ${c.reason}`, '');
+    if (c.reason) lines.push(`${REASON_LABEL[c.type ?? ''] ?? 'Check'}: ${c.reason}`, '');
     for (const q of c.evidence ?? []) lines.push(`> ${q.replace(/\n/g, ' ')}`, '');
   }
   const excerpt = r.messages.slice(-EXCERPT_TURNS);
@@ -83,7 +95,7 @@ export function buildBugReport(r: ReportInput): string {
   for (const m of excerpt) {
     const who = m.role === 'agent' ? 'Agent' : m.role === 'tool' ? 'Tool' : 'Customer';
     const text = m.role === 'tool' && m.toolCalls?.length
-      ? m.toolCalls.map((t) => `${t.name}(${JSON.stringify(t.arguments)})`).join('; ')
+      ? m.toolCalls.map((t) => `${t.name}(${JSON.stringify(t.arguments)})${t.result != null ? ` → ${JSON.stringify(t.result)}` : ''}`).join('; ')
       : m.content;
     lines.push(`**${who}:** ${text.replace(/\n+/g, ' ')}`, '');
   }
@@ -110,6 +122,16 @@ export function BugReportButton({ execution, scenarioName, failedChecks, message
     queryFn: () => client.prompts.get(execution.promptId!),
     enabled: open && !!execution.promptId,
   });
+  const scorecardId = (execution as Execution & { scorecardResults?: { scorecardId?: string } }).scorecardResults?.scorecardId;
+  const criteria = useQuery({
+    queryKey: ['scorecard-criteria', scorecardId],
+    queryFn: () => client.scorecards.listCriteria(scorecardId!),
+    enabled: open && !!scorecardId,
+  });
+  const typedChecks = useMemo(
+    () => failedChecks.map((c) => ({ ...c, type: c.type ?? criteria.data?.find((x) => x.id === c.criteriaId)?.type })),
+    [failedChecks, criteria.data],
+  );
   const runSet = useQuery({
     queryKey: ['run-set', runSetId],
     queryFn: () => runSets.get(runSetId!),
@@ -123,13 +145,13 @@ export function BugReportButton({ execution, scenarioName, failedChecks, message
         personaName: persona.data?.name ?? (execution.personaId ? '…' : 'None'),
         agentName: prompt.data?.name ?? (execution.promptId ? '…' : 'Unknown'),
         runSet: runSet.data ?? null,
-        failedChecks,
+        failedChecks: typedChecks,
         messages,
         link: typeof window !== 'undefined' ? `${window.location.origin}/executions/${execution.executionId ?? execution.id}` : '',
         cause,
         severity,
       }),
-    [scenarioName, persona.data, prompt.data, runSet.data, failedChecks, messages, execution, cause, severity],
+    [scenarioName, persona.data, prompt.data, runSet.data, typedChecks, messages, execution, cause, severity],
   );
 
   async function copy() {

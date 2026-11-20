@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import { columns, type ExecutionRow } from './columns';
+import { scorecardPassed, scorecardPercent } from '@/lib/workshop';
 import type { Execution } from '@chanl/eval-sdk';
 
 export default function RunsListPage() {
@@ -46,6 +47,14 @@ export default function RunsListPage() {
     return map;
   }, [scenariosQ.data]);
 
+  const personasQ = useQuery({ queryKey: ['personas'], queryFn: () => client.personas.list({ limit: 100 }), staleTime: 60_000 });
+  const promptsQ = useQuery({ queryKey: ['prompts'], queryFn: () => client.prompts.list({ limit: 100 }), staleTime: 60_000 });
+  const nameOf = React.useCallback(
+    (list: Array<{ id: string; name: string }> | undefined, id: string | undefined) =>
+      (id && list?.find((x) => x.id === id)?.name) || '--',
+    [],
+  );
+
   const rows: ExecutionRow[] = React.useMemo(() => {
     const executions = q.data?.executions ?? [];
     const mapped = executions.map((e: Execution) => ({
@@ -53,7 +62,10 @@ export default function RunsListPage() {
       scenarioName: e.scenarioId
         ? scenarioNameById.get(e.scenarioId) ?? `Scenario ${e.scenarioId.slice(-6)}`
         : 'Unnamed run',
-      score: e.overallScore,
+      personaName: nameOf(personasQ.data?.personas, e.personaId),
+      agentName: nameOf(promptsQ.data?.prompts, e.promptId),
+      passed: scorecardPassed(e as { scorecardResults?: { passed?: boolean } }),
+      score: scorecardPercent(e as { scorecardResults?: { overallScore?: number } }),
       status: e.status,
       duration: e.duration,
       createdAt: e.createdAt,
@@ -63,7 +75,7 @@ export default function RunsListPage() {
       return mapped.filter((r) => r.status === statusFilter);
     }
     return mapped;
-  }, [q.data, scenarioNameById, statusFilter]);
+  }, [q.data, scenarioNameById, statusFilter, personasQ.data, promptsQ.data, nameOf]);
 
   function handleRowClick(row: ExecutionRow) {
     router.push(`/executions/${encodeURIComponent(row.id)}`);

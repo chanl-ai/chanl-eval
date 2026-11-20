@@ -20,9 +20,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEvalConfig } from '@/lib/eval-config';
+import { readLastAgent } from '@/lib/playground-link';
+import { agentForScenario } from '@/lib/workshop';
 import type { RunSetKind } from '@chanl/eval-sdk';
 
 export const RED_TEAM_TAG = 'red-team';
+/** Seeded names the red-team scan preselects when they exist. */
+const REDTEAM_SCENARIO = 'Red-team: Account probe';
+const REDTEAM_SCORECARD = 'Red-team Guard';
 
 interface Props {
   open: boolean;
@@ -36,14 +41,14 @@ interface Props {
 
 const COPY = {
   reliability: {
-    title: 'Run ×k',
-    description: 'Run the same scenario several times. One pass proves little; k passes in a row show it is reliable.',
+    title: 'Run ×5',
+    description: 'Run the same scenario several times. One pass proves little; passing every time shows it is reliable. Every mock tool is available to the agent.',
     submit: 'Start runs',
     icon: Play,
   },
   redteam: {
     title: 'Red-team scan',
-    description: 'Run every attack persona once against this agent and see which attacks worked.',
+    description: 'Run every attack persona once against this agent and see which attacks worked. Every mock tool is available to the agent.',
     submit: 'Start scan',
     icon: ShieldAlert,
   },
@@ -116,12 +121,34 @@ export function RunSetDialog({ open, onOpenChange, kind, ...defaults }: Props) {
     if (open && kind === 'redteam') setAttackIds(attackerKey ? attackerKey.split(',') : []);
   }, [open, kind, attackerKey]);
 
-  // Default the scorecard to the scenario's own when the scenario changes.
+  // Fill what the caller left open once the lists load: the red-team scan's seeded scenario and
+  // scorecard, then the scenario's own scorecard, default persona and agent.
+  const [filled, setFilled] = useState(false);
+  useEffect(() => { if (!open) setFilled(false); }, [open]);
+  const listsReady = prompts.isSuccess && scenarios.isSuccess && personas.isSuccess && scorecards.isSuccess;
   useEffect(() => {
-    const sc = scenarioList.find((s) => s.id === scenarioId);
-    if (sc?.scorecardId && !scorecardId) setScorecardId(sc.scorecardId);
-    if (kind === 'reliability' && sc?.personaIds?.[0] && !personaId) setPersonaId(sc.personaIds[0]);
-  }, [scenarioId, scenarioList, scorecardId, personaId, kind]);
+    if (!open || filled || !listsReady) return;
+    setFilled(true);
+    let sid = defaults.scenarioId ?? '';
+    let scId = defaults.scorecardId ?? '';
+    if (kind === 'redteam') {
+      sid = sid || scenarioList.find((s) => s.name === REDTEAM_SCENARIO)?.id || '';
+      scId = scId || scorecardList.find((s) => s.name === REDTEAM_SCORECARD)?.id || '';
+    }
+    if (sid) applyScenario(sid, scId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, filled, listsReady]);
+
+  function applyScenario(id: string, scorecardOverride?: string) {
+    setScenarioId(id);
+    const sc = scenarioList.find((s) => s.id === id);
+    setScorecardId(scorecardOverride || sc?.scorecardId || '');
+    if (kind === 'reliability' && !defaults.personaId && sc?.personaIds?.[0]) setPersonaId(sc.personaIds[0]);
+    if (!defaults.promptId) {
+      const agentId = agentForScenario(sc, promptList, readLastAgent());
+      if (agentId) setPromptId(agentId);
+    }
+  }
 
   const kNum = Math.min(10, Math.max(1, parseInt(k, 10) || 1));
   const personaIds = kind === 'redteam' ? attackIds : personaId ? [personaId] : [];
@@ -132,7 +159,7 @@ export function RunSetDialog({ open, onOpenChange, kind, ...defaults }: Props) {
     setPending(true);
     try {
       const created = await runSets.create({ kind, scenarioId, promptId, personaIds, scorecardId, k: kNum });
-      toast.success(kind === 'redteam' ? 'Scan started' : `${kNum} runs started`);
+      toast.success(kind === 'redteam' ? 'Scan started' : `${kNum * personaIds.length} runs started`);
       onOpenChange(false);
       router.push(`/run-sets/${created.id}`);
     } catch (e) {
@@ -155,7 +182,7 @@ export function RunSetDialog({ open, onOpenChange, kind, ...defaults }: Props) {
         <div className="space-y-4">
           <FieldSelect label="Agent" value={promptId} onChange={setPromptId} items={promptList}
             placeholder="Choose an agent" testId="runset-agent" loading={prompts.isLoading} />
-          <FieldSelect label="Scenario" value={scenarioId} onChange={setScenarioId} items={scenarioList}
+          <FieldSelect label="Scenario" value={scenarioId} onChange={(v) => applyScenario(v)} items={scenarioList}
             placeholder="Choose a scenario" testId="runset-scenario" loading={scenarios.isLoading} />
           {kind === 'reliability' ? (
             <FieldSelect label="Persona" value={personaId} onChange={setPersonaId} items={personaList}
@@ -189,7 +216,7 @@ export function RunSetDialog({ open, onOpenChange, kind, ...defaults }: Props) {
           <FieldSelect label="Scorecard" value={scorecardId} onChange={setScorecardId} items={scorecardList}
             placeholder="Choose a scorecard" testId="runset-scorecard" loading={scorecards.isLoading} />
           <div className="space-y-2">
-            <Label htmlFor="runset-k">Runs per persona (k)</Label>
+            <Label htmlFor="runset-k">{kind === 'redteam' ? 'Runs per attack persona' : 'Number of runs'}</Label>
             <Input id="runset-k" type="number" min={1} max={10} value={k} onChange={(e) => setK(e.target.value)} className="w-24" />
           </div>
         </div>

@@ -10,7 +10,8 @@
     "start": "next start --port 3000",
     "lint": "echo 'No eslint configured for dashboard'",
     "clean": "rm -rf .next",
-    "test:room": "node --test tests/room.test.mjs"
+    "test:room": "node --test tests/room.test.mjs",
+    "test:workshop": "node --test tests/workshop.test.ts"
   },
   "dependencies": {
     "@chanl/eval-sdk": "workspace:*",

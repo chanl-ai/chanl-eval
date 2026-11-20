@@ -15,6 +15,7 @@ import { PageLayout } from '@/components/shared/page-layout';
 import { RunSetDialog } from '@/components/run-sets/run-set-dialog';
 import { SaveAsNewAgentDialog } from '@/components/agents/save-as-new-agent-dialog';
 import { useEvalConfig } from '@/lib/eval-config';
+import { playgroundHref, rememberLastAgent } from '@/lib/playground-link';
 
 export default function AgentDetailPage() {
   const params = useParams();
@@ -68,7 +69,7 @@ export default function AgentDetailPage() {
               <ShieldAlert className="mr-2 h-3.5 w-3.5" />
               Red-team scan
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => router.push('/playground')}>
+            <Button size="sm" variant="ghost" onClick={() => { rememberLastAgent(id); router.push(playgroundHref({ agentId: id })); }} data-testid="agent-playground">
               <Beaker className="mr-2 h-3.5 w-3.5" />
               Playground
             </Button>

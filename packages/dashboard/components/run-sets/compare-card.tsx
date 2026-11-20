@@ -4,10 +4,13 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { useEvalConfig } from '@/lib/eval-config';
+import { compareChange } from '@/lib/workshop';
+import type { RunSet } from '@chanl/eval-sdk';
 
 const CHANGE_STYLE = {
   improved: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
@@ -17,14 +20,26 @@ const CHANGE_STYLE = {
 
 const CHANGE_LABEL = { improved: 'Improved', same: 'Same', regressed: 'Regressed' } as const;
 
-/** Before/after per check, against the baseline run set. Regressed checks are highlighted. */
-export function CompareCard({ runSetId, baselineId, running }: { runSetId: string; baselineId: string; running: boolean }) {
+/**
+ * Before/after per check, against the baseline run set. Shown only once both run sets have
+ * finished: partial counts made a half-run "after" look like a regression.
+ */
+export function CompareCard({ runSet, baselineId }: { runSet: RunSet; baselineId: string }) {
   const { runSets } = useEvalConfig().client;
-  const q = useQuery({
-    queryKey: ['run-set-compare', runSetId, baselineId],
-    queryFn: () => runSets.compare(runSetId, baselineId),
-    refetchInterval: running ? 3000 : false,
+  const baseline = useQuery({
+    queryKey: ['run-set', baselineId],
+    queryFn: () => runSets.get(baselineId),
+    refetchInterval: (query) => (query.state.data?.status === 'completed' ? false : 3000),
   });
+  const done = runSet.status === 'completed' && baseline.data?.status === 'completed';
+  const q = useQuery({
+    // Keyed on progress so the final numbers are fetched once the last run lands.
+    queryKey: ['run-set-compare', runSet.id, baselineId, runSet.completed, baseline.data?.completed],
+    queryFn: () => runSets.compare(runSet.id, baselineId),
+    enabled: done,
+  });
+  const finished = runSet.completed + (baseline.data?.completed ?? 0);
+  const total = runSet.total + (baseline.data?.total ?? 0);
 
   return (
     <Card data-testid="compare-card">
@@ -35,19 +50,26 @@ export function CompareCard({ runSetId, baselineId, running }: { runSetId: strin
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        {q.isLoading ? (
+        {!done ? (
+          <div className="space-y-2" data-testid="compare-running">
+            <p className="text-sm text-muted-foreground">
+              Running: {finished} of {total || '…'} runs finished. The comparison appears when both sets are done.
+            </p>
+            <Progress value={total > 0 ? (finished / total) * 100 : 0} />
+          </div>
+        ) : q.isLoading || !baseline.data ? (
           <Skeleton className="h-24 w-full" />
         ) : q.isError ? (
           <p className="text-sm text-destructive">{(q.error as Error).message}</p>
         ) : q.data ? (
           <>
             <div className="flex flex-wrap items-center gap-3 text-sm">
-              <span className="rounded-md border px-3 py-1.5">
-                Before <strong className="tabular-nums">{q.data.before.passed}/{q.data.before.k}</strong> passed
+              <span className="rounded-md border px-3 py-1.5" data-testid="compare-before">
+                Before <strong className="tabular-nums">{baseline.data.passed}/{baseline.data.total}</strong> passed
               </span>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
               <span className="rounded-md border px-3 py-1.5" data-testid="compare-after">
-                After <strong className="tabular-nums">{q.data.after.passed}/{q.data.after.k}</strong> passed
+                After <strong className="tabular-nums">{runSet.passed}/{runSet.total}</strong> passed
               </span>
             </div>
             <Table>
@@ -60,16 +82,19 @@ export function CompareCard({ runSetId, baselineId, running }: { runSetId: strin
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {q.data.checks.map((c) => (
-                  <TableRow key={c.key} data-change={c.change} className={cn(c.change === 'regressed' && 'bg-red-500/10 hover:bg-red-500/15')}>
-                    <TableCell className="font-medium whitespace-normal">{c.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">{c.beforeFailed}</TableCell>
-                    <TableCell className="text-right tabular-nums">{c.afterFailed}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={CHANGE_STYLE[c.change]}>{CHANGE_LABEL[c.change]}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {q.data.checks.map((c) => {
+                  const change = compareChange(c.beforeFailed, c.afterFailed);
+                  return (
+                    <TableRow key={c.key} data-change={change} className={cn(change === 'regressed' && 'bg-red-500/10 hover:bg-red-500/15')}>
+                      <TableCell className="font-medium whitespace-normal">{c.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">{c.beforeFailed}</TableCell>
+                      <TableCell className="text-right tabular-nums">{c.afterFailed}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={CHANGE_STYLE[change]}>{CHANGE_LABEL[change]}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {q.data.checks.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">

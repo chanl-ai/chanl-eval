@@ -51,18 +51,10 @@ export function ReliabilityCard({ runSet }: { runSet: RunSet }) {
         <RunDots runs={runSet.runs} />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Stat label="Passed" value={<span data-testid="runset-passed">{runSet.passed}/{runSet.total}</span>} />
+          <Stat label="Passed every run" value={done ? (runSet.passK ? 'Yes' : 'No') : '—'} />
+          <Stat label="Passed at least once" value={done ? (runSet.passAtK ? 'Yes' : 'No') : '—'} />
           <Stat
-            label={`pass^${runSet.total}`}
-            value={done ? (runSet.passK ? 'Yes' : 'No') : '—'}
-            hint="Passed every run"
-          />
-          <Stat
-            label={`pass@${runSet.total}`}
-            value={done ? (runSet.passAtK ? 'Yes' : 'No') : '—'}
-            hint="Passed at least once"
-          />
-          <Stat
-            label="Most-failed check"
+            label="Check failed most often"
             value={
               runSet.mostFailedCheck ? (
                 <span className="text-sm font-medium" data-testid="most-failed-check">
