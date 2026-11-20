@@ -11,8 +11,11 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageLayout } from '@/components/shared/page-layout';
 import { RunSetLabelBadge } from '@/components/run-sets/reliability-card';
 import { useEvalConfig } from '@/lib/eval-config';
+import type { RunSet } from '@chanl/eval-sdk';
 
-const KIND = { reliability: 'Run ×k', redteam: 'Red-team scan', compare: 'Comparison' } as const;
+type Named = RunSet & { scenarioName?: string; promptName?: string };
+
+const KIND = { reliability: 'Run ×5', redteam: 'Red-team scan', compare: 'Comparison' } as const;
 
 export default function RunSetsPage() {
   const { client } = useEvalConfig();
@@ -39,6 +42,7 @@ export default function RunSetsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Kind</TableHead>
+                  <TableHead>Scenario and agent</TableHead>
                   <TableHead>Passed</TableHead>
                   <TableHead>Result</TableHead>
                   <TableHead className="hidden sm:table-cell">Started</TableHead>
@@ -48,8 +52,15 @@ export default function RunSetsPage() {
                 {sets.map((rs) => (
                   <TableRow key={rs.id}>
                     <TableCell>
-                      <Link href={`/run-sets/${rs.id}`} className="font-medium underline-offset-4 hover:underline">{KIND[rs.kind]}</Link>
+                      <Link href={`/run-sets/${rs.id}`} className="font-medium underline-offset-4 hover:underline">{rs.kind === 'reliability' ? `Run ×${rs.k}` : KIND[rs.kind]}</Link>
                       {rs.isBaseline && <Badge variant="secondary" className="ml-2">Baseline</Badge>}
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
+                      <span className="block text-sm">{(rs as Named).scenarioName ?? '—'}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {[(rs as Named).promptName, rs.byPersona.length <= 2 ? rs.byPersona.map((p) => p.personaName).join(', ') : `${rs.byPersona.length} personas`]
+                          .filter(Boolean).join(' · ')}
+                      </span>
                     </TableCell>
                     <TableCell className="tabular-nums">{rs.passed}/{rs.total}</TableCell>
                     <TableCell><RunSetLabelBadge label={rs.label} /></TableCell>

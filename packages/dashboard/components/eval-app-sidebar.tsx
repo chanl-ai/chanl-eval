@@ -58,6 +58,9 @@ const bottomNav = [
   { title: 'Settings', href: '/settings', icon: Settings },
 ];
 
+/** Pages the workshop never uses; hidden in the room so attendees have fewer places to get lost. */
+const ROOM_HIDDEN = new Set(['/generate', '/datasets', '/settings']);
+
 function isActive(pathname: string, href: string): boolean {
   if (href === '/') return pathname === '/';
   return pathname === href || pathname.startsWith(href + '/');
@@ -90,7 +93,7 @@ export function EvalAppSidebar({ ...props }: React.ComponentProps<typeof Sidebar
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {primaryNav.map((item) => (
+              {primaryNav.filter((i) => !room.cloud || !ROOM_HIDDEN.has(i.href)).map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     asChild
@@ -114,7 +117,7 @@ export function EvalAppSidebar({ ...props }: React.ComponentProps<typeof Sidebar
           <SidebarGroupLabel>Data</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {dataNav.map((item) => (
+              {dataNav.filter((i) => !room.cloud || !ROOM_HIDDEN.has(i.href)).map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     asChild
@@ -137,7 +140,7 @@ export function EvalAppSidebar({ ...props }: React.ComponentProps<typeof Sidebar
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {bottomNav.map((item) => (
+              {bottomNav.filter((i) => !room.cloud || !ROOM_HIDDEN.has(i.href)).map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     asChild

@@ -52,7 +52,25 @@ export function toolOrderSettings(t: ToolCheckState): Record<string, unknown> {
   return { first: t.first.trim(), then: t.then.trim(), requireFirstSuccess: t.requireFirstSuccess };
 }
 
-export function ToolCallFields({ value, onChange }: { value: ToolCheckState; onChange: (v: ToolCheckState) => void }) {
+/** A pick list of the seat's mock tools; free text only when there are none to pick from. */
+function ToolNameField({ id, value, onChange, toolNames, placeholder, testId }: {
+  id: string; value: string; onChange: (v: string) => void; toolNames?: string[]; placeholder: string; testId: string;
+}) {
+  if (!toolNames?.length) {
+    return <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} data-testid={testId} />;
+  }
+  const options = value && !toolNames.includes(value) ? [value, ...toolNames] : toolNames;
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger id={id} className="w-full" data-testid={testId}><SelectValue placeholder="Choose a mock tool" /></SelectTrigger>
+      <SelectContent>
+        {options.map((n) => <SelectItem key={n} value={n} className="font-mono">{n}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+export function ToolCallFields({ value, onChange, toolNames }: { value: ToolCheckState; onChange: (v: ToolCheckState) => void; toolNames?: string[] }) {
   const set = (patch: Partial<ToolCheckState>) => onChange({ ...value, ...patch });
   const setArg = (i: number, patch: Partial<ToolCheckState['args'][number]>) =>
     set({ args: value.args.map((a, j) => (j === i ? { ...a, ...patch } : a)) });
@@ -62,8 +80,8 @@ export function ToolCallFields({ value, onChange }: { value: ToolCheckState; onC
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="tool-name">Tool name</Label>
-          <Input id="tool-name" value={value.tool} onChange={(e) => set({ tool: e.target.value })}
-            placeholder="e.g. lookup_order" data-testid="tool-name" />
+          <ToolNameField id="tool-name" value={value.tool} onChange={(v) => set({ tool: v })} toolNames={toolNames}
+            placeholder="e.g. lookup_order" testId="tool-name" />
         </div>
         <div className="space-y-2">
           <Label>Passes when the tool is</Label>
@@ -114,18 +132,18 @@ export function ToolCallFields({ value, onChange }: { value: ToolCheckState; onC
   );
 }
 
-export function ToolOrderFields({ value, onChange }: { value: ToolCheckState; onChange: (v: ToolCheckState) => void }) {
+export function ToolOrderFields({ value, onChange, toolNames }: { value: ToolCheckState; onChange: (v: ToolCheckState) => void; toolNames?: string[] }) {
   const set = (patch: Partial<ToolCheckState>) => onChange({ ...value, ...patch });
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="tool-first">First</Label>
-          <Input id="tool-first" value={value.first} onChange={(e) => set({ first: e.target.value })} placeholder="e.g. match_po" data-testid="tool-first" />
+          <ToolNameField id="tool-first" value={value.first} onChange={(v) => set({ first: v })} toolNames={toolNames} placeholder="e.g. match_po" testId="tool-first" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="tool-then">Then</Label>
-          <Input id="tool-then" value={value.then} onChange={(e) => set({ then: e.target.value })} placeholder="e.g. approve_invoice" data-testid="tool-then" />
+          <ToolNameField id="tool-then" value={value.then} onChange={(v) => set({ then: v })} toolNames={toolNames} placeholder="e.g. approve_payment" testId="tool-then" />
         </div>
       </div>
       <label className="flex items-center gap-2 text-sm">

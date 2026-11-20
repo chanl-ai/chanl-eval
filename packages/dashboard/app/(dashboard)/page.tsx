@@ -221,6 +221,8 @@ export default function HomePage() {
     return () => { cancelled = true; };
   }, [baseUrl, apiKey, room.cloud]);
 
+  if (room.cloud) return <WorkshopLabs />;
+
   return (
     <PageLayout
       icon={BookOpen}
@@ -311,6 +313,41 @@ export default function HomePage() {
         />
       </div>
 
+    </PageLayout>
+  );
+}
+
+/** The workshop's labs in order, each linking to the page its first step starts on. */
+const LABS = [
+  { n: 0, title: 'Join the lab and look around', href: '/agents', start: 'Agents' },
+  { n: 1, title: 'Meet your agent, then watch it break under pressure', href: '/agents', start: 'Agents → Acme Refund Agent' },
+  { n: 2, title: 'Build a scorecard that catches the broken promise', href: '/scorecards', start: 'Scorecards → Refund Policy v1' },
+  { n: 3, title: 'Run the same test five times', href: '/scenarios', start: 'Scenarios → Late Refund Request' },
+  { n: 4, title: 'Break the invoice workflow', href: '/agents', start: 'Agents → Invoice Workflow Agent' },
+  { n: 5, title: 'Run a red-team scan', href: '/agents', start: 'Agents → Acme Refund Agent' },
+  { n: 6, title: 'Fix the prompt and prove it', href: '/run-sets', start: 'Run sets → your Lab 3 run set' },
+] as const;
+
+function WorkshopLabs() {
+  return (
+    <PageLayout icon={BookOpen} title="Workshop labs" description="Follow the slide for each lab. Each one starts on the page below.">
+      <Card className="max-w-3xl py-0">
+        <CardContent className="p-0">
+          <ol className="divide-y" data-testid="workshop-labs">
+            {LABS.map((lab) => (
+              <li key={lab.n}>
+                <Link href={lab.href} className="flex items-center gap-4 px-4 py-3 hover:bg-accent transition-colors">
+                  <Badge variant="outline" className="shrink-0 tabular-nums">Lab {lab.n}</Badge>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">{lab.title}</span>
+                    <span className="block text-xs text-muted-foreground">Start: {lab.start}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
     </PageLayout>
   );
 }

@@ -57,7 +57,7 @@ import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig, type AdapterType } from '@/lib/eval-config';
 import type { Execution, Scenario, Persona, Prompt, ToolFixture } from '@chanl/eval-sdk';
 import { ToolCallList } from '@/components/shared/tool-call-list';
-import { agentForScenario, scorecardPercent, stepsToLines, type ToolCallView } from '@/lib/workshop';
+import { agentForScenario, scenarioForAgent, scorecardPercent, stepsToLines, type ToolCallView } from '@/lib/workshop';
 import { readLastAgent, rememberLastAgent } from '@/lib/playground-link';
 
 // ---------------------------------------------------------------------------
@@ -139,7 +139,7 @@ export default function PlaygroundPage() {
 }
 
 function Playground() {
-  const { client, adapterType, setAdapterType } = useEvalConfig();
+  const { client, adapterType, setAdapterType, room } = useEvalConfig();
   const searchParams = useSearchParams();
   // What the page was opened to run (scenario page "Run", agent page "Playground", run "Run again").
   const linked = {
@@ -411,7 +411,9 @@ function Playground() {
   useEffect(() => {
     if (initialized || !dataReady) return;
     setInitialized(true);
-    const scenario = scenarios.find((s: Scenario) => s.id === linked.scenario) ?? scenarios[0];
+    const linkedAgent = savedPrompts.find((p) => p.id === linked.agent);
+    const scenarioId = linked.scenario || scenarioForAgent(linkedAgent, scenarios);
+    const scenario = scenarios.find((s: Scenario) => s.id === scenarioId) ?? scenarios[0];
     if (scenario) setSelectedScenarioId(scenario.id);
     const personaId = linked.persona || scenario?.personaIds?.[0] || personas[0]?.id;
     if (personaId) setSelectedPersonaId(personaId);
@@ -484,7 +486,8 @@ function Playground() {
       void queryClient.invalidateQueries({ queryKey: ['executions'] });
 
       if (completed.status === 'completed') {
-        const score = scorecardPercent(completed as { scorecardResults?: { overallScore?: number } });
+        const score = (completed as Execution & { scorePercent?: number | null }).scorePercent
+          ?? scorecardPercent(completed as { scorecardResults?: { overallScore?: number } });
         toast.success(`Test completed${score != null ? ` — Score: ${score}%` : ''}`);
       } else { toast.error(`Test ${completed.status}`); }
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Execution failed'); }
@@ -499,7 +502,7 @@ function Playground() {
       title="Playground"
       description="Configure your agent prompt and run simulated conversations"
       actions={
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
             <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Scenario</Label>
             {scenariosQuery.isLoading ? (
@@ -555,8 +558,8 @@ function Playground() {
               <><Play className="mr-2 h-4 w-4" />Run Test</>
             )}
           </Button>
-          <div className="w-px h-9 bg-border" />
-          <Button
+          {!room.cloud && <div className="w-px h-9 bg-border" />}
+          {!room.cloud && <Button
             variant="outline"
             onClick={() => {
               const prompt = encodeURIComponent(systemPrompt);
@@ -566,12 +569,12 @@ function Playground() {
             data-testid="generate-scenarios-button"
           >
             <Sparkles className="mr-2 h-4 w-4" />Generate Scenarios
-          </Button>
+          </Button>}
         </div>
       }
     >
       {/* Getting Started banner */}
-      {showBanner && (
+      {showBanner && !room.cloud && (
         <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 mb-2" data-testid="getting-started-banner">
           <div className="flex items-center gap-2.5">
             <BookOpen className="h-4 w-4 text-primary shrink-0" />

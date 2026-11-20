@@ -11,9 +11,9 @@ export interface ExecutionRow {
   scenarioName: string;
   personaName: string;
   agentName: string;
-  /** Scorecard verdict; undefined when no scorecard judged the run. */
-  passed: boolean | undefined;
-  score: number | undefined;
+  /** Scorecard verdict; null when no scorecard has judged the run. */
+  passed: boolean | null;
+  score: number | null;
   status: string;
   duration: number | undefined;
   createdAt: string | undefined;
@@ -65,6 +65,18 @@ function getScoreColor(score: number | undefined): string {
   if (score >= 80) return 'text-chart-6';
   if (score >= 60) return 'text-warning';
   return 'text-destructive';
+}
+
+/** The run's scorecard verdict, as the server returns it on the run list. */
+function ScorecardCell({ row }: { row: ExecutionRow }) {
+  const { passed, score } = row;
+  if (passed == null) return <span className="text-xs text-muted-foreground">Not scored</span>;
+  return (
+    <span className={`text-sm font-semibold tabular-nums whitespace-nowrap ${getScoreColor(passed ? 100 : 0)}`} data-testid="run-result">
+      {passed ? 'Passed' : 'Failed'}
+      {score != null && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{score}%</span>}
+    </span>
+  );
 }
 
 // --- Column definitions ---
@@ -139,20 +151,12 @@ export const columns: ColumnDef<ExecutionRow>[] = [
 
   // Scorecard result: one verdict per run, with the score beside it.
   {
-    accessorKey: 'score',
+    id: 'scorecard',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Scorecard" />
     ),
-    cell: ({ row }) => {
-      const { passed, score } = row.original;
-      if (passed === undefined) return <span className="text-xs text-muted-foreground">Not scored</span>;
-      return (
-        <span className={`text-sm font-semibold tabular-nums whitespace-nowrap ${getScoreColor(passed ? 100 : 0)}`} data-testid="run-result">
-          {passed ? 'Passed' : 'Failed'}
-          {score != null && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{score}%</span>}
-        </span>
-      );
-    },
+    enableSorting: false,
+    cell: ({ row }) => <ScorecardCell row={row.original} />,
   },
 
   // Status badge

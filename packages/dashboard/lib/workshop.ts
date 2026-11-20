@@ -29,6 +29,12 @@ export function agentForScenario(
   return undefined;
 }
 
+/** The reverse link: the first scenario on the agent's topic, for "open the playground on this agent". */
+export function scenarioForAgent(agent: Tagged | undefined, scenarios: Tagged[]): string | undefined {
+  const topics = (agent?.tags ?? []).filter((t) => !GENERIC_TAGS.has(t));
+  return scenarios.find((s) => (s.tags ?? []).some((t) => topics.includes(t)))?.id;
+}
+
 export type CheckChange = 'improved' | 'regressed' | 'same';
 
 /** Fewer failed runs after the change is an improvement; more is a regression. */

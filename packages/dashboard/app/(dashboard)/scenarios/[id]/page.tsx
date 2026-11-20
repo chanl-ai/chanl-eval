@@ -126,7 +126,7 @@ export default function ScenarioDetailPage() {
             >
               {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => router.push(playgroundHref({ scenarioId: id, personaId: q.data?.personaIds?.[0], scorecardId: q.data?.scorecardId }))} data-testid="run-scenario">
+            <Button size="sm" variant="outline" onClick={() => router.push(playgroundHref({ scenarioId: id, personaId: personaId || undefined, scorecardId: scorecardId || undefined }))} data-testid="run-scenario">
               <Play className="mr-2 h-3.5 w-3.5" />
               Run
             </Button>
@@ -291,7 +291,7 @@ export default function ScenarioDetailPage() {
           </Card>
 
           {/* How Simulation Works */}
-          <Card>
+          {!room.cloud && <Card>
             <CardHeader>
               <CardTitle className="text-base font-medium flex items-center gap-2">
                 <Info className="h-4 w-4 text-muted-foreground" />
@@ -317,7 +317,7 @@ export default function ScenarioDetailPage() {
                 <code className="bg-muted px-1 rounded text-[11px]">packages/scenarios-core/src/simulator/persona-simulator.service.ts</code>
               </p>}
             </CardContent>
-          </Card>
+          </Card>}
         </div>
       ) : null}
 
@@ -326,8 +326,8 @@ export default function ScenarioDetailPage() {
         onOpenChange={setRunSetOpen}
         kind="reliability"
         scenarioId={id}
-        personaId={q.data?.personaIds?.[0]}
-        scorecardId={q.data?.scorecardId}
+        personaId={personaId || undefined}
+        scorecardId={scorecardId || undefined}
       />
 
       <DeleteDialog

@@ -128,7 +128,7 @@ function Stat({ icon, label, value, testId }: { icon: React.ReactNode; label: st
           {icon}
           <div className="min-w-0">
             <div className="text-xs text-muted-foreground">{label}</div>
-            <div className="text-lg font-semibold truncate" data-testid={testId}>{value}</div>
+            <div className="text-base font-semibold break-words sm:text-lg" data-testid={testId}>{value}</div>
           </div>
         </div>
       </CardContent>
@@ -140,9 +140,9 @@ function Stat({ icon, label, value, testId }: { icon: React.ReactNode; label: st
  * One result per run: the scorecard's pass or fail. Step counts are left out because every
  * finished step reads as "passed", which contradicted a failing scorecard.
  */
-function StatCards({ execution, personaName, agentName, passed, failedCount }: {
+function StatCards({ execution, personaName, agentName, passed, checksPassed, checksTotal }: {
   execution: Execution; personaName?: string; agentName?: string;
-  passed: boolean | undefined; failedCount: number;
+  passed: boolean | undefined; checksPassed: number; checksTotal: number;
 }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -152,7 +152,7 @@ function StatCards({ execution, personaName, agentName, passed, failedCount }: {
           : <CheckCircle className={`h-4 w-4 shrink-0 ${passed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />}
         label="Scorecard"
         testId="run-verdict"
-        value={passed === undefined ? 'Not scored' : passed ? 'Passed' : `Failed ${failedCount} check${failedCount === 1 ? '' : 's'}`}
+        value={passed === undefined ? 'Not scored' : `${passed ? 'Passed' : 'Failed'} · ${checksPassed} of ${checksTotal} checks`}
       />
       <Stat icon={<User className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Persona" value={personaName ?? '--'} testId="run-persona" />
       <Stat icon={<Bot className="h-4 w-4 shrink-0 text-muted-foreground" />} label="Agent" value={agentName ?? '--'} testId="run-agent" />
@@ -316,6 +316,7 @@ export default function RunDetailPage() {
   const scorecardSummary = (execution as any)?.scorecardSummary as string | undefined;
 
   const messages = execution ? executionToMessages(execution) : [];
+  const applicableChecks = metrics.flatMap((m) => m.criteria ?? []).filter((c) => !c.notApplicable);
   const failedChecks = metrics
     .flatMap((m) => m.criteria ?? [])
     .filter((c) => !c.passed && !c.notApplicable)
@@ -358,7 +359,7 @@ export default function RunDetailPage() {
       title={scenarioName ?? (execution ? `Run ${execution.id.slice(-8)}` : 'Run Detail')}
       description={execution ? `Run ${execution.id.slice(-8)} · ${formatDate(execution.createdAt)}` : 'Loading...'}
       titleExtra={
-        execution ? (
+        execution && !room.cloud ? (
           <div className="flex items-center gap-2">
             <Badge variant={getStatusVariant(execution.status)} className="gap-1">
               {isActive ? <Loader2 className="h-3 w-3 animate-spin" /> : getStatusIcon(execution.status)}
@@ -375,14 +376,14 @@ export default function RunDetailPage() {
       actions={
         execution ? (
           <div className="flex items-center gap-2">
-            <ShareResults
+            {!room.cloud && <ShareResults
               metrics={metrics}
               overallScore={displayScore}
               scenarioName={scenarioName}
               executionDate={execution.createdAt}
               turnCount={messages.length}
               duration={formatDuration(execution.duration ?? (execution.endTime && execution.startTime ? new Date(execution.endTime).getTime() - new Date(execution.startTime).getTime() : undefined))}
-            />
+            />}
             {isFailedRun && (
               <BugReportButton execution={execution} scenarioName={scenarioName} failedChecks={failedChecks} messages={messages} />
             )}
@@ -418,7 +419,8 @@ export default function RunDetailPage() {
             personaName={personaQ.data?.name}
             agentName={agentQ.data?.name}
             passed={hasEvaluation ? (scorePassed ?? failedChecks.length === 0) : undefined}
-            failedCount={failedChecks.length}
+            checksPassed={applicableChecks.filter((c) => c.passed).length}
+            checksTotal={applicableChecks.length}
           />
 
           {/* Main content: Transcript + Scorecard */}
@@ -441,7 +443,7 @@ export default function RunDetailPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base font-medium">Scorecard</CardTitle>
-                  {hasEvaluation && (
+                  {hasEvaluation && !room.cloud && (
                     <Button
                       variant="ghost"
                       size="sm"

@@ -89,6 +89,9 @@ function CriterionDialog({
   editingCriterion?: ScorecardCriteria | null; onSaved: () => void;
 }) {
   const { client } = useEvalConfig();
+  // Tool names come from the seat's mock tools, so a typo cannot make a "never called" check pass forever.
+  const toolsQ = useQuery({ queryKey: ['tool-fixtures'], queryFn: () => client.toolFixtures.list({ limit: 100, isActive: true }), enabled: open });
+  const toolNames = [...new Set((toolsQ.data?.toolFixtures ?? []).map((t) => t.name))].sort();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -105,7 +108,8 @@ function CriterionDialog({
       setDescription(editingCriterion.description ?? '');
       setType(editingCriterion.type ?? 'keyword');
       const s = (editingCriterion.settings ?? {}) as Record<string, unknown>;
-      setKeywords(((s.keywords as string[]) ?? []).join(', '));
+      // Seeded checks store the list under `keyword`; the handler reads either. Saved back as `keywords`.
+      setKeywords([((s.keywords ?? s.keyword) as string[] | string | undefined) ?? []].flat().join(', '));
       setMatchType((s.matchType as string) ?? 'any');
       setRubric((s.rubric as string) ?? '');
       setMaxMs(String((s.maxMs as number) ?? 5000));
@@ -218,8 +222,8 @@ function CriterionDialog({
               <Input type="number" value={maxMs} onChange={(e) => setMaxMs(e.target.value)} />
             </div>
           )}
-          {type === 'tool_call' && <ToolCallFields value={toolCheck} onChange={setToolCheck} />}
-          {type === 'tool_order' && <ToolOrderFields value={toolCheck} onChange={setToolCheck} />}
+          {type === 'tool_call' && <ToolCallFields value={toolCheck} onChange={setToolCheck} toolNames={toolNames} />}
+          {type === 'tool_order' && <ToolOrderFields value={toolCheck} onChange={setToolCheck} toolNames={toolNames} />}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
@@ -340,7 +344,7 @@ function CriterionCard({ criterion, scorecardId, onEdit, onDeleted }: {
   let summary = '';
   switch (criterion.type) {
     case 'keyword': {
-      const kws = (settings.keywords as string[]) ?? [];
+      const kws = [((settings.keywords ?? settings.keyword) as string[] | string | undefined) ?? []].flat();
       const mt = (settings.matchType as string) ?? 'any';
       summary = `${mt === 'must_not_contain' ? 'Excludes' : mt === 'all' ? 'All of' : 'Any of'}: ${kws.join(', ')}`;
       break;
@@ -396,7 +400,7 @@ export default function ScorecardDetailPage() {
   const id = typeof params.id === 'string' ? params.id : '';
   const router = useRouter();
   const qc = useQueryClient();
-  const { client } = useEvalConfig();
+  const { client, room } = useEvalConfig();
 
   const q = useQuery({ queryKey: ['scorecard', id], queryFn: () => client.scorecards.get(id), enabled: !!id });
   const categoriesQ = useQuery({ queryKey: ['scorecard-categories', id], queryFn: () => client.scorecards.listCategories(id), enabled: !!id });
@@ -639,7 +643,7 @@ export default function ScorecardDetailPage() {
 
           {/* Col 3: Settings sidebar */}
           <div className="space-y-4 overflow-y-auto">
-            <JudgeAgreementPanel scorecardId={id} />
+            {!room.cloud && <JudgeAgreementPanel scorecardId={id} />}
 
             <Card>
               <CardHeader className="pb-3">

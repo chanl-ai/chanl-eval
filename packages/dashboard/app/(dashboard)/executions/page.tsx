@@ -18,7 +18,6 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageLayout } from '@/components/shared/page-layout';
 import { useEvalConfig } from '@/lib/eval-config';
 import { columns, type ExecutionRow } from './columns';
-import { scorecardPassed, scorecardPercent } from '@/lib/workshop';
 import type { Execution } from '@chanl/eval-sdk';
 
 export default function RunsListPage() {
@@ -64,8 +63,8 @@ export default function RunsListPage() {
         : 'Unnamed run',
       personaName: nameOf(personasQ.data?.personas, e.personaId),
       agentName: nameOf(promptsQ.data?.prompts, e.promptId),
-      passed: scorecardPassed(e as { scorecardResults?: { passed?: boolean } }),
-      score: scorecardPercent(e as { scorecardResults?: { overallScore?: number } }),
+      passed: (e as Execution & { passed?: boolean | null }).passed ?? null,
+      score: (e as Execution & { scorePercent?: number | null }).scorePercent ?? null,
       status: e.status,
       duration: e.duration,
       createdAt: e.createdAt,
