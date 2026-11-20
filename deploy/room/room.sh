@@ -102,6 +102,20 @@ cmd_up() {
     if (( i % 8 == 0 )); then wait; fi
   done
   wait
+  # Parallel updates that hit Fly's rate limit fail silently (their output is discarded), so any
+  # machine still on another image is updated again, one at a time, and the command fails if any
+  # are left.
+  local stale
+  stale="$(fly machines list -a "$SEAT_APP" --json | node -e '
+    const image = process.argv[1]; let s = "";
+    process.stdin.on("data", d => s += d).on("end", () => {
+      for (const m of JSON.parse(s)) if (!m.config.image.startsWith(image)) console.log(m.id);
+    });' "$image")"
+  for id in $stale; do
+    echo "retry update $id"
+    fly machine update "$id" -a "$SEAT_APP" --image "$image" --yes \
+      --vm-size "$SEAT_VM_SIZE" --vm-memory "$SEAT_VM_MEMORY" >/dev/null
+  done
   fly machines list -a "$SEAT_APP"
 }
 
