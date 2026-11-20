@@ -121,6 +121,16 @@ describe('RunSetService', () => {
     expect(view.scorecardId).toBe(scorecardId);
   });
 
+  it("uses the agent's own tools when the request names none", async () => {
+    const { ids, scenarioId } = await seed();
+    const agent = new Types.ObjectId();
+    await scenarios.db.collection('prompts').insertOne({ _id: agent, name: 'Acme', content: 'x', toolFixtureIds: [ids[1]] });
+
+    await service.create({ kind: 'reliability', scenarioId, promptId: agent.toString(), personaIds: [personaId], k: 1 });
+
+    expect(queued[0].dto.toolFixtureIds).toEqual([ids[1]]);
+  });
+
   it('runs a set compared against a baseline with the baseline tools and scorecard', async () => {
     const { ids, scenarioId } = await seed();
     const otherScorecard = new Types.ObjectId().toString();

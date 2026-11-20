@@ -108,8 +108,8 @@ export class RunSetService {
 
   /**
    * Tools and scorecard the runs use. A set compared against a baseline reuses the baseline's, so
-   * the before and after differ only in the agent. Otherwise an empty tool list means every active
-   * tool on this server: a run set with no tools cannot exercise an agent whose policy is enforced
+   * the before and after differ only in the agent. Otherwise an empty tool list means the agent's own
+   * tools, or every active tool on this server when the agent has none: a run set with no tools cannot exercise an agent whose policy is enforced
    * through tool calls, and the dashboard's run buttons send none. The scorecard falls back to the
    * scenario's, and is stored so GET can say which one scored the runs.
    */
@@ -123,7 +123,18 @@ export class RunSetService {
       toolFixtureIds ??= baseline.toolFixtureIds?.length ? baseline.toolFixtureIds : undefined;
       scorecardId ??= baseline.scorecardId || undefined;
     }
-    toolFixtureIds ??= await this.toolFixtureService.activeIdsForRun();
+    if (!toolFixtureIds) {
+      // Prompts live in the server package; their collection is read by name, as the worker does.
+      const prompt = Types.ObjectId.isValid(dto.promptId)
+        ? await this.scenarioModel.db.collection('prompts').findOne(
+            { _id: new Types.ObjectId(dto.promptId) },
+            { projection: { toolFixtureIds: 1 } },
+          )
+        : null;
+      toolFixtureIds = prompt?.toolFixtureIds?.length
+        ? (prompt.toolFixtureIds as string[])
+        : await this.toolFixtureService.activeIdsForRun();
+    }
     if (!scorecardId) {
       const scenario = await this.scenarioModel.findById(dto.scenarioId).select('scorecardId').lean();
       if (!scenario) throw new NotFoundException(`Scenario ${dto.scenarioId} not found`);

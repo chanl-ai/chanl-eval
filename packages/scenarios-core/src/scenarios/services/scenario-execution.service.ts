@@ -27,6 +27,7 @@ import {
 import { QueueProducerService } from '../../execution/queue-producer.service';
 import { EvaluationService, ScorecardsService } from '@chanl/scorecards-core';
 import { buildLlmJudge } from '../../execution/judge-llm';
+import { judgeTranscript } from '../../execution/judge-transcript';
 
 
 @Injectable()
@@ -610,6 +611,9 @@ export class ScenarioExecutionService {
         dto.scorecardId,
         {
           transcriptText,
+          judgeTranscriptText: judgeTranscript(
+            execution.stepResults.map((st) => ({ role: st.role, text: st.actualResponse, toolCalls: st.toolCalls })),
+          ),
           segments,
           metrics: { firstResponseLatency },
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,

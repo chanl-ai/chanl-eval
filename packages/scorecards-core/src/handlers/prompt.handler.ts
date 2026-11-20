@@ -72,7 +72,7 @@ export class PromptHandler implements CriteriaHandler {
         description:
           settings.rubric || settings.description || criteria.description || criteria.name,
         evaluationType,
-        transcript: context.transcriptText,
+        transcript: context.judgeTranscriptText || context.transcriptText,
         threshold: thresholdInfo,
         selfConsistency: settings.selfConsistency,
       });

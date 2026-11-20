@@ -11,6 +11,9 @@ export interface EvaluationContext {
   /** Full transcript text (all segments joined) */
   transcriptText: string;
 
+  /** Transcript with tool calls and results inline, for LLM judges. Falls back to transcriptText. */
+  judgeTranscriptText?: string;
+
   /** Individual transcript segments with metadata */
   segments?: Array<{
     speaker: string;

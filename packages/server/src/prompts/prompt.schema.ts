@@ -18,6 +18,13 @@ export class Prompt {
   @Prop({ type: [String], default: [] })
   tags!: string[];
 
+  /**
+   * The agent's own tools: runs and playground chats that name no tools use these, and fall back to
+   * every active tool when this is empty.
+   */
+  @Prop({ type: [String], default: [] })
+  toolFixtureIds!: string[];
+
   @Prop({ type: Object })
   adapterConfig?: {
     adapterType?: string;

@@ -63,6 +63,8 @@ Rules:
 - Answer ONLY the question asked. Ignore tone, politeness, helpfulness, empathy, completeness and
   whether the customer's problem was solved, unless the question itself asks about them.
 - Judge what the agent actually said and did in the transcript. Do not guess at intent.
+- Lines starting "[Tool call]" are actions the agent took and the data the system returned to it.
+  Count the actions as things the agent did, and use the data as the facts of the case.
 - For a yes/no question, "result" is the answer to the question exactly as worded: true means yes,
   false means no.
 - For a score question, "result" is a number from 0 to 10 (7+ good, 5-6 mediocre, below 5 bad).

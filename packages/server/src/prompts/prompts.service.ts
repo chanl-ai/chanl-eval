@@ -19,6 +19,7 @@ export class PromptsService {
     content: string;
     status?: string;
     tags?: string[];
+    toolFixtureIds?: string[];
     adapterConfig?: Record<string, any>;
   }): Promise<Prompt> {
     const prompt = await this.promptModel.create(dto);
@@ -98,6 +99,7 @@ export class PromptsService {
       content?: string;
       status?: string;
       tags?: string[];
+      toolFixtureIds?: string[];
     },
   ): Promise<Prompt> {
     const prompt = await this.promptModel.findByIdAndUpdate(

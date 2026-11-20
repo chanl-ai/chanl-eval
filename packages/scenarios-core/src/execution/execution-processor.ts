@@ -28,6 +28,7 @@ import {
   generatePersonaOpening,
   generatePersonaUtterance,
 } from './persona-llm';
+import { judgeTranscript } from './judge-transcript';
 import { buildLlmJudge } from './judge-llm';
 import { AgentConfigResolver, PromptConfig } from './agent-config-resolver';
 import { resolveLlmConfigSync } from './llm-config-resolver';
@@ -333,6 +334,9 @@ export class ExecutionProcessor {
             scorecardId,
             {
               transcriptText,
+              judgeTranscriptText: judgeTranscript(
+                transcript.map((t) => ({ role: t.role, text: t.content, toolCalls: t.toolCalls })),
+              ),
               segments: transcript.map((t) => ({
                 speaker: t.role === 'agent' ? 'agent' : 'customer',
                 text: t.content,

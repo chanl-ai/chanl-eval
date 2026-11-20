@@ -70,6 +70,7 @@ const PROMPTS = [
     content: ACME_PROMPT,
     status: 'active',
     tags: [WORKSHOP_TAG, 'refunds'],
+    toolSet: 'acme',
     adapterConfig: { adapterType: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 400 },
   },
   {
@@ -78,6 +79,7 @@ const PROMPTS = [
     content: INVOICE_PROMPT,
     status: 'active',
     tags: [WORKSHOP_TAG, 'invoices'],
+    toolSet: 'invoice',
     adapterConfig: { adapterType: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 400 },
   },
 ];
@@ -549,17 +551,18 @@ export async function seedSeat(c: SeatClient, log: (m: string) => void = () => {
   const r: SeedResult = { prompts: {}, personas: {}, tools: {}, toolSets: {}, scenarios: {}, scorecards: {}, created: 0, updated: 0 };
   const count = (created: boolean) => (created ? r.created++ : r.updated++);
 
-  for (const p of PROMPTS) {
-    const { id, created } = await upsertByName(c, '/prompts', 'PUT', p);
-    r.prompts[p.name] = id; count(created);
-  }
-
   // Tool fixture names are not unique on the server, so match on name plus the workshop tag.
   for (const { set, ...tf } of toolFixtures()) {
     const body = { ...tf, tags: [WORKSHOP_TAG, `set:${set}`], isActive: true };
     const { id, created } = await upsertByName(c, '/tool-fixtures', 'PATCH', body,
       (d) => d.name === tf.name && (d.tags ?? []).includes(`set:${set}`));
     r.tools[tf.name] = id; (r.toolSets[set] ??= []).push(id); count(created);
+  }
+
+  // Each agent carries its own tools, so a run or chat that names none offers only that agent's.
+  for (const { toolSet, ...p } of PROMPTS) {
+    const { id, created } = await upsertByName(c, '/prompts', 'PUT', { ...p, toolFixtureIds: r.toolSets[toolSet] });
+    r.prompts[p.name] = id; count(created);
   }
 
   for (const p of PERSONAS) {

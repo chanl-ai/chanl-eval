@@ -54,17 +54,20 @@ export class ChatService {
 
   /**
    * The session's tools are fixed when it starts and kept on the execution, so every message in the
-   * conversation offers the model the same tools. No ids means every active tool, the same default
-   * run sets use.
+   * conversation offers the model the same tools. No ids means the agent's own tools, else every
+   * active tool, the same default run sets use.
    */
   async createSession(dto: { promptId: string; toolFixtureIds?: string[] }): Promise<{
     sessionId: string;
     executionId: string;
     toolFixtureIds: string[];
   }> {
+    const prompt = await this.promptsService.findById(dto.promptId);
     const toolFixtureIds = dto.toolFixtureIds?.length
       ? dto.toolFixtureIds
-      : await this.toolFixtureService.activeIdsForRun();
+      : prompt.toolFixtureIds?.length
+        ? prompt.toolFixtureIds
+        : await this.toolFixtureService.activeIdsForRun();
     const resolved = await this.resolveAgentConfig(dto.promptId);
 
     // Verify adapter connects (fail fast)
