@@ -35,6 +35,8 @@ export interface Prompt {
   content: string;
   status?: string;
   tags?: string[];
+  /** Mock tools this agent uses when a run or chat names none. */
+  toolFixtureIds?: string[];
   adapterConfig?: {
     adapterType?: string;
     model?: string;
@@ -51,6 +53,7 @@ export interface CreatePromptDto {
   content: string;
   status?: 'active' | 'draft' | 'archived';
   tags?: string[];
+  toolFixtureIds?: string[];
   adapterConfig?: {
     adapterType?: string;
     model?: string;

@@ -41,6 +41,7 @@ export function SaveAsNewAgentDialog({ open, onOpenChange, source }: {
         description: source.description,
         content: source.content,
         tags: source.tags,
+        toolFixtureIds: source.toolFixtureIds,
         adapterConfig: source.adapterConfig,
       });
       toast.success(`Saved “${created.name}”`);
