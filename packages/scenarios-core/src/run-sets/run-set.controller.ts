@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { RunSetService } from './run-set.service';
 import { CreateRunSetDto, ListRunSetsQuery } from './dto/create-run-set.dto';
 
@@ -38,8 +38,14 @@ export class RunSetController {
 export class RoomStatsController {
   constructor(private readonly runSets: RunSetService) {}
 
+  /** `?since=` (ISO date) sets the window for failing checks and red-team breaks; default 3 hours. */
   @Get('room')
-  room() {
-    return this.runSets.roomStats();
+  room(@Query('since') since?: string) {
+    let from: Date | undefined;
+    if (since) {
+      from = new Date(since);
+      if (Number.isNaN(from.getTime())) throw new BadRequestException('since must be an ISO date');
+    }
+    return this.runSets.roomStats(new Date(), from);
   }
 }

@@ -9,6 +9,8 @@ import {
   ScenarioExecutionDocument,
 } from '../scenarios/schemas/scenario-execution.schema';
 import { Persona, PersonaDocument } from '../personas/schemas/persona.schema';
+import { Scenario, ScenarioDocument } from '../scenarios/schemas/scenario.schema';
+import { ToolFixtureService } from '../tool-fixtures/tool-fixture.service';
 import { ScenarioExecutionService } from '../scenarios/services/scenario-execution.service';
 import {
   RunInput,
@@ -24,6 +26,8 @@ export type RunSetView = {
   scenarioId: string;
   promptId: string;
   personaIds: string[];
+  scorecardId: string | null;
+  toolFixtureIds: string[];
   k: number;
   isBaseline: boolean;
   baselineRunSetId?: string;
@@ -32,11 +36,14 @@ export type RunSetView = {
 
 export interface RoomStats {
   runsLast10Min: number;
+  /** Start of the window the failing checks and red-team breaks cover. */
+  since: string;
   topFailingChecks: Array<{ name: string; failed: number; total: number }>;
   redteamBroken: Array<{ personaName: string; count: number }>;
 }
 
 const DEFAULT_K = 5;
+const ROOM_STATS_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 @Injectable()
 export class RunSetService {
@@ -45,8 +52,10 @@ export class RunSetService {
     @InjectModel(ScenarioExecution.name)
     private readonly executionModel: Model<ScenarioExecutionDocument>,
     @InjectModel(Persona.name) private readonly personaModel: Model<PersonaDocument>,
+    @InjectModel(Scenario.name) private readonly scenarioModel: Model<ScenarioDocument>,
     private readonly executionService: ScenarioExecutionService,
     private readonly scorecardsService: ScorecardsService,
+    private readonly toolFixtureService: ToolFixtureService,
   ) {}
 
   /** Queues k executions per persona through the same path as POST /scenarios/:id/execute. */
@@ -55,13 +64,14 @@ export class RunSetService {
     for (const id of [dto.scenarioId, dto.promptId, ...dto.personaIds]) {
       if (!Types.ObjectId.isValid(id)) throw new BadRequestException(`Invalid id: ${id}`);
     }
+    const { toolFixtureIds, scorecardId } = await this.resolveRunInputs(dto);
     const runSet = await this.runSetModel.create({
       kind: dto.kind,
       scenarioId: dto.scenarioId,
       promptId: dto.promptId,
       personaIds: dto.personaIds,
-      scorecardId: dto.scorecardId,
-      toolFixtureIds: dto.toolFixtureIds || [],
+      scorecardId,
+      toolFixtureIds,
       k,
       baselineRunSetId: dto.baselineRunSetId,
       isBaseline: false,
@@ -77,8 +87,8 @@ export class RunSetService {
           {
             promptId: dto.promptId,
             personaId,
-            scorecardId: dto.scorecardId,
-            toolFixtureIds: dto.toolFixtureIds,
+            scorecardId,
+            toolFixtureIds,
           },
           { runSetId },
         );
@@ -87,6 +97,32 @@ export class RunSetService {
     }
     await this.runSetModel.findByIdAndUpdate(runSetId, { $set: { executionIds } });
     return { id: runSetId, executionIds };
+  }
+
+  /**
+   * Tools and scorecard the runs use. A set compared against a baseline reuses the baseline's, so
+   * the before and after differ only in the agent. Otherwise an empty tool list means every active
+   * tool on this server: a run set with no tools cannot exercise an agent whose policy is enforced
+   * through tool calls, and the dashboard's run buttons send none. The scorecard falls back to the
+   * scenario's, and is stored so GET can say which one scored the runs.
+   */
+  private async resolveRunInputs(
+    dto: CreateRunSetDto,
+  ): Promise<{ toolFixtureIds: string[]; scorecardId: string | undefined }> {
+    let toolFixtureIds = dto.toolFixtureIds?.length ? dto.toolFixtureIds : undefined;
+    let scorecardId = dto.scorecardId || undefined;
+    if (dto.baselineRunSetId) {
+      const baseline = await this.load(dto.baselineRunSetId);
+      toolFixtureIds ??= baseline.toolFixtureIds?.length ? baseline.toolFixtureIds : undefined;
+      scorecardId ??= baseline.scorecardId || undefined;
+    }
+    toolFixtureIds ??= await this.toolFixtureService.activeIdsForRun();
+    if (!scorecardId) {
+      const scenario = await this.scenarioModel.findById(dto.scenarioId).select('scorecardId').lean();
+      if (!scenario) throw new NotFoundException(`Scenario ${dto.scenarioId} not found`);
+      scorecardId = scenario.scorecardId?.toString() || undefined;
+    }
+    return { toolFixtureIds, scorecardId };
   }
 
   async list(query: ListRunSetsQuery): Promise<RunSetView[]> {
@@ -128,15 +164,24 @@ export class RunSetService {
     return compareRunSets({ k: before.k, runs: beforeRuns }, { k: after.k, runs: afterRuns });
   }
 
-  async roomStats(now = new Date()): Promise<RoomStats> {
-    const since = new Date(now.getTime() - 10 * 60 * 1000);
+  /**
+   * The wall's numbers for this server. Runs in the last 10 minutes count every execution (single
+   * runs, run sets and playground chats), since that is the room's activity. Failing checks and
+   * red-team breaks cover a window (default the last 3 hours) so rehearsal runs from earlier in the
+   * day do not top the wall.
+   */
+  async roomStats(now = new Date(), since?: Date): Promise<RoomStats> {
+    const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
+    const windowStart = since ?? new Date(now.getTime() - ROOM_STATS_WINDOW_MS);
     const runsLast10Min = await this.executionModel.countDocuments({
-      runSetId: { $exists: true },
-      createdAt: { $gte: since },
+      createdAt: { $gte: tenMinAgo },
     });
 
-    const sets = await this.runSetModel.find({}).lean();
-    const allRuns = await this.loadRuns(sets.flatMap((s) => s.executionIds));
+    const recent = await this.executionModel
+      .find({ createdAt: { $gte: windowStart }, scenarioId: { $exists: true } })
+      .select('executionId')
+      .lean();
+    const allRuns = await this.loadRuns(recent.map((e: any) => e.executionId));
     const byExecution = new Map(allRuns.map((r) => [r.executionId, r]));
 
     const checkCounts = new Map<string, { name: string; failed: number; total: number }>();
@@ -158,6 +203,9 @@ export class RunSetService {
       .sort((a, b) => b.failed - a.failed)
       .slice(0, 5);
 
+    const sets = await this.runSetModel
+      .find({ kind: 'redteam', createdAt: { $gte: windowStart } })
+      .lean();
     const redteamSets = sets.filter((s) => s.kind === 'redteam');
     const names = await this.personaNames(redteamSets.flatMap((s) => s.personaIds));
     const broken = new Map<string, number>();
@@ -178,7 +226,7 @@ export class RunSetService {
       .map(([personaName, count]) => ({ personaName, count }))
       .sort((a, b) => b.count - a.count);
 
-    return { runsLast10Min, topFailingChecks, redteamBroken };
+    return { runsLast10Min, since: windowStart.toISOString(), topFailingChecks, redteamBroken };
   }
 
   private async load(id: string): Promise<RunSet> {
@@ -199,6 +247,8 @@ export class RunSetService {
       scenarioId: runSet.scenarioId,
       promptId: runSet.promptId,
       personaIds: runSet.personaIds,
+      scorecardId: runSet.scorecardId || null,
+      toolFixtureIds: runSet.toolFixtureIds || [],
       k: runSet.k,
       isBaseline: !!runSet.isBaseline,
       ...(runSet.baselineRunSetId ? { baselineRunSetId: runSet.baselineRunSetId } : {}),

@@ -15,9 +15,15 @@ import {
   OpenAIAdapter,
   AnthropicAdapter,
   HttpAdapter,
+  ToolFixtureService,
+  MockResolver,
+  ToolFixture,
 } from '@chanl/scenarios-core';
 import { PromptsService } from '../prompts/prompts.service';
 import { SettingsService } from '../settings/settings.service';
+
+/** Tool rounds per message before the reply is returned as is; matches scenario runs. */
+const MAX_TOOL_ROUNDS = 5;
 
 @Injectable()
 export class ChatService {
@@ -29,20 +35,36 @@ export class ChatService {
     private readonly promptsService: PromptsService,
     private readonly settingsService: SettingsService,
     private readonly agentConfigResolver: AgentConfigResolver,
+    private readonly toolFixtureService: ToolFixtureService,
+    private readonly mockResolver: MockResolver,
   ) {}
 
-  private async resolveAgentConfig(promptId: string) {
+  private async resolveAgentConfig(promptId: string, tools: ToolFixture[] = []) {
     const prompt = await this.promptsService.findById(promptId);
     return this.agentConfigResolver.resolve({
       prompt: { content: prompt.content, adapterConfig: prompt.adapterConfig },
       settingsLookup: (provider) => this.settingsService.getApiKey(provider),
+      tools: tools.map((tf) => ({
+        name: tf.name,
+        description: tf.description,
+        parameters: tf.parameters || { type: 'object', properties: {} },
+      })),
     });
   }
 
-  async createSession(dto: { promptId: string }): Promise<{
+  /**
+   * The session's tools are fixed when it starts and kept on the execution, so every message in the
+   * conversation offers the model the same tools. No ids means every active tool, the same default
+   * run sets use.
+   */
+  async createSession(dto: { promptId: string; toolFixtureIds?: string[] }): Promise<{
     sessionId: string;
     executionId: string;
+    toolFixtureIds: string[];
   }> {
+    const toolFixtureIds = dto.toolFixtureIds?.length
+      ? dto.toolFixtureIds
+      : await this.toolFixtureService.activeIdsForRun();
     const resolved = await this.resolveAgentConfig(dto.promptId);
 
     // Verify adapter connects (fail fast)
@@ -64,11 +86,12 @@ export class ChatService {
       parameters: {
         adapterType: resolved.adapterType,
         model: resolved.config.model,
+        toolFixtureIds,
       },
     });
 
-    this.logger.log(`Chat session created: ${executionId}`);
-    return { sessionId: executionId, executionId };
+    this.logger.log(`Chat session created: ${executionId} with ${toolFixtureIds.length} tools`);
+    return { sessionId: executionId, executionId, toolFixtureIds };
   }
 
   async sendMessage(
@@ -77,7 +100,7 @@ export class ChatService {
   ): Promise<{
     content: string;
     latencyMs?: number;
-    toolCalls?: AgentResponse['toolCalls'];
+    toolCalls: Array<{ name: string; arguments: Record<string, any>; result: any }>;
   }> {
     const trimmed = message.trim();
     if (!trimmed) {
@@ -98,30 +121,53 @@ export class ChatService {
     if (!promptId) {
       throw new BadRequestException('Session has no linked prompt');
     }
-    const resolved = await this.resolveAgentConfig(promptId);
+    const toolIds: string[] = execution.parameters?.toolFixtureIds || [];
+    const tools = toolIds.length ? await this.toolFixtureService.findByIds(toolIds) : [];
+    const resolved = await this.resolveAgentConfig(promptId, tools);
 
-    // Create adapter, connect, rebuild history from stepResults
     const adapter = this.createAdapter(resolved.adapterType);
     await adapter.connect(resolved.config);
 
+    // Earlier tool rounds are replayed as plain assistant text: the provider-specific tool-call ids
+    // are not stored, and the model only needs to know what each tool returned.
     const history: AgentMessage[] = [];
     for (const step of execution.stepResults || []) {
       if (step.role === 'persona') {
         history.push({ role: 'user', content: step.actualResponse || '' });
       } else if (step.role === 'agent') {
         history.push({ role: 'assistant', content: step.actualResponse || '' });
+      } else if (step.role === 'tool') {
+        for (const call of step.toolCalls || []) {
+          history.push({
+            role: 'assistant',
+            content: `[Called ${call.name}(${JSON.stringify(call.arguments ?? {})}) → ${JSON.stringify(call.result)}]`,
+          });
+        }
       }
     }
 
     const now = new Date();
+    const turnIndex = (execution.stepResults || []).filter((st) => st.role === 'persona').length;
 
     try {
-      // Send message with full history
-      const response = await adapter.sendMessage(trimmed, history);
+      let response = await adapter.sendMessage(trimmed, history);
+      const toolCalls: Array<{ name: string; arguments: Record<string, any>; result: any }> = [];
 
-      // Build step results for this turn
-      const turnIndex = Math.floor((history.length + 2) / 2) - 1;
-      const newSteps = [
+      // Same loop as a scenario run: resolve each call against the mock tools and send the results
+      // back until the model answers in text.
+      if (response.toolCalls?.length && tools.length) {
+        history.push({ role: 'user', content: trimmed });
+        for (let round = 0; response.toolCalls?.length && round < MAX_TOOL_ROUNDS; round++) {
+          const resolvedCalls = this.mockResolver.resolveAll(response.toolCalls, tools);
+          for (const call of resolvedCalls) {
+            toolCalls.push({ name: call.name, arguments: call.arguments, result: call.result });
+          }
+          history.push(...adapter.buildToolCallHistory(response, resolvedCalls));
+          response = await adapter.sendMessage('', history);
+        }
+      }
+
+      const steps: any[] = [
         {
           stepId: `turn-${turnIndex}-persona`,
           status: 'completed' as const,
@@ -131,6 +177,16 @@ export class ChatService {
           startTime: now,
           endTime: now,
         },
+        ...toolCalls.map((call, i) => ({
+          stepId: `turn-${turnIndex}-tool-${i}`,
+          status: 'completed' as const,
+          role: 'tool' as const,
+          actualResponse: JSON.stringify(call),
+          duration: 0,
+          startTime: now,
+          endTime: now,
+          toolCalls: [call],
+        })),
         {
           stepId: `turn-${turnIndex}-agent`,
           status: 'completed' as const,
@@ -139,20 +195,18 @@ export class ChatService {
           duration: response.latencyMs || 0,
           startTime: now,
           endTime: new Date(),
-          ...(response.toolCalls?.length ? { toolCalls: response.toolCalls } : {}),
         },
       ];
 
-      // Append to execution stepResults
       await this.executionModel.findOneAndUpdate(
         { executionId: sessionId },
-        { $push: { stepResults: { $each: newSteps } } },
+        { $push: { stepResults: { $each: steps } } },
       );
 
       return {
         content: response.content,
         latencyMs: response.latencyMs,
-        toolCalls: response.toolCalls,
+        toolCalls,
       };
     } finally {
       await adapter.disconnect();

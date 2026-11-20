@@ -122,6 +122,24 @@ export class ToolFixtureService {
   }
 
   /**
+   * The ids of the tools a run gets when the caller names none: every active fixture, one per tool
+   * name (the most recently updated). Providers reject a request that declares two tools with the
+   * same name, so a duplicate would fail every run rather than only the one that used it.
+   */
+  async activeIdsForRun(): Promise<string[]> {
+    const fixtures = await this.toolFixtureModel
+      .find({ isActive: true })
+      .sort({ updatedAt: -1 })
+      .select('_id name')
+      .lean();
+    const byName = new Map<string, string>();
+    for (const f of fixtures as Array<{ _id: unknown; name: string }>) {
+      if (!byName.has(f.name)) byName.set(f.name, String(f._id));
+    }
+    return [...byName.values()];
+  }
+
+  /**
    * Bulk load tool fixtures by IDs.
    * Returns found fixtures (silently skips missing IDs).
    */
